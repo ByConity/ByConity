@@ -493,6 +493,15 @@
     M(CnchSendResourceElapsedMilliseconds, "Total time for send resource to all workers") \
     M(CnchDiskCacheNodeUnLocalityParts, "Total count of un-locality disk cache part") \
     \
+    M(ServerRpcRequest, "Total number of RPC requests to server") \
+    M(ServerRpcElaspsedMicroseconds, "Total time of RPC requests to server, not contain async call join time") \
+    M(WorkerRpcRequest, "Total number of RPC requests to worker") \
+    M(WorkerRpcElaspsedMicroseconds, "Total time of RPC requests to worker, not contain async call join time") \
+    M(CatalogRequest, "Total number of requests in Catalog") \
+    M(CatalogElapsedMicroseconds, "Total time of requests in Catalog") \
+    M(KvRpcRequest, "Total number of requests to KV") \
+    M(KvRpcElapsedMicroseconds, "Total time of requests to KV, not contain SCAN fetch time") \
+    \
     M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
     M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
     M(IntentLockPreemptionElapsedMilliseconds, "Total time spent to preempt conflict locks") \

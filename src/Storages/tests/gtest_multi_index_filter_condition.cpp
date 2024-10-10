@@ -67,7 +67,7 @@ public:
         context->setPath(store_path);
         context->setMetastorePath(store_path + "/metastore/");
 
-        context->setGinIndexStoreFactory({});
+        context->setGINStoreReaderFactory({});
     }
 
     static void TearDownTestSuite()

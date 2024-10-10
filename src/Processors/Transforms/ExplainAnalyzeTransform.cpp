@@ -13,13 +13,14 @@ namespace DB
 {
 
 ExplainAnalyzeTransform::ExplainAnalyzeTransform(
-    const Block & header_,
+    const Block & input_header_,
+    const Block & output_header_,
     ASTExplainQuery::ExplainKind kind_,
     std::shared_ptr<QueryPlan> query_plan_ptr_,
     ContextMutablePtr context_,
     PlanSegmentDescriptions & segment_descriptions_,
     QueryPlanSettings settings_)
-    : ISimpleTransform(header_, {{std::make_shared<DataTypeString>(),"Explain Analyze"}}, true)
+    : ISimpleTransform(input_header_, output_header_, true)
     , kind(kind_)
     , context(context_)
     , query_plan_ptr(std::move(query_plan_ptr_))

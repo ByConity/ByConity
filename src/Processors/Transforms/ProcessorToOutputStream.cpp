@@ -1,18 +1,20 @@
 #include <math.h>
-#include <Processors/Transforms/ProcessorToOutputStream.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
+#include "common/types.h"
+#include "IO/Progress.h"
 
 namespace DB
 {
 
-Block ProcessorToOutputStream::newHeader()
+Block ProcessorToOutputStream::newHeader(const String & output_inserted_rows_name)
 {
-    return {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+    return {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), output_inserted_rows_name)};
 }
 
-ProcessorToOutputStream::ProcessorToOutputStream(BlockOutputStreamPtr stream_)
-    : IProcessor({stream_->getHeader()}, {newHeader()})
+ProcessorToOutputStream::ProcessorToOutputStream(BlockOutputStreamPtr stream_, const String & output_inserted_rows_name_)
+    : IProcessor({stream_->getHeader()}, {newHeader(output_inserted_rows_name_)})
     , input(inputs.front())
     , output(outputs.front())
     , stream(std::move(stream_))
@@ -38,6 +40,11 @@ void ProcessorToOutputStream::onFinish()
     stream->writeSuffix();
 
     auto return_chunk = getReturnChunk();
+    if (progress_callback)
+    {
+        WriteProgress write_progress(total_rows, 0);
+        progress_callback(Progress(write_progress));
+    }
     output_data.chunk = std::move(return_chunk);
     output.pushData(std::move(output_data));
 }

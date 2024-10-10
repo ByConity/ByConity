@@ -1,6 +1,8 @@
 #include <Optimizer/Signature/PlanNormalizer.h>
+#include <Optimizer/Signature/PlanSegmentNormalizer.h>
 
 #include <Optimizer/PlanNodeSearcher.h>
+#include <QueryPlan/PlanPrinter.h>
 
 #include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
 #include <gtest/gtest.h>
@@ -225,4 +227,30 @@ TEST_F(PlanNormalizerTest, DISABLED_testCTENormalize)
 
     ASSERT_TRUE(normal_root && normal_with);
     EXPECT_EQ(*normal_root, *normal_with);
+}
+
+/// test now(), table name, filter
+TEST_F(PlanNormalizerTest, NormalizePlanSegment)
+{
+    const auto * sql1 = "select inv_item_sk, now() from inventory where inv_item_sk > 3 AND inv_item_sk < 6";
+    std::unordered_map<std::string, Field> query_settings;
+    auto context1 = tester->createQueryContext(query_settings);
+    TxnTimestamp txn1 = 1;
+    context1->setTemporaryTransaction(txn1, txn1, false);
+
+    auto plan1 = tester->plan(sql1, context1);
+    auto normalizer1 = PlanSegmentNormalizer(context1, &plan1->getCTEInfo());
+    auto logical_plan1 = normalizer1.buildNormalPlan(plan1->getPlanNode(), {.normalize_literals = true, .normalize_storage = true});
+    auto logical_plan_str1 = PlanPrinter::textPlanNode(logical_plan1, context1);
+
+    const auto * sql2 = "select inv_item_sk, now() from inventory where inv_item_sk > 2 AND inv_item_sk < 9";
+    auto context2 = tester->createQueryContext(query_settings);
+    TxnTimestamp txn2 = 1;
+    context2->setTemporaryTransaction(txn2, txn2, false);
+    auto plan2 = tester->plan(sql2, context2);
+    auto normalizer2 = PlanSegmentNormalizer(context2, &plan1->getCTEInfo());
+    auto logical_plan2 = normalizer2.buildNormalPlan(plan2->getPlanNode(), {.normalize_literals = true, .normalize_storage = true});
+    auto logical_plan_str2 = PlanPrinter::textPlanNode(logical_plan2, context2);
+
+    ASSERT_EQ(logical_plan_str1, logical_plan_str2) << logical_plan_str1 << logical_plan_str2;
 }

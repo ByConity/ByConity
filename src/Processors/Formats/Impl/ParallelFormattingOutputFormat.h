@@ -115,6 +115,12 @@ public:
         return internal_formatter_creator(buffer)->getContentType();
     }
 
+    void closeFile() override
+    {
+        finalize();
+        IOutputFormat::closeFile();
+    }
+
 protected:
     void consume(Chunk chunk) override final
     {

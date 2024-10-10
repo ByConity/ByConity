@@ -7,9 +7,9 @@
 #if USE_HIVE
 
 #include <hive_metastore_types.h>
-#include "Access/KerberosInit.h"
-#include "Storages/Hive/CnchHiveSettings.h"
-#include "Storages/Hive/TSaslClientTransport.h"
+#include <Access/KerberosInit.h>
+#include <Storages/Hive/CnchHiveSettings.h>
+#include <Storages/Hive/TSaslClientTransport.h>
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -286,6 +286,7 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     {
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "connect to hive metastore: {} failed. {}", name, tx.what());
     }
+
     return thrift_client;
 }
 } // namespace DB

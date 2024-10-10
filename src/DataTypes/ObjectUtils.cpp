@@ -1011,7 +1011,8 @@ void limitObjectSubcolumns(const ColumnsDescription & object_columns, const UInt
 UInt64 getColumnsCommitTimeForJSONTable(const IStorage & table, const NamesAndTypesList & search_part_columns)
 {
     Names exclude_column_names;
-    for (const auto & column : table.getInMemoryMetadata().columns)
+    auto storage_metadata = table.getInMemoryMetadataPtr();
+    for (const auto & column : storage_metadata->getColumns())
     {
         if (column.type->hasDynamicSubcolumns())
             exclude_column_names.emplace_back(column.name);

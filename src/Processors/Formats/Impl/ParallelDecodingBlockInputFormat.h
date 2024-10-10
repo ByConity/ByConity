@@ -4,6 +4,7 @@
 #include <bthread/condition_variable.h>
 #include "Formats/SharedParsingThreadPool.h"
 #include "Processors/Formats/IInputFormat.h"
+#include "Processors/Sources/ConstChunkGenerator.h"
 #include "Storages/MergeTree/KeyCondition.h"
 #include "Common/ThreadPool.h"
 
@@ -43,14 +44,15 @@ protected:
         is_stopped = 1;
     }
 
-    void initializeIfNeeded();
 
     virtual size_t getNumberOfRowGroups() = 0;
+    void initializeFileReaderIfNeeded();
     virtual void initializeFileReader() = 0;
     virtual void initializeRowGroupReaderIfNeeded(size_t row_group_idx) = 0;
     virtual void resetRowGroupReader(size_t row_group_idx) = 0;
     struct PendingChunk;
     virtual std::optional<PendingChunk> readBatch(size_t row_group_idx) = 0;
+    virtual size_t getRowCount() = 0;
 
     void decodeOneChunk(size_t row_group_idx, std::unique_lock<Mutex> & lock);
 
@@ -170,6 +172,7 @@ protected:
     bool is_initialized = false;
 
     std::optional<KeyCondition> key_condition;
+    std::optional<ConstChunkGenerator> const_chunk_source;
 };
 
 }

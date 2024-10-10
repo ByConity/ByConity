@@ -9,7 +9,6 @@
 #include "Interpreters/Context.h"
 #include "Processors/Executors/PullingPipelineExecutor.h"
 #include <Processors/Formats/InputStreamFromInputFormat.h>
-#include "Processors/Sources/SourceFromSingleChunk.h"
 #include "Processors/QueryPipeline.h"
 #include "Storages/Hive/HivePartition.h"
 #include "Processors/Transforms/FilterTransform.h"
@@ -20,6 +19,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int THERE_IS_NO_COLUMN;
+    extern const int UNSUPPORTED_METHOD;
 }
 
 StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, const StorageMetadataPtr & metadata_)
@@ -43,21 +43,6 @@ StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, const StorageMeta
     }
 
     eraseHiveVirtuals(physical_header);
-
-    if (!physical_header)
-    {
-        all_partition_column = true;
-
-        NamesAndTypesList physical = metadata->getColumns().getAllPhysical();
-        physical.remove_if([&] (auto &col) {
-            return partition_name_to_index.contains(col.name);
-        });
-
-        /// select smallest non partition column
-        String selected = ExpressionActions::getSmallestColumn(physical);
-        auto column = metadata->getColumns().getPhysical(selected);
-        physical_header.insert(ColumnWithTypeAndName(column.type, column.name));
-    }
 }
 
 Block StorageHiveSource::BlockInfo::getHeader() const
@@ -65,7 +50,7 @@ Block StorageHiveSource::BlockInfo::getHeader() const
     return header;
 }
 
-StorageHiveSource::Allocator::Allocator(HiveFiles files_)
+StorageHiveSource::Allocator::Allocator(HiveFiles && files_)
     : hive_files(std::move(files_))
 {
 }
@@ -91,6 +76,8 @@ StorageHiveSource::StorageHiveSource(
     , block_info(info_)
     , allocator(allocator_)
     , shared_pool(shared_pool_)
+    , need_only_count(
+          (query_info_->optimize_trivial_count && context_->getSettingsRef().optimize_trivial_count_query) || !info_->physical_header)
 {
     /// Update some hive settings
     FormatSettings format_settings = getFormatSettings(context_);
@@ -122,34 +109,21 @@ void StorageHiveSource::prepareReader()
     if (!hive_file)
         return;
 
-    /// all blocks are 'virtual' i.e. all columns are partition column
-    if (block_info->all_partition_column)
-    {
-        std::optional<size_t> num_rows = hive_file->numRows();
-        if (num_rows)
-        {
-            Columns columns;
-            auto types = block_info->physical_header.getDataTypes();
-            for (const auto & type : types)
-                columns.push_back(type->createColumnConstWithDefaultValue(*num_rows));
-
-            Chunk chunk(std::move(columns), *num_rows);
-            pipeline = std::make_unique<QueryPipeline>();
-            pipeline->init(Pipe(std::make_shared<SourceFromSingleChunk>(block_info->physical_header, std::move(chunk))));
-            reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-            return;
-        }
-    }
-
     pipeline = std::make_unique<QueryPipeline>();
     if (hive_file->format == IHiveFile::FileFormat::Paimon)
         data_source = hive_file->getReader(block_info->header, read_params);
     else
         data_source = hive_file->getReader(block_info->physical_header, read_params);
+
     pipeline->init(Pipe(data_source));
     reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
 
     auto input_format = std::dynamic_pointer_cast<IInputFormat>(data_source);
+    if (input_format && need_only_count)
+    {
+        input_format->needOnlyCount();
+    }
+
     if (read_params->query_info && read_params->query_info->prewhere_info
         && input_format && !input_format->supportsPrewhere())
     {

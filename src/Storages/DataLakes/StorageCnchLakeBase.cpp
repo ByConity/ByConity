@@ -190,7 +190,7 @@ void StorageCnchLakeBase::alter(const AlterCommands & params, ContextPtr local_c
 {
     checkAlterSettings(params);
 
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
 
     params.apply(new_metadata, local_context);
     CnchHiveSettings new_settings = storage_settings ? *storage_settings : local_context->getCnchHiveSettings();

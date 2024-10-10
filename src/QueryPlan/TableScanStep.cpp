@@ -15,8 +15,9 @@
 
 #include <memory>
 #include <optional>
-#include <QueryPlan/TableScanStep.h>
+#include <Optimizer/Rewriter/SQLFingerprintRewriter.h>
 #include <QueryPlan/ExecutePlanElement.h>
+#include <QueryPlan/TableScanStep.h>
 
 #include <Analyzers/TypeAnalyzer.h>
 #include <DataTypes/ObjectUtils.h>
@@ -65,6 +66,9 @@
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
+#include "IO/ReadBufferFromString.h"
+#include "IO/WriteBufferFromString.h"
+#include "Parsers/ASTSerDerHelper.h"
 
 namespace DB
 {
@@ -740,12 +744,12 @@ void TableScanStep::formatOutputStream(ContextPtr context)
     const auto select_expression_list = query_info.query->as<ASTSelectQuery>()->select();
     select_expression_list->children.clear();
 
-    for (const auto & item : header)
+    for (const auto & name : getRequiredColumns(GetFlags::Output))
     {
-        select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(item.name));
-        if (name_to_name_map.contains(item.name))
+        select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(name));
+        if (name_to_name_map.contains(name))
         {
-            table_output_stream.header.insert(ColumnWithTypeAndName{item.type, name_to_name_map[item.name]});
+            table_output_stream.header.insert(ColumnWithTypeAndName{header.getByName(name).type, name_to_name_map[name]});
         }
     }
 
@@ -755,6 +759,10 @@ void TableScanStep::formatOutputStream(ContextPtr context)
         select_expression_list->children.emplace_back(inline_expr.second->clone());
         table_output_stream.header.insert(ColumnWithTypeAndName{type_analyzer.getType(inline_expr.second), inline_expr.first});
     }
+
+    // in case of column_names is empty, add a dummy column
+    if (select_expression_list->children.empty())
+        select_expression_list->children.emplace_back(std::make_shared<ASTLiteral>(1U));
 
     *output_stream = table_output_stream;
 
@@ -1240,7 +1248,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         {
             cloud_merge_tree->source_task_filter = build_context.distributed_settings.source_task_filter;
         }
-        // flag = Output
+        // Here columns of PREWHERE being included in required columns is by design
         QueryPlan storage_plan;
         storage->read(
             storage_plan,

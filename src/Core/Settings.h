@@ -157,18 +157,12 @@ enum PreloadLevelSettings : UInt64
       "Block at the query wait loop on the server for the specified number of seconds.", \
       0) \
     M(UInt64, idle_connection_timeout, 3600, "Close idle TCP connections after specified number of seconds.", 0) \
-    M(UInt64, \
-      distributed_connections_pool_size, \
-      DBMS_DEFAULT_DISTRIBUTED_CONNECTIONS_POOL_SIZE, \
-      "Maximum number of connections with one remote server in the pool.", \
-      0) \
-    M(UInt64, \
-      connections_with_failover_max_tries, \
-      DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES, \
-      "The maximum number of attempts to connect to replicas.", \
-      0) \
-    M(UInt64, s3_min_upload_part_size, 512 * 1024 * 1024, "The minimum size of part to upload during multipart upload to S3.", 0) \
-    M(UInt64, s3_max_single_part_upload_size, 64 * 1024 * 1024, "The maximum size of object to upload using singlepart upload to S3.", 0) \
+    M(UInt64, distributed_connections_pool_size, DBMS_DEFAULT_DISTRIBUTED_CONNECTIONS_POOL_SIZE, "Maximum number of connections with one remote server in the pool.", 0) \
+    M(UInt64, connections_with_failover_max_tries, DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES, "The maximum number of attempts to connect to replicas.", 0) \
+    M(UInt64, s3_min_upload_part_size, 128*1024*1024, "The minimum size of part to upload during multipart upload to S3.", 0) \
+    M(UInt64, s3_max_single_part_upload_size, 64*1024*1024, "The maximum size of object to upload using singlepart upload to S3.", 0) \
+    M(UInt64, s3_use_parallel_upload, false, "Whether to allow s3 upload part concurrently when using MultiPartUpload", 0) \
+    M(UInt64, s3_parallel_upload_pool_size, 8, "The thread pool size of s3 parallel upload", 0) \
     M(UInt64, s3_max_single_read_retries, 4, "The maximum number of retries during single S3 read.", 0) \
     M(UInt64, s3_max_redirects, 10, "Max number of S3 redirects hops allowed.", 0) \
     M(UInt64, s3_max_connections, 1024, "The maximum number of connections per server.", 0) \
@@ -377,6 +371,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_queries, 1, "Log requests and write the log to the system table.", 0) \
     M(Bool, log_query_plan, 0, "Log json format query plan to the system query_log table.", 0) \
+    M(Bool, log_normalized_query_plan_hash, 0, "Log json format query plan to the system query_log table.", 0) \
     M(Bool, log_max_io_thread_queries, 1, "Log max io time thread requests and write the log to the system table", 0) \
     M(LogQueriesType, \
       log_queries_min_type, \
@@ -1398,6 +1393,7 @@ enum PreloadLevelSettings : UInt64
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
     M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
+    M(LogExplainAnalyzeType, log_explain_analyze_type, LogExplainAnalyzeType::NONE, "Log explain analyze result. Type: NONE|QUERY_PIPELINE|AGGREGATED_QUERY_PIPELINE.", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
     M(Bool, enable_active_prewhere, false, "Whether to actively generate prewhere by statistics", 0) \
     M(Float, max_active_prewhere_selectivity, 0.3, "Max Selectivity of actively generated prewheres", 0) \
@@ -1532,11 +1528,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_sorting_through_union, true, "Whether to enable PushPartialSortingThroughUnion rules", 0) \
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
+    M(Bool, enable_push_partial_topn_distinct_through_exchange, true, "Whether to enable PushPartialTopNDistinctThroughExchange rules", 0) \
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
     M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
     M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
     M(Bool, enable_push_sort_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
-    M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
+    M(Bool, enable_push_topn_through_projection, false, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \
     M(Bool, enable_optimize_aggregate_memory_efficient, false, "Whether to enable OptimizeMemoryEfficientAggregation rules", 0) \
@@ -1548,7 +1545,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
     M(Bool, enable_unalias_symbol_references, true, "Whether to enable unalias symbol references", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
-    M(Bool, extract_bitmap_implicit_filter, false, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
+    M(Bool, extract_bitmap_implicit_filter, true, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
     M(Bool, enable_add_local_exchange, false, "Whether to add local exchange", 0) \
     M(Bool, enable_join_using_to_join_on, false, "Whether rewrite Join Using to Join On to make reordering possible", 0) \
     M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
@@ -1787,6 +1784,7 @@ enum PreloadLevelSettings : UInt64
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
+    M(String, fallback_use_cnch_catalog, ALL_TABLE_FALLBACK_CNCH_CATALOG, "fallback using cnch catalog to get table first when resolving database and table failed", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
     M(Bool, enable_interactive_transaction, true, "Enable interactive transaction", 0) \
     M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \

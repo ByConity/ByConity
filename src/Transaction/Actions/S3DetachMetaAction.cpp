@@ -43,7 +43,8 @@ void S3DetachMetaAction::executeV2()
         return;
 
     /// In current impl, either parts or staged parts is empty.
-    global_context.getCnchCatalog()->detachAttachedParts(tbl, tbl, parts, staged_parts, parts.empty() ? staged_parts : parts, {}, bitmaps);
+    global_context.getCnchCatalog()->detachAttachedParts(
+        tbl, tbl, parts, staged_parts, parts.empty() ? staged_parts : parts, {}, bitmaps, txn_id);
     executed = true;
 }
 
@@ -60,7 +61,7 @@ void S3DetachMetaAction::abort()
         detached_names.push_back(part->info.getPartName());
     }
 
-    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts, staged_parts, bitmaps, {});
+    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts, staged_parts, bitmaps, {}, txn_id);
 
     /// Since bitmaps are all new base bitmap that have been regenerated, simply delete it
     for (const auto & bitmap: bitmaps)

@@ -1,8 +1,9 @@
 #include <Optimizer/Signature/PlanSignature.h>
 
-#include <Common/SipHash.h>
 #include <Optimizer/Signature/PlanNormalizer.h>
+#include <Optimizer/Signature/StepNormalizer.h>
 #include <QueryPlan/PlanNode.h>
+#include <Common/SipHash.h>
 
 #include <memory>
 #include <vector>
@@ -24,10 +25,10 @@ size_t PlanSignatureProvider::combine(const std::vector<size_t> & hashes)
     return hash.get64();
 }
 
-PlanSignature PlanSignatureProvider::computeSignature(PlanNodePtr node)
+PlanSignature PlanSignatureProvider::computeSignature(PlanNodePtr node, PlanNormalizerOptions options)
 {
     PlanNodeToSignatures buffer{};
-    return computeSignatureImpl(node, /*write_to_buffer*/false, buffer);
+    return computeSignatureImpl(node, /*write_to_buffer*/ false, buffer, options);
 }
 
 PlanSignature PlanSignatureProvider::combineSettings(PlanSignature signature, const SettingsChanges & settings)
@@ -57,21 +58,22 @@ PlanSignature PlanSignatureProvider::combineSettings(PlanSignature signature, co
 PlanNodeToSignatures PlanSignatureProvider::computeSignatures(PlanNodePtr node)
 {
     PlanNodeToSignatures buffer{};
-    computeSignatureImpl(node, /*write_to_buffer*/true, buffer);
+    computeSignatureImpl(node, /*write_to_buffer*/ true, buffer, {});
     return buffer;
 }
 
-PlanSignature PlanSignatureProvider::computeSignatureImpl(PlanNodePtr node, bool write_to_buffer, PlanNodeToSignatures & buffer)
+PlanSignature PlanSignatureProvider::computeSignatureImpl(
+    PlanNodePtr node, bool write_to_buffer, PlanNodeToSignatures & buffer, PlanNormalizerOptions options)
 {
     std::vector<PlanSignature> sigs;
     for (const auto & child : node->getChildren())
-        sigs.emplace_back(computeSignatureImpl(child, write_to_buffer, buffer));
+        sigs.emplace_back(computeSignatureImpl(child, write_to_buffer, buffer, options));
     // special case for cte, because its child is implicit
     if (auto cte_step = dynamic_pointer_cast<const CTERefStep>(node->getStep()))
     {
         auto cte_root = cte_info.getCTEs().at(cte_step->getId());
-        auto cte_root_signature = buffer.contains(cte_root) ? buffer.at(cte_root)
-                                                            : computeSignatureImpl(cte_root, /*write_to_buffer*/true, buffer);
+        auto cte_root_signature
+            = buffer.contains(cte_root) ? buffer.at(cte_root) : computeSignatureImpl(cte_root, /*write_to_buffer*/ true, buffer, options);
         sigs.emplace_back(std::move(cte_root_signature));
     }
 
@@ -81,5 +83,4 @@ PlanSignature PlanSignatureProvider::computeSignatureImpl(PlanNodePtr node, bool
         buffer.emplace(node, node_sig);
     return node_sig;
 }
-
 }

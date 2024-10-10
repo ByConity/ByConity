@@ -103,6 +103,8 @@ public:
 
     bool isNeedDedupStage() const { return dedup_mode != CnchDedupHelper::DedupMode::APPEND; }
 
+    void setFromAttach() { from_attach = true; }
+
     DumpedData res;
 
     static UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
@@ -122,6 +124,10 @@ private:
     ContextPtr context;
     ManipulationType type;
     String task_id;
+
+    /// ATTACH path should be distingushed from INSERT;
+    /// but we now record all new parts in INSERT, here we add this field as a mark
+    bool from_attach{false};
 
     String consumer_group;
     cppkafka::TopicPartitionList tpl;

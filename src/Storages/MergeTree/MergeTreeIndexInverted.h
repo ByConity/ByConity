@@ -6,12 +6,14 @@
 #include <common/types.h>
 #include <Common/config.h>
 #include <Common/ChineseTokenExtractor.h>
+#include "Storages/MergeTree/GINStoreCommon.h"
 #include <Interpreters/GinFilter.h>
 #include <Interpreters/ITokenExtractor.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
 #if USE_TSQUERY
@@ -50,7 +52,7 @@ class MergeTreeIndexAggregatorInverted final : public IMergeTreeIndexAggregator
 {
 public:
     MergeTreeIndexAggregatorInverted(
-        GinIndexStorePtr store_,
+        GINStoreWriter& writer_,
         const Names & index_columns_,
         const String & index_name_,
         const GinFilterParameters & params_,
@@ -66,7 +68,7 @@ public:
 
     void addToGinFilter(UInt32 rowID, const char * data, size_t length, GinFilter & gin_filter);
 
-    GinIndexStorePtr store;
+    GINStoreWriter& writer;
     Names index_columns;
     const String index_name;
     const GinFilterParameters params;
@@ -194,15 +196,17 @@ private:
 class MergeTreeIndexInverted final : public IMergeTreeIndex
 {
 public:
-    explicit MergeTreeIndexInverted(
-        const IndexDescription & index_, const GinFilterParameters & params_, std::unique_ptr<ITokenExtractor> && token_extractor_)
-        : IMergeTreeIndex(index_), params(params_), token_extractor(std::move(token_extractor_))
+    MergeTreeIndexInverted(const IndexDescription& index_, GINStoreVersion version_,
+        const GinFilterParameters& params_, std::unique_ptr<ITokenExtractor> && token_extractor_)
+            : IMergeTreeIndex(index_), version(version_), params(params_),
+            token_extractor(std::move(token_extractor_))
     {
     }
 
-    explicit MergeTreeIndexInverted(
-        const IndexDescription & index_, const GinFilterParameters & params_, std::unique_ptr<ChineseTokenExtractor> && nlp_extractor_)
-        : IMergeTreeIndex(index_), params(params_), nlp_extractor(std::move(nlp_extractor_))
+    MergeTreeIndexInverted(const IndexDescription & index_, GINStoreVersion version_,
+        const GinFilterParameters& params_, std::unique_ptr<ChineseTokenExtractor>&& nlp_extractor_)
+            : IMergeTreeIndex(index_), version(version_), params(params_),
+            nlp_extractor(std::move(nlp_extractor_))
     {
     }
 
@@ -210,14 +214,15 @@ public:
 
     MergeTreeIndexGranulePtr createIndexGranule() const override;
     MergeTreeIndexAggregatorPtr createIndexAggregator() const override;
-    MergeTreeIndexAggregatorPtr createIndexAggregatorForPart(const GinIndexStorePtr & store) const override;
+    MergeTreeIndexAggregatorPtr createIndexAggregatorForPart(GINStoreWriter * writer) const override;
     MergeTreeIndexConditionPtr createIndexCondition(const SelectQueryInfo & query_info, ContextPtr context) const override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & node) const override;
 
     bool isInvertedIndex() const override { return true; }
 
-    GinFilterParameters params;
+    const GINStoreVersion version;
+    const GinFilterParameters params;
     /// Function for selecting next token.
     std::unique_ptr<ITokenExtractor> token_extractor;
     // select next token with nlp, now we only have chinese

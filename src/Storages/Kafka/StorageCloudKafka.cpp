@@ -54,6 +54,7 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
     extern const int CNCH_KAFKA_TASK_NEED_STOP;
     extern const int RDKAFKA_EXCEPTION;
+    extern const int TOO_MANY_PARTS;
 }
 
 namespace
@@ -450,7 +451,7 @@ void StorageCloudKafka::streamThread()
             if (!streamToViews())
                 break;
         }
-        rdkafka_exception_times = 0;
+        need_delay_exception_times = 0;
     }
     catch (const Exception & e)
     {
@@ -476,9 +477,9 @@ void StorageCloudKafka::streamThread()
             }).detach();
             return;
         }
-        else if (e.code() == ErrorCodes::RDKAFKA_EXCEPTION)
+        else if (e.code() == ErrorCodes::RDKAFKA_EXCEPTION || e.code() == ErrorCodes::TOO_MANY_PARTS)
         {
-            rdkafka_exception_times = std::min(10ul, rdkafka_exception_times + 1);
+            need_delay_exception_times = std::min(10ul, need_delay_exception_times + 1);
         }
 
         process_exception();
@@ -489,7 +490,7 @@ void StorageCloudKafka::streamThread()
     }
 
     if (stream_run)
-        consumer_context.task->scheduleAfter(STREAM_RESCHEDULE_MS * (1 << rdkafka_exception_times));
+        consumer_context.task->scheduleAfter(STREAM_RESCHEDULE_MS * (1 << need_delay_exception_times));
 }
 
 bool StorageCloudKafka::streamToViews(/* required_column_names */)

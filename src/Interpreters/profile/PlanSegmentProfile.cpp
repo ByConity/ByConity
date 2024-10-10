@@ -2,6 +2,7 @@
 #include <Interpreters/profile/PlanSegmentProfile.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/PlanSerDerHelper.h>
+#include <Core/SettingsEnums.h>
 
 
 namespace DB
@@ -189,4 +190,20 @@ void PlanSegmentProfile::toProto(Protos::PlanSegmentProfileRequest & proto)
     proto.set_error_message(error_message);
 }
 
+PlanSegmentProfilePtr PlanSegmentProfile::getFromProcessors(const Processors & processors, ContextPtr context)
+{
+    PlanSegmentProfilePtr segment_profile = std::make_shared<PlanSegmentProfile>(context->getCurrentQueryId(), 0);
+    ProcessorProfiles profiles;
+    for (const auto & processor : processors)
+        profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
+    GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+    if (context->getSettingsRef().log_explain_analyze_type != LogExplainAnalyzeType::NONE)
+    {
+        auto output_root = GroupedProcessorProfile::getOutputRoot(grouped_profiles);
+        segment_profile->profile_root_id = output_root->id;
+        segment_profile->profiles = GroupedProcessorProfile::getProfileMetricsFromOutputRoot(output_root);
+    }
+    segment_profile->worker_address = context->getCoordinatorAddress().toString();
+    return segment_profile;
+}
 }

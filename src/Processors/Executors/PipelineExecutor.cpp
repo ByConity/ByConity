@@ -81,7 +81,8 @@ PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem,
     if (process_list_element)
     {
         report_processors_profile = process_list_element->getContext()->getSettingsRef().report_processors_profiles;
-        need_processors_profiles = process_list_element->getContext()->getSettingsRef().log_processors_profiles || report_processors_profile;
+        need_processors_profiles = process_list_element->getContext()->getSettingsRef().report_segment_profiles ||
+            process_list_element->getContext()->getSettingsRef().log_processors_profiles || report_processors_profile;
     }
 
     try

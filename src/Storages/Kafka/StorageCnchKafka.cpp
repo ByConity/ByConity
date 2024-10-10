@@ -141,8 +141,8 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     /// start alter
     LOG_DEBUG(log, "Start altering table {}", full_name);
 
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
@@ -221,7 +221,7 @@ StoragePtr StorageCnchKafka::tryGetTargetTable()
         if (!mv)
             throw Exception("Dependence for CnchKafka should be MaterializedView, but got "
                             + view->getName(), ErrorCodes::LOGICAL_ERROR);
-        
+
         if (mv->async())
            continue;
 

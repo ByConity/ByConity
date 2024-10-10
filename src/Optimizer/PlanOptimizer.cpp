@@ -104,6 +104,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         // push down limit and aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::markTopNDistinct(), "MarkTopNDistinct"),
+
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
         std::make_shared<DistinctToAggregatePruning>(),
 
@@ -124,6 +126,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<CascadesOptimizer>(false),
 
         std::make_shared<AddBufferForDeadlockCTE>(),
+        std::make_shared<IterativeRewriter>(Rules::pushTopNDistinct(), "PushTopNDistinct"),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
@@ -239,6 +242,7 @@ const Rewriters & PlanOptimizer::getLegacyFullRewriters()
 
         // push down limit & aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::markTopNDistinct(), "MarkTopNDistinct"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
         std::make_shared<DistinctToAggregatePruning>(),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
@@ -302,6 +306,7 @@ const Rewriters & PlanOptimizer::getLegacyFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
 
+        std::make_shared<IterativeRewriter>(Rules::pushTopNDistinct(), "PushTopNDistinct"),
         // push partial step through exchange
         // TODO cost-base partial aggregate push down
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
@@ -407,6 +412,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<SimplifyCrossJoin>(),
 
+        std::make_shared<IterativeRewriter>(Rules::markTopNDistinct(), "MarkTopNDistinct"),
+
         // add materialized view rewriter before distinct-aggregte rewrite
         std::make_shared<MaterializedViewRewriter>(),
 
@@ -471,6 +478,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<AddRuntimeFilters>(),
 
         // push partial step through exchange
+        std::make_shared<IterativeRewriter>(Rules::pushTopNDistinct(), "PushTopNDistinct"),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
 
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),

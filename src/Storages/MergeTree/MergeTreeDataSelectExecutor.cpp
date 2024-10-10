@@ -50,7 +50,7 @@
 #include <QueryPlan/UnionStep.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/MergeTree/GinIndexDataPartHelper.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
@@ -2124,7 +2124,8 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         {
             gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*part);
         }
-        cache_in_store.store = context->getGinIndexStoreFactory()->get(index_helper->getFileName(), std::move(gin_part_helper));
+        cache_in_store.store = context->getGINStoreReaderFactory()->get(
+            index_helper->getFileName(), std::move(gin_part_helper));
         cache_in_store.filter_result_cache = part->storage.getContext()->getGinIndexFilterResultCache();
     }
 

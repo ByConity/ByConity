@@ -76,6 +76,7 @@ namespace ErrorCodes
     extern const int CNCH_KAFKA_TASK_NEED_STOP;
     extern const int UNKNOWN_TABLE;
     extern const int CNCH_TOPOLOGY_NOT_MATCH_ERROR;
+    extern const int TOO_MANY_PARTS;
 }
 namespace AutoStats = Statistics::AutoStats;
 
@@ -1107,11 +1108,22 @@ void CnchServerServiceImpl::getDedupImplVersion(
     Protos::GetDedupImplVersionResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    auto cnch_txn = getContext()->getCnchTransactionCoordinator().getTransaction(request->txn_id());
-    if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
-        cnch_txn->setMainTableUUID(RPCHelpers::createUUID(request->uuid()));
-    response->set_version(cnch_txn->getDedupImplVersion(getContext()));
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(request->txn_id());
+            if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
+                cnch_txn->setMainTableUUID(RPCHelpers::createUUID(request->uuid()));
+            response->set_version(cnch_txn->getDedupImplVersion(gc));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+            response->set_version(1);
+        }
+    });
 }
 
 // About Auto Statistics
@@ -1458,7 +1470,14 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
                         bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
 
                     global_context->getCnchCatalog()->attachDetachedParts(
-                        from_table, to_table, detached_part_names, commit_parts, commit_staged_parts, detached_bitmaps, bitmaps);
+                        from_table,
+                        to_table,
+                        detached_part_names,
+                        commit_parts,
+                        commit_staged_parts,
+                        detached_bitmaps,
+                        bitmaps,
+                        request->has_txn_id() ? request->txn_id() : 0);
                     break;
                 }
                 case Protos::DetachAttachType::ATTACH_DETACHED_RAW:
@@ -1546,7 +1565,15 @@ void CnchServerServiceImpl::redirectDetachAttachedS3Parts(
                     for (auto & bitmap_model : request->bitmaps())
                         bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
 
-                    global_context->getCnchCatalog()->detachAttachedParts(from_table, to_table, attached_parts, attached_staged_parts, commit_parts, attached_bitmaps, bitmaps);
+                    global_context->getCnchCatalog()->detachAttachedParts(
+                        from_table,
+                        to_table,
+                        attached_parts,
+                        attached_staged_parts,
+                        commit_parts,
+                        attached_bitmaps,
+                        bitmaps,
+                        request->has_txn_id() ? request->txn_id() : 0);
                     break;
                 }
                 case Protos::DetachAttachType::DETACH_ATTACHED_RAW:
@@ -2048,6 +2075,38 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
     });
 }
 
+void CnchServerServiceImpl::checkDelayInsertOrThrowIfNeeded(
+        google::protobuf::RpcController * cntl,
+        const Protos::checkDelayInsertOrThrowIfNeededReq * request,
+        Protos::checkDelayInsertOrThrowIfNeededResp * response,
+        google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, context = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            UUID uuid = RPCHelpers::createUUID(request->storage_uuid());
+            auto storage = context->getCnchCatalog()->getTableByUUID(*context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(storage.get());
+            if (!cnch_merge_tree)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "CnchMergeTree is expected for checkDelayInsertOrThrowIfNeeded but got " + storage->getName());
+
+            cnch_merge_tree->cnchDelayInsertOrThrowIfNeeded();
+        }
+        catch (Exception & e)
+        {
+            /// Only TOO_MANY_PARTS matters
+            if (e.code() == ErrorCodes::TOO_MANY_PARTS)
+                RPCHelpers::handleException(response->mutable_exception());
+            else
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    });
+}
 
 #if defined(__clang__)
     #pragma clang diagnostic pop

@@ -104,7 +104,11 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
 
 bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool throw_exception)
 {
-    if (!node || (!context->getSettingsRef().enable_optimizer))
+    if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().enable_distributed_output)
+        throw Exception(
+            "Distributed output in non-optimizer mode is not supported, please enable optimizer.", ErrorCodes::UNSUPPORTED_PARAMETER);
+
+    if (!node || !context->getSettingsRef().enable_optimizer)
     {
         turnOffOptimizer(context, node);
         return false;
@@ -120,9 +124,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
         turnOffOptimizer(context, node);
         return false;
     }
-
-    if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().enable_distributed_output)
-        throw Exception("Distributed output in non-optimizer mode is not supported, please enable optimizer.", ErrorCodes::UNSUPPORTED_PARAMETER);
 
     String reason;
     if (auto * explain = node->as<ASTExplainQuery>())

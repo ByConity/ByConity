@@ -260,4 +260,14 @@ std::vector<RulePtr> Rules::joinUsingToJoinOn()
     return {std::make_shared<JoinUsingToJoinOn>()};
 }
 
+std::vector<RulePtr> Rules::markTopNDistinct()
+{
+    return {std::make_shared<MarkTopNDistinctThroughExchange>()};
+}
+
+std::vector<RulePtr> Rules::pushTopNDistinct()
+{
+    return {std::make_shared<PushPartialTopNDistinctThroughExchange>()};
+}
+
 }

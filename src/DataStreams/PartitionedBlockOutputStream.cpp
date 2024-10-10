@@ -1,6 +1,7 @@
 #include "PartitionedBlockOutputStream.h"
 
 #include <Functions/FunctionsConversion.h>
+#include <common/getFQDNOrHostName.h>
 #include <Common/ArenaUtils.h>
 
 #include <Interpreters/Context.h>
@@ -133,7 +134,7 @@ void PartitionedBlockOutputStream::validatePartitionKey(const String & str, bool
 
 String PartitionedBlockOutputStream::replaceWildcards(const String & haystack, const String & partition_id)
 {
-    return boost::replace_all_copy(haystack, PartitionedBlockOutputStream::PARTITION_ID_WILDCARD, partition_id);
+    return boost::replace_all_copy(haystack, PartitionedBlockOutputStream::PARTITION_ID_REPLACE, fmt::format("{}_{}", partition_id,  getPodOrHostName()));
 }
 
 }

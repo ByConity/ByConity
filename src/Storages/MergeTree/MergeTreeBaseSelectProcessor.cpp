@@ -138,16 +138,11 @@ Chunk MergeTreeBaseSelectProcessor::generate()
             injectVirtualColumns(res, task.get(), partition_value_type, virt_column_names);
             if (support_intermedicate_result_cache)
             {
-                if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
-                {
-                    OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->getDeleteBitmapVersion())};
-                    res.setOwnerInfo(std::move(owner_info));
-                }
-                else
-                {
-                    OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->commit_time.toSecond())};
-                    res.setOwnerInfo(std::move(owner_info));
-                }
+                UInt64 modification_time = task->data_part->getModificationTime();
+                /// In some cases, like mutation commands, part will not load delete bitmap for unique table, just skip result cache
+                if (modification_time == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+                    return res;
+                res.setOwnerInfo({task->data_part->name, static_cast<time_t>(modification_time)});
             }
 
             return res;

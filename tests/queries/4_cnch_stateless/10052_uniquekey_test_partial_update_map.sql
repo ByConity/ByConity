@@ -40,6 +40,7 @@ select * from uniquekey_partial_update1 order by id;
 ------- test partial update insert select operation, enable merge_map_when_partial_update
 drop table if exists uniquekey_partial_update_source_table;
 drop table if exists uniquekey_partial_update1;
+drop table if exists uniquekey_partial_update2;
 
 create table uniquekey_partial_update_source_table (id Int32, a Int32, b LowCardinality(String), c FixedString(10), d Array(Int32), e Map(String, Int32)) Engine=CnchMergeTree() order by id;
 create table uniquekey_partial_update1 (id Int32, a Int32, b LowCardinality(String), c FixedString(10), d Array(Int32), e Map(String, Int32)) Engine=CnchMergeTree() order by id unique key id SETTINGS enable_unique_partial_update = 1, partial_update_enable_merge_map = 1;
@@ -49,8 +50,13 @@ select 'test partial update insert select operation, select1, from source table'
 select * from uniquekey_partial_update_source_table order by id, a, b, c;
 
 insert into uniquekey_partial_update1 (id, a, b, c, d, e, _update_columns_) select id, a, b, c, d, e, 'id,a,d,e' as _update_columns_ from uniquekey_partial_update_source_table;
-select 'test partial update insert select operation, select2, from target table';
+select 'test partial update insert select operation, select2, from target table 1';
 select * from uniquekey_partial_update1;
+
+create table uniquekey_partial_update2 (id Int32, a Int32, b LowCardinality(String), c FixedString(10), d Array(Int32), e Map(String, Int32)) Engine=CnchMergeTree() order by id unique key id SETTINGS enable_unique_partial_update = 1, partial_update_enable_merge_map = 1, dedup_impl_version = 'dedup_in_txn_commit';
+insert into uniquekey_partial_update2 (id, a, b, c, d, e, _update_columns_) select id, a, b, c, d, e, 'id,a,d,e' as _update_columns_ from uniquekey_partial_update_source_table settings optimize_unique_table_write = 1;
+select 'test partial update insert select operation, select3, from target table 2';
+select * from uniquekey_partial_update2;
 
 -- create materialized view uniquekey_partial_update_view to uniquekey_partial_update2 (id Int32, a Int32, b LowCardinality(String), c FixedString(10), d Array(Int32), e Map(String, Int32), `_update_columns_` String) as select id, a, b, c, d, e, update_columns as _update_columns_ from uniquekey_partial_update_source_table;
 -- insert into uniquekey_partial_update_source_table (id, a, d, update_columns) values (1, 4, [10, 20], 'id,d'), (2, 6, [50, 60], 'id,a');
@@ -62,3 +68,4 @@ select * from uniquekey_partial_update1;
 
 drop table if exists uniquekey_partial_update_source_table;
 drop table if exists uniquekey_partial_update1;
+drop table if exists uniquekey_partial_update2;

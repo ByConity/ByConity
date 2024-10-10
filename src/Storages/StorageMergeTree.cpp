@@ -260,8 +260,8 @@ BlockOutputStreamPtr
 StorageMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     const auto & settings = local_context->getSettingsRef();
-    return std::make_shared<MergeTreeBlockOutputStream>(
-        *this, metadata_snapshot, settings.max_partitions_per_insert_block, local_context);
+    UInt64 max_parts = getSettings()->max_partitions_per_insert_block.changed ? getSettings()->max_partitions_per_insert_block : settings.max_partitions_per_insert_block;
+    return std::make_shared<MergeTreeBlockOutputStream>(*this, metadata_snapshot, max_parts, local_context);
 }
 
 void StorageMergeTree::checkTableCanBeDropped() const
@@ -302,8 +302,8 @@ void StorageMergeTree::alter(
     auto table_id = getStorageID();
     auto old_storage_settings = getSettings();
 
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
     auto maybe_mutation_commands = commands.getMutationCommands(new_metadata, local_context->getSettingsRef().materialize_ttl_after_modify, local_context);
     /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
     handleClearColumnInPartitionWhere(maybe_mutation_commands, commands);

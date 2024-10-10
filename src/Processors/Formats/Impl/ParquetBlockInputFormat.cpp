@@ -636,6 +636,12 @@ std::optional<ParallelDecodingBlockInputFormat::PendingChunk> ParquetBlockInputF
     return res;
 }
 
+size_t ParquetBlockInputFormat::getRowCount()
+{
+    initializeFileReaderIfNeeded();
+    return metadata->num_rows();
+}
+
 void ParquetBlockInputFormat::prefetchRowGroup(size_t row_group_idx)
 {
     /// prebuffer will trigger async prefetch

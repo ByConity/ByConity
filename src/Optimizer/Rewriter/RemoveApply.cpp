@@ -893,6 +893,7 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
         SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
         limit_for_distinct,
         in_right,
+        true,
         true);
     auto distinct_node = std::make_shared<DistinctNode>(context->nextNodeId(), std::move(distinct_step), PlanNodes{subquery_ptr});
 
@@ -1097,6 +1098,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
             SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
             limit_for_distinct,
             key_pairs.second,
+            true,
             true);
         auto distinct_node
             = std::make_shared<DistinctNode>(context->nextNodeId(), std::move(distinct_step), PlanNodes{right_correlation_node});

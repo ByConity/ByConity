@@ -6,6 +6,8 @@ namespace DB
 {
     void ParallelFormattingOutputFormat::finalize()
     {
+        if (IOutputFormat::finalized)
+            return;
         need_flush = true;
         IOutputFormat::finalized = true;
         /// Don't throw any background_exception here, because we want to finalize the execution.

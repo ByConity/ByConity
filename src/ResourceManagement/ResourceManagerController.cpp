@@ -24,7 +24,6 @@
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
-#include <ResourceManagement/WorkerGroupResourceCoordinator.h>
 
 #include <ResourceManagement/ElectionController.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
@@ -47,7 +46,6 @@ ResourceManagerController::ResourceManagerController(ContextPtr global_context_)
     resource_tracker = std::make_unique<ResourceTracker>(*this);
     vw_manager = std::make_unique<VirtualWarehouseManager>(*this);
     group_manager = std::make_unique<WorkerGroupManager>(*this);
-    wg_resource_coordinator = std::make_unique<WorkerGroupResourceCoordinator>(*this);
     election_controller = std::make_unique<ElectionController>(*this);
 }
 
@@ -452,11 +450,6 @@ void ResourceManagerController::dropWorkerGroup(
         vw->removeGroup(group_id);
     }
     group_manager->dropWorkerGroupImpl(group_id, wg_lock);
-}
-
-CoordinateDecisions ResourceManagerController::swapCoordinateDecisions()
-{
-    return wg_resource_coordinator->flushDecisions();
 }
 
 }

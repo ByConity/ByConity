@@ -148,7 +148,8 @@ void InterpreterSelectIntersectExceptQuery::buildQueryPlan(QueryPlan & query_pla
             limits,
             0,
             result_header.getNames(),
-            false);
+            false,
+            true);
 
         query_plan.addStep(std::move(distinct_step));
     }

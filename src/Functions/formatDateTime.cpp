@@ -1092,14 +1092,14 @@ namespace
                         "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                             + ", should be 1, 2 or 3",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-                if (arguments.size() == 1 && !isInteger(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
+                if (arguments.size() == 1 && !isNumber(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
                     throw Exception(
                         "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName()
                             + " when arguments size is 1. Should be integer or a string literal of an integer",
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
                 if (arguments.size() > 1
                     && !(
-                        isInteger(arguments[0].type) || isDate(arguments[0].type) || isDate32(arguments[0].type)
+                        isNumber(arguments[0].type) || isDate(arguments[0].type) || isDate32(arguments[0].type)
                         || isDateTime(arguments[0].type) || isDateTime64(arguments[0].type) || isStringOrFixedString(arguments[0].type)))
                     throw Exception(
                         "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName()
@@ -1146,7 +1146,7 @@ namespace
             ColumnsWithTypeAndName converted;
             if constexpr (support_integer == SupportInteger::Yes)
             {
-                if (isStringOrFixedString(arguments[0].type))
+                if (isStringOrFixedString(arguments[0].type) || (isNumber(arguments[0].type) && !isInteger(arguments[0].type)))
                 {
                     ColumnsWithTypeAndName temp{arguments[0]};
                     auto to_int = FunctionFactory::instance().get("toInt64", context_ptr);

@@ -95,14 +95,8 @@ Pipe StorageCloudHive::read(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        pipes.emplace_back(std::make_shared<StorageHiveSource>(
-            local_context,
-            max_block_size,
-            block_info,
-            allocator,
-            query_info_ptr,
-            shared_pool
-        ));
+        pipes.emplace_back(
+            std::make_shared<StorageHiveSource>(local_context, max_block_size, block_info, allocator, query_info_ptr, shared_pool));
     }
     auto pipe = Pipe::unitePipes(std::move(pipes));
     narrowPipe(pipe, num_streams);

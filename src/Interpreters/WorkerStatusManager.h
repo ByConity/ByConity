@@ -238,7 +238,9 @@ class WorkerGroupStatus
 {
 public:
     friend class WorkerStatusManager;
-    WorkerGroupStatus(Context * context) : global_context(context) { }
+    explicit WorkerGroupStatus(Context * context) : global_context(context)
+    {
+    }
     WorkerGroupStatus() = default;
     ~WorkerGroupStatus();
     void calculateStatus();
@@ -303,9 +305,10 @@ public:
 
     constexpr static const size_t CIRCUIT_BREAKER_THRESHOLD = 20;
 
+    WorkerStatusManager() = default;
     explicit WorkerStatusManager(ContextWeakMutablePtr context_);
 
-    ~WorkerStatusManager();
+    virtual ~WorkerStatusManager();
 
     void updateWorkerNode(const Protos::WorkerNodeResourceData & resource_info, UpdateSource source);
 
@@ -328,7 +331,7 @@ public:
 
     std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
 
-    std::optional<WorkerStatusExtra> getWorkerStatus(const WorkerId & worker_id);
+    virtual std::optional<WorkerStatusExtra> getWorkerStatus(const WorkerId & worker_id);
 
     void updateConfig(const ASConfiguration & as_config);
 
@@ -363,7 +366,11 @@ public:
         task = pool_.createTask(prefix, [&] { heartbeat(); });
         task->activateAndSchedule();
     }
-    void stop() { task->deactivate(); }
+    void stop()
+    {
+        if (task)
+            task->deactivate();
+    }
     void heartbeat();
     void shutdown();
 

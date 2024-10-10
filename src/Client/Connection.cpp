@@ -1040,7 +1040,7 @@ Packet Connection::receivePacket()
 
             case Protocol::Server::ReadTaskRequest:
                 return res;
-            
+
             case Protocol::Server::TimezoneUpdate:
                 readStringBinary(server_timezone, *in);
                 res.server_timezone = server_timezone;

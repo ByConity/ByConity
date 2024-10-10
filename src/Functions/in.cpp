@@ -80,6 +80,12 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
+    // Require building set
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const override
     {
         /// Never return constant for -IgnoreSet functions to avoid constant folding.

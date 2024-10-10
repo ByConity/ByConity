@@ -291,7 +291,7 @@ void CnchServerTransaction::executeDedupStage()
     std::vector<brpc::CallId> call_ids;
     for (auto & it : dedup_task_map)
     {
-        Stopwatch total_task_watch;
+        Stopwatch task_watch;
         const auto & storage_id = it.first;
         auto & dedup_task = it.second;
         if (!dedup_task)
@@ -319,32 +319,54 @@ void CnchServerTransaction::executeDedupStage()
 
         /// 1. Acquire lock and fill task
         CnchDedupHelper::acquireLockAndFillDedupTask(*cnch_table, *dedup_task, *this, getContext());
-        /// 2. Random pick one worker to execute dedup task
+        /// 2. Pick worker to execute dedup task
         auto vw_handle = getContext()->getVirtualWarehousePool().get(cnch_table->getSettings()->cnch_vw_write);
-        auto worker_client = vw_handle->getWorker();
-        if (cnch_table->getSettings()->pick_first_worker_to_dedup)
-            worker_client = vw_handle->getAllWorkers()[0];
-        LOG_DEBUG(log, "Choose worker: {} to execute dedup task for txn {}", worker_client->getHostWithPorts().toDebugString(), txn_id.toUInt64());
+        auto sub_dedup_tasks = CnchDedupHelper::pickWorkerForDedup(*cnch_table, dedup_task, vw_handle);
 
         /// 3. Execute dedup task and wait result
-        Stopwatch inner_watch;
-        auto funcOnCallback = [&, dedup_task, inner_watch, pre_cost = total_task_watch.elapsedMilliseconds()](bool success) {
-            dedup_task->statistics.execute_task_cost = inner_watch.elapsedMilliseconds();
-            dedup_task->statistics.total_cost = dedup_task->statistics.execute_task_cost + pre_cost;
-            dedup_task->statistics.other_cost = pre_cost - dedup_task->statistics.acquire_lock_cost - dedup_task->statistics.get_metadata_cost;
+        dedup_task->statistics.other_cost = task_watch.elapsedMilliseconds() - dedup_task->statistics.acquire_lock_cost - dedup_task->statistics.get_metadata_cost;
+        for (const auto & task_pair : sub_dedup_tasks)
+        {
+            const auto & worker_client = task_pair.first;
+            const auto & sub_dedup_task = task_pair.second;
             LOG_DEBUG(
                 log,
-                "{} handle dedup stage for table {}, part size: {}, delete bitmap size: {}, txn id: {}, statistics: {}",
-                success ? "Finish" : "Failed",
-                dedup_task->storage_id.getNameForLogs(),
-                dedup_task->new_parts.size(),
-                dedup_task->delete_bitmaps_for_new_parts.size(),
+                "Choose worker: {} to execute sub dedup task for txn {}, scope: {}",
+                worker_client->getHostWithPorts().toDebugString(),
                 txn_id.toUInt64(),
-                dedup_task->statistics.toString());
-        };
-        auto call_id
-            = worker_client->executeDedupTask(getContext(), txn_id, getContext()->getRPCPort(), *cnch_table, *dedup_task, handler, funcOnCallback);
-        call_ids.emplace_back(call_id);
+                sub_dedup_task->dedup_scope.toString());
+
+            Stopwatch inner_watch;
+            auto funcOnCallback
+                = [&, worker_client, dedup_task, sub_dedup_task, inner_watch, pre_cost = task_watch.elapsedMilliseconds()](bool success) {
+                      sub_dedup_task->statistics.execute_task_cost = inner_watch.elapsedMilliseconds();
+                      LOG_DEBUG(
+                          log,
+                          "Worker {} {} handle sub dedup task for table {}, txn id: {}, {}",
+                          worker_client->getHostWithPorts().toDebugString(),
+                          success ? "success" : "failed",
+                          dedup_task->storage_id.getNameForLogs(),
+                          txn_id.toUInt64(),
+                          sub_dedup_task->toString());
+
+                      if (!success)
+                          dedup_task->failed_task_num++;
+                      if (++dedup_task->finished_task_num == sub_dedup_tasks.size())
+                      {
+                          dedup_task->statistics.execute_task_cost = inner_watch.elapsedMilliseconds();
+                          dedup_task->statistics.total_cost = dedup_task->statistics.execute_task_cost + pre_cost;
+                          LOG_DEBUG(
+                              log,
+                              "All sub dedup tasks finish for table {}, txn_id: {}, {}",
+                              dedup_task->storage_id.getNameForLogs(),
+                              txn_id.toUInt64(),
+                              dedup_task->toString());
+                      }
+                  };
+            auto call_id = worker_client->executeDedupTask(
+                getContext(), txn_id, getContext()->getRPCPort(), *cnch_table, *sub_dedup_task, handler, funcOnCallback);
+            call_ids.emplace_back(call_id);
+        }
     }
 
     /// 4. Wait result

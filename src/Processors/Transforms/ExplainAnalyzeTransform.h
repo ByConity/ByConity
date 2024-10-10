@@ -14,12 +14,14 @@ using ProcessorsSet = std::unordered_set<const IProcessor *>;
 class ExplainAnalyzeTransform : public ISimpleTransform
 {
 public:
-    ExplainAnalyzeTransform(const Block & header_,
-                            ASTExplainQuery::ExplainKind kind_,
-                            std::shared_ptr<QueryPlan> query_plan_ptr_,
-                            ContextMutablePtr context_,
-                            PlanSegmentDescriptions & segment_descriptions_,
-                            QueryPlanSettings settings = {});
+    ExplainAnalyzeTransform(
+        const Block & input_header_,
+        const Block & output_header_,
+        ASTExplainQuery::ExplainKind kind_,
+        std::shared_ptr<QueryPlan> query_plan_ptr_,
+        ContextMutablePtr context_,
+        PlanSegmentDescriptions & segment_descriptions_,
+        QueryPlanSettings settings = {});
 
     String getName() const override { return "ExplainAnalyzeTransform"; }
 protected:

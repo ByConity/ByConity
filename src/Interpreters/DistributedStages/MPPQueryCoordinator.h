@@ -62,6 +62,11 @@ public:
 
     ~MPPQueryCoordinator();
 
+    UInt64 getNormalizedQueryPlanHash() const
+    {
+        return normalized_query_plan_hash;
+    }
+
 private:
     friend class CoordinatorStateMachineDef;
 
@@ -88,6 +93,7 @@ private:
     bool post_processing_rpc_waiting_initialized = false;
 
     ProgressManager progress_manager;
+    UInt64 normalized_query_plan_hash = 0;
 };
 
 using MPPQueryCoordinatorPtr = std::shared_ptr<MPPQueryCoordinator>;

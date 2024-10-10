@@ -765,11 +765,4 @@ void Block::updateHash(SipHash & hash) const
             col.column->updateHashWithValue(row_no, hash);
 }
 
-Block generateFakeBlock(const Block & src_block)
-{
-    if (src_block.rows() == 0)
-        throw Exception("Cannot generate fake block as src_block is empty.", ErrorCodes::LOGICAL_ERROR);
-    return src_block.cloneWithCutColumns(0, 1);
-}
-
 }

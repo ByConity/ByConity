@@ -18,7 +18,8 @@ public:
         INSERT,
     };
 
-    TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_ = false);
+    TableWriteStep(
+        const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_, String output_affected_row_count_symbol_);
 
     String getName() const override
     {
@@ -45,6 +46,8 @@ public:
 
     bool isOutputProfiles() const { return insert_select_with_profiles; }
 
+    const String & getOutputAffectedRowCountSymbol() const { return output_affected_row_count_symbol; }
+
     void toProto(Protos::TableWriteStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<TableWriteStep> fromProto(const Protos::TableWriteStep & proto, ContextPtr context);
 
@@ -61,6 +64,7 @@ private:
 
     TargetPtr target;
     bool insert_select_with_profiles;
+    String output_affected_row_count_symbol;
 };
 
 class TableWriteStep::Target

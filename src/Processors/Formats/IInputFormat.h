@@ -108,8 +108,13 @@ public:
     virtual IStorage::ColumnSizeByName getColumnSizes() { return {}; }
     virtual bool supportsPrewhere() const { return false; }
 
+    void needOnlyCount() { need_only_count = true; }
+
 protected:
+
     ColumnMappingPtr column_mapping{};
+
+    bool need_only_count = false;
 
 private:
     /// Number of currently parsed chunk (if parallel parsing is enabled)

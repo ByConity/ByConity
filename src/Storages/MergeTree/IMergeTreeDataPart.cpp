@@ -1784,6 +1784,21 @@ void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bo
     }
 }
 
+UInt64 IMergeTreeDataPart::getModificationTime() const
+{
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        /// For unique table, use delete bitmap version as modification_time instead of commit time.
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        if (std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end()) == 0)
+            return NOT_INITIALIZED_COMMIT_TIME;
+        else
+            return delete_bitmap_metas.front()->commit_time();
+    }
+    else
+        return commit_time.toSecond();
+}
+
 UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
 {
     throw Exception("getUniqueKeyIndex", ErrorCodes::UNSUPPORTED_METHOD);

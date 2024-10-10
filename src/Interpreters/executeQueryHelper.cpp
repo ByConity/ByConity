@@ -50,6 +50,48 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
             UUIDHelpers::UUIDToString(storage_ptr->getStorageUUID()), storage_ptr->getServerVwName(), context->getTimestamp(), true);
     };
 
+    auto get_main_table_from_query_settings = [&] (const std::vector<DatabaseAndTableWithAlias> & all_tables, const String & current_db)
+    {
+        StorageID main_table = StorageID::createEmpty();
+        String explicit_main_table = context->getSettingsRef().explicit_main_table;
+        if (!explicit_main_table.empty())
+        {
+            char * begin = explicit_main_table.data();
+            char * end = begin + explicit_main_table.size();
+            Tokens tokens(begin, end);
+            IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
+            auto pos = token_iterator;
+            Expected expected;
+            String database_name, table_name;
+            if (parseDatabaseAndTableName(pos, expected, database_name, table_name))
+            {
+                if (database_name.empty())
+                    database_name = current_db;
+
+                // Only if the specified main table shows up in select we can forward the query to its host server.
+                if (std::any_of(all_tables.begin(), all_tables.end(), [&](const auto & ele){return ele.database == database_name && ele.table == table_name;}))
+                {
+                    main_table.database_name = std::move(database_name);
+                    main_table.table_name = std::move(table_name);
+                    LOG_DEBUG(
+                        getLogger("executeQuery"),
+                        "Get explicit main table `{}.{}` from query settings.",
+                        database_name,
+                        table_name);
+                }
+                else
+                {
+                    LOG_WARNING(
+                        getLogger("executeQuery"),
+                        "Ignore main table settings because `{}.{}` is not found in the query.",
+                        database_name,
+                        table_name);
+                }
+            }
+        }
+        return main_table;
+    };
+
     if (const auto * alter = ast->as<ASTAlterQuery>())
     {
         if (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE)
@@ -61,6 +103,51 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
         if(alter_mysql->alter_object == ASTAlterQuery::AlterObjectType::DATABASE)
             return {};
         return get_target_server_for_table(alter_mysql->database.empty() ? context->getCurrentDatabase() : alter_mysql->database, alter_mysql->table);
+    }
+    else if (const auto insert = ast->as<ASTInsertQuery>())
+    {
+        // for insert select. we find the main table from the query settings or table settings and try to route 
+        // the query to the host server of the main table.
+        if (insert->select)
+        {
+            ASTs tables;
+            bool has_table_func = false;
+            ASTSelectQuery::collectAllTables(insert->select.get(), tables, has_table_func);
+            String current_db = context->getCurrentDatabase();
+
+            std::vector<DatabaseAndTableWithAlias> db_and_tables;
+            for (const auto & table_ast : tables)
+                db_and_tables.emplace_back(DatabaseAndTableWithAlias(table_ast, current_db));
+
+            StorageID main_table_from_query_setting = get_main_table_from_query_settings(db_and_tables, current_db);
+            if (!main_table_from_query_setting.empty())
+                return get_target_server_for_table(main_table_from_query_setting.database_name, main_table_from_query_setting.table_name);
+
+            for (const auto & db_and_table : db_and_tables)
+            {
+                if (db_and_table.database == "system")
+                    continue;
+                DatabaseAndTable db_and_tb = DatabaseCatalog::instance().tryGetDatabaseAndTable(StorageID(db_and_table.database, db_and_table.table), context);
+                DatabasePtr db_ptr = std::move(db_and_tb.first);
+                StoragePtr storage_ptr = std::move(db_and_tb.second);
+                if (!db_ptr || !storage_ptr || db_ptr->getEngineName() != "Cnch")
+                    continue;
+                
+                auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get());
+                if (!cnch)
+                    continue;
+                
+                if (cnch->getSettings()->as_main_table)
+                {
+                    auto topology_master = context->getCnchTopologyMaster();
+                    return topology_master->getTargetServer(
+                        UUIDHelpers::UUIDToString(storage_ptr->getStorageUUID()), storage_ptr->getServerVwName(), context->getTimestamp(), true);
+                }
+            }
+        }
+
+        // Otherwise, do not route query
+        return {};
     }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
@@ -98,41 +185,9 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
             /// 1. If the main table is explicitly set, use the user defined main table.
             /// 2. If one of the table is set to be main table in the table settings, use that table
             /// 3. Pick up the first one table shows up in the query as main table.
-            String explicit_main_table = context->getSettingsRef().explicit_main_table;
-            if (!explicit_main_table.empty())
-            {
-                char * begin = explicit_main_table.data();
-                char * end = begin + explicit_main_table.size();
-                Tokens tokens(begin, end);
-                IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
-                auto pos = token_iterator;
-                Expected expected;
-                String database_name, table_name;
-                if (parseDatabaseAndTableName(pos, expected, database_name, table_name))
-                {
-                    if (database_name.empty())
-                        database_name = current_db;
-
-                    // Only if the specified main table shows up in select we can forward the query to its host server.
-                    if (std::any_of(db_and_tables.begin(), db_and_tables.end(), [&](const auto & ele){return ele.database == database_name && ele.table == table_name;}))
-                    {
-                        LOG_DEBUG(
-                            getLogger("executeQuery"),
-                            "Get explicit main table `{}.{}` for current select query from settings.",
-                            database_name,
-                            table_name);
-                        return get_target_server_for_table(database_name, table_name);
-                    }
-                    else
-                    {
-                        LOG_WARNING(
-                            getLogger("executeQuery"),
-                            "Ignore main table settings because `{}.{}` is not in the select query.",
-                            database_name,
-                            table_name);
-                    }
-                }
-            }
+            StorageID main_table_from_query_setting = get_main_table_from_query_settings(db_and_tables, current_db);
+            if (!main_table_from_query_setting.empty())
+                return get_target_server_for_table(main_table_from_query_setting.database_name, main_table_from_query_setting.table_name);
 
             StoragePtr main_storage;
             for (const auto & db_and_table : db_and_tables)
@@ -221,7 +276,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     // PipelineExecutor requires block header.
     LOG_DEBUG(getLogger("executeQuery"), "Sending query as ordinary query");
     Block header;
-    if (context->getSettingsRef().enable_select_query_forwarding && ast->as<ASTSelectWithUnionQuery>())
+    if ((context->getSettingsRef().enable_select_query_forwarding || context->getSettingsRef().enable_multiple_table_select_query_forwarding)
+        && ast->as<ASTSelectWithUnionQuery>())
     {
         if (settings.enable_optimizer &&  QueryUseOptimizerChecker::check(ast, context))
             header = InterpreterSelectQueryUseOptimizer(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();

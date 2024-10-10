@@ -151,37 +151,26 @@ PlanSegmentProcessList::insertGroup(ContextMutablePtr query_context, std::vector
 }
 
 void PlanSegmentProcessList::insertProcessList(
-    EntryPtr plan_segment_process_entry, const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force)
+    EntryPtr plan_segment_process_entry, size_t segment_id, ContextMutablePtr query_context, bool force)
 {
-    if (plan_segment.getPlanSegmentId() != 0)
-        plan_segment_process_entry->prepareQueryScope(query_context);
-
-    auto segment_group = plan_segment_process_entry->getPlanSegmentGroup();
-    if (segment_group->is_internal_query)
-        return;
-
-    WriteBufferFromOwnString pipeline_buffer;
-    QueryPlan::ExplainPlanOptions options;
-    plan_segment.getQueryPlan().explainPlan(pipeline_buffer, options);
-    String pipeline_string = pipeline_buffer.str();
-
     ProcessList::EntryPtr entry;
     auto context_process_list_entry = query_context->getProcessListEntry().lock();
     if (context_process_list_entry)
         entry = std::move(context_process_list_entry);
     else
-        entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
+        entry = query_context->getProcessList().insert("", nullptr, query_context, force);
 
     plan_segment_process_entry->setQueryStatus(entry->getPtr());
-    bool exist = segment_group->modify(plan_segment.getPlanSegmentId(), std::move(entry));
+    const auto segment_group = plan_segment_process_entry->getPlanSegmentGroup();
+    bool exist = segment_group->modify(segment_id, std::move(entry));
     if (!exist)
         throw Exception(
             fmt::format(
                 "Distributed query {}@{}@{} doesn't contain segment_id {}",
-                plan_segment.getQueryId(),
+                query_context->getInitialQueryId(),
                 segment_group->coordinator_address,
                 segment_group->initial_query_start_time_ms,
-                plan_segment.getPlanSegmentId()),
+                segment_id),
             ErrorCodes::LOGICAL_ERROR);
 }
 

@@ -185,6 +185,7 @@ public:
         writer->doWriteSuffix();
         writer->flush();
         write_buf->sync();
+        write_buf->finalize();
     }
 
 private:
@@ -404,8 +405,6 @@ void IStorageCloudFile::read(
     size_t max_block_size,
     unsigned int num_streams)
 {
-    tryUpdateFSClient(query_context);
-
     if (parts.empty())
         return;
 
@@ -435,8 +434,6 @@ void IStorageCloudFile::read(
 
 BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, const ContextPtr query_context)
 {
-    tryUpdateFSClient(query_context);
-
     String current_uri = file_list.back();
     bool has_wildcards = current_uri.find(PartitionedFileBlockOutputStream::PARTITION_ID_WILDCARD) != String::npos;
     const auto * insert_query = dynamic_cast<const ASTInsertQuery *>(query.get());

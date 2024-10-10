@@ -397,7 +397,7 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
         StoragePtr storage = table_scan_step->getStorage();
         if (storage && storage->isBucketTable() && storage->isTableClustered(plan_segment_context.context))
         {
-            auto num_of_buckets = storage->getInMemoryMetadata().getBucketNumberFromClusterByKey();
+            auto num_of_buckets = storage->getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey();
             input->setNumOfBuckets(num_of_buckets);
         }
         return {input};
@@ -677,7 +677,7 @@ std::vector<size_t> ParallelSizeChecker::visitTableScanNode(QueryPlan::Node * no
 
 std::vector<size_t> ParallelSizeChecker::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
 {
-    return {shard_number};
+    return {1};
 }
 
 std::vector<size_t> ParallelSizeChecker::visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context &)

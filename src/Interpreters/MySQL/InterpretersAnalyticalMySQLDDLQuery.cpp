@@ -429,17 +429,17 @@ void InterpreterAlterAnalyticalMySQLImpl::validate(const TQuery & query, Context
             auto table_id = context->resolveStorageID(query, Context::ResolveOrdinary);
             DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, context);
             StoragePtr table = DatabaseCatalog::instance().getTable(table_id, context);
-            StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
+            auto metadata = table->getInMemoryMetadataPtr();
 
             if (auto command = AlterCommand::parse(command_ast, context))
             {
                 if (command->type == AlterCommand::MODIFY_COLUMN)
-                    validateAlterColumnType(*command, metadata);
+                    validateAlterColumnType(*command, *metadata);
 
                 /// check changes to primary key
                 if (command->type == AlterCommand::DROP_COLUMN || command->type == AlterCommand::MODIFY_COLUMN)
                 {
-                    const auto primary_col_names = getPrimaryKeys(metadata);
+                    const auto primary_col_names = getPrimaryKeys(*metadata);
                     if (primary_col_names.contains(command->column_name))
                         throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "Cannot modify primary key columns.");
                 }

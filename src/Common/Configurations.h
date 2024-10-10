@@ -23,8 +23,6 @@ namespace DB
     M(UInt64, init_client_tries, "", 3, ConfigFlag::Default, "") \
     M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "") \
     M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
-    M(String, resource_coordinate_mode, "", "None", ConfigFlag::Default, "None, Sharing, Scaling.") \
-    M(UInt64, resource_coordinate_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
     M(UInt64, worker_heartbeat_timeout_sec, "", 6, ConfigFlag::Default, "RM will mark a worker as outdated if don't receive its heartbeat in this timeout. And outdated workers will be removed periodcally.") \
 
@@ -166,6 +164,7 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, ginindex_store_cache_shard, "", 2, ConfigFlag::Default, "") \
     M(UInt64, ginindex_store_cache_ttl, "", 60, ConfigFlag::Default, "") \
     M(UInt64, ginindex_store_cache_lru_update_interval, "", 60, ConfigFlag::Default, "In seconds") \
+    M(UInt64, ginindex_store_cache_sst_block_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, intermediate_result_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, mark_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, mmap_cache_size, "", 1000, ConfigFlag::Default, "") \

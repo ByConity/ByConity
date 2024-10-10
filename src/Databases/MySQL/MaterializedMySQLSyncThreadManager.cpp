@@ -156,8 +156,8 @@ getTableOutput(const String & database_name, const String & table_name, ContextM
     const StoragePtr & storage = DatabaseCatalog::instance().getTable(StorageID(database_name, table_name), query_context);
 
     WriteBufferFromOwnString insert_columns_str;
-    const StorageInMemoryMetadata & storage_metadata = storage->getInMemoryMetadata();
-    const ColumnsDescription & storage_columns = storage_metadata.getColumns();
+    auto storage_metadata = storage->getInMemoryMetadataPtr();
+    const ColumnsDescription & storage_columns = storage_metadata->getColumns();
     const NamesAndTypesList & insert_columns_names = storage_columns.getOrdinary();
 
 

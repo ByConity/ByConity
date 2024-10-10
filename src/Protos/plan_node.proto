@@ -209,6 +209,7 @@ message TableWriteStep {
   required ITransformingStep query_plan_base = 1;
   required Target target = 2;
   optional bool insert_select_with_profiles = 3;
+  optional string output_affected_row_count_symbol = 4;
 }
 
 message TableFinishStep {
@@ -216,6 +217,7 @@ message TableFinishStep {
   required TableWriteStep.Target target = 2;
   required string output_affected_row_count_symbol = 3;
   optional AST query = 4;
+  optional bool insert_select_with_profiles = 5;
 }
 
 message OutfileWriteStep {

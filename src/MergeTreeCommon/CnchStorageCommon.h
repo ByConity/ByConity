@@ -86,6 +86,7 @@ public:
         bool need_extended_profile_info = false);
 
     String getCloudTableName(ContextPtr context) const;
+    static String getOriginalTableName(const String & table_name, DB::TxnTimestamp txn_id);
 
     // For each condition, we construct a block containing
     // arguments of condition and then run a function to execute this block.

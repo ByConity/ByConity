@@ -64,7 +64,7 @@ QueryPlan generateEmptyPlan()
 PlanSegmentProcessList::EntryPtr insertProcessList(PlanSegment & plan_segment, ContextMutablePtr context, bool force = false)
 {
     auto plan_segment_process_entry = context->getPlanSegmentProcessList().insertGroup(context, plan_segment.getPlanSegmentId(), force);
-    context->getPlanSegmentProcessList().insertProcessList(plan_segment_process_entry, plan_segment, context, force);
+    context->getPlanSegmentProcessList().insertProcessList(plan_segment_process_entry, plan_segment.getPlanSegmentId(), context, force);
     return plan_segment_process_entry;
 }
 

@@ -1,5 +1,7 @@
 #include <QueryPlan/ITransformingStep.h>
 #include <Processors/QueryPipeline.h>
+#include "QueryPlan/DistinctStep.h"
+#include "QueryPlan/IQueryPlanStep.h"
 
 namespace DB
 {

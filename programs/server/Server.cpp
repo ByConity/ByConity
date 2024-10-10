@@ -90,7 +90,7 @@
 #include <Formats/registerFormats.h>
 #include <Storages/registerStorages.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <google/protobuf/service.h>
@@ -1312,13 +1312,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setChecksumsCache(checksum_cache_settings);
 
     /// A cache for gin index store
-    GinIndexStoreCacheSettings ginindex_store_cache_settings;
-    ginindex_store_cache_settings.lru_max_size = root_config.ginindex_store_cache_size;
-    ginindex_store_cache_settings.mapping_bucket_size = root_config.ginindex_store_cache_bucket;
-    ginindex_store_cache_settings.cache_shard_num = root_config.ginindex_store_cache_shard;
-    ginindex_store_cache_settings.lru_update_interval = root_config.ginindex_store_cache_lru_update_interval;
-    ginindex_store_cache_settings.cache_ttl = root_config.ginindex_store_cache_ttl;
-    global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
+    GINStoreReaderFactorySettings gin_store_reader_factory_settings;
+    gin_store_reader_factory_settings.lru_max_size = root_config.ginindex_store_cache_size;
+    gin_store_reader_factory_settings.mapping_bucket_size = root_config.ginindex_store_cache_bucket;
+    gin_store_reader_factory_settings.cache_shard_num = root_config.ginindex_store_cache_shard;
+    gin_store_reader_factory_settings.lru_update_interval = root_config.ginindex_store_cache_lru_update_interval;
+    gin_store_reader_factory_settings.cache_ttl = root_config.ginindex_store_cache_ttl;
+    gin_store_reader_factory_settings.sst_block_cache_size = root_config.ginindex_store_cache_sst_block_cache_size;
+    global_context->setGINStoreReaderFactory(gin_store_reader_factory_settings);
 
     size_t compressed_data_index_cache_size = root_config.compressed_data_index_cache;
     global_context->setCompressedDataIndexCache(compressed_data_index_cache_size);

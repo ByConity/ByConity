@@ -101,7 +101,7 @@ public:
             const NamesAndTypesList & virtual_columns,
             ContextPtr context,
             KeysWithInfo * read_keys_ = nullptr,
-            const S3Settings::ReadWriteSettings & request_settings_ = {});
+            const S3Settings::RequestSettings & request_settings_ = {});
 
         KeyWithInfoPtr next(size_t idx = 0) override;
         size_t estimatedKeysCount() override;
@@ -120,7 +120,7 @@ public:
             const std::string & version_id_,
             const std::vector<String> & keys_,
             const String & bucket_,
-            const S3Settings::ReadWriteSettings & request_settings_,
+            const S3Settings::RequestSettings & request_settings_,
             KeysWithInfo * read_keys = nullptr);
 
         KeyWithInfoPtr next(size_t idx = 0) override;
@@ -159,7 +159,7 @@ public:
         const ContextPtr & context_,
         std::optional<FormatSettings> format_settings_,
         UInt64 max_block_size_,
-        const S3Settings::ReadWriteSettings & request_settings_,
+        const S3Settings::RequestSettings & request_settings_,
         String compression_hint_,
         const std::shared_ptr<Aws::S3::S3Client> & client_,
         const String & bucket,
@@ -183,7 +183,7 @@ private:
     ColumnsDescription columns_desc;
     NamesAndTypesList requested_columns;
     UInt64 max_block_size;
-    S3Settings::ReadWriteSettings request_settings;
+    S3Settings::RequestSettings request_settings;
     String compression_hint;
     std::shared_ptr<Aws::S3::S3Client> client;
     Block sample_block;
@@ -242,7 +242,7 @@ public:
 
         S3::URI url;
         S3::AuthSettings auth_settings;
-        S3Settings::ReadWriteSettings request_settings;
+        S3Settings::RequestSettings request_settings;
         /// If s3 configuration was passed from ast, then it is static.
         /// If from config - it can be changed with config reload.
         bool static_configuration = true;

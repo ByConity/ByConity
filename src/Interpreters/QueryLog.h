@@ -105,6 +105,7 @@ struct QueryLogElement
     String virtual_warehouse;
     String worker_group;
     String query_plan;
+    UInt64 normalized_query_plan_hash{};
 
     static std::string name() { return "QueryLog"; }
 

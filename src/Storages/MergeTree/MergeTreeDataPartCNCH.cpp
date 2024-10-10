@@ -50,7 +50,7 @@
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/DiskCache/BitmapIndexDiskCacheSegment.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/MergeTree/GinIndexDataPartHelper.h>
 
 
@@ -350,7 +350,7 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes(
     default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
-void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
+void MergeTreeDataPartCNCH::loadFromFileSystem()
 {
     if (parent_part && enableDiskCache())
     {
@@ -362,7 +362,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
             if (cache_disk && cache_disk->exists(segment_path))
             {
                 auto reader = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
-                loadMetaInfoFromBuffer(*reader, load_hint_mutation);
+                loadMetaInfoFromBuffer(*reader);
 
                 return;
             }
@@ -381,7 +381,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     DiskPtr disk = volume->getDisk();
     auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size, "metainfo.txt");
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
-    loadMetaInfoFromBuffer(limit_reader, load_hint_mutation);
+    loadMetaInfoFromBuffer(limit_reader);
 
     // We should load the projection's name list from the disk when loading part from the file system, e.g., attach partion.
     if (!parent_part)
@@ -783,12 +783,7 @@ ColumnPtr MergeTreeDataPartCNCH::loadDedupSort() const
     /// Load dedup sort from remote disk
     auto checksums = getChecksums();
     if (!checksums->has("_dedup_sort_"))
-    {
-        auto res = ColumnUInt64::create();
-        for (size_t i = 0; i < rows_count; i++)
-            res->insertValue(i);
-        return res;
-    }
+        return nullptr;
 
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_dedup_sort_");
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
@@ -1013,6 +1008,8 @@ IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
     IMergeTreeDataPartPtr uki_index_part = shared_from_this();
     while (uki_index_part && uki_index_part->isPartial() && uki_index_part->partial_update_state != PartialUpdateState::RWProcessFinished)
         uki_index_part = uki_index_part->tryGetPreviousPart();
+    if (!uki_index_part)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique key index part {} is nullptr", name);
 
     String data_path = uki_index_part->getFullPath() + "/data";
     off_t offset = 0;
@@ -1092,7 +1089,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     index_granularity.setInitialized();
 }
 
-void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_hint_mutation)
+void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf)
 {
     assertString("CHPT", buf);
     UInt8 version{0};
@@ -1111,12 +1108,12 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
     size_t marks_count = 0;
     readVarUInt(marks_count, buf);
 
-    Int64 hint_mutation = 0;
-    readVarUInt(hint_mutation, buf);
-    if (load_hint_mutation)
-    {
-        info.hint_mutation = hint_mutation;
-    }
+    /// NOTE: zuochuang.zema, litianan: The MR 5260389562 fixed some bugs of ATTACH/DETACH.
+    /// After this, all callers pass `load_hint_mutation = false` when calling @loadMetaInfoFromBuffer or @loadFromFileSystem.
+    /// So currently `hint_mutation` in MetaInfo is useless.
+    /// Actually, hint_mutation is loaded when creating MergeTreePartInfo, see MergeTreePartInfo::fromPartName().
+    Int64 skip_hint_mutation = 0;
+    readVarUInt(skip_hint_mutation, buf);
 
     columns_ptr->readText(buf);
     if (parent_part)
@@ -1592,7 +1589,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
 
         /// Preload inverted index into memory
         ContextPtr ctx = storage.getContext();
-        if (auto factory = ctx->getGinIndexStoreFactory(); factory != nullptr && ctx->getSettings().enable_skip_index
+        if (auto factory = ctx->getGINStoreReaderFactory(); factory != nullptr && ctx->getSettings().enable_skip_index
             && (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
         {
             for (const auto & idx : storage.getInMemoryMetadataPtr()->getSecondaryIndices())

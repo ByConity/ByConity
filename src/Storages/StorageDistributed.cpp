@@ -877,7 +877,7 @@ void StorageDistributed::alter(const AlterCommands & params, ContextPtr local_co
     auto table_id = getStorageID();
 
     checkAlterIsPossible(params, local_context);
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
     params.apply(new_metadata, local_context);
     DatabaseCatalog::instance().getDatabase(table_id.database_name, local_context)->alterTable(local_context, table_id, new_metadata);
     setInMemoryMetadata(new_metadata);

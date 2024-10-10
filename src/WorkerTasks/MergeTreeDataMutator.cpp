@@ -227,7 +227,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
         new_partial_parts.back()->columns_commit_time = params.columns_commit_time;
         new_partial_parts.back()->mutation_commit_time = params.mutation_commit_time;
         /// Copy bucket info for bucket table
-        if (params.is_bucket_table) 
+        if (params.is_bucket_table)
         {
             // NOTE: Assuming that PARTITION BY and ORDER BY are immutable
             if (!table_definition_hash.match(part->table_definition_hash))
@@ -277,7 +277,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
     splitMutationCommands(source_part, metadata_snapshot, commands, for_interpreter, for_file_renames);
 
-    /// We always do mutateSomePartColumns but not mutateAllPartColumns for CnchMergeTree, so no need to read delete_bitmap. 
+    /// We always do mutateSomePartColumns but not mutateAllPartColumns for CnchMergeTree, so no need to read delete_bitmap.
     auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part, /*without_delete_bitmap*/ true);
 
     UInt64 watch_prev_elapsed = 0;
@@ -507,7 +507,7 @@ void MergeTreeDataMutator::addColumnsForRecalculateProjections(
 NameSet MergeTreeDataMutator::collectFilesForClearMapKey(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands)
 {
     NameSet clear_map_key_set;
-    const auto & metadata_snapshot = source_part->storage.getInMemoryMetadata();
+    auto metadata_snapshot = source_part->storage.getInMemoryMetadataPtr();
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
@@ -517,7 +517,7 @@ NameSet MergeTreeDataMutator::collectFilesForClearMapKey(MergeTreeData::DataPart
         NameSet file_set;
 
         String map_name = command.column_name;
-        const auto & map_column = metadata_snapshot.columns.getPhysical(map_name);
+        const auto & map_column = metadata_snapshot->getColumns().getPhysical(map_name);
         const auto & map_type = typeid_cast<const DataTypeMap &>(*map_column.type);
         /// Remove all files of the implicit key name
         for (const auto & map_key_ast : command.map_keys->children)
@@ -897,7 +897,7 @@ std::optional<size_t> MergeTreeDataMutator::writeWithProjections(
     LOG_DEBUG(log, "Begin to write with projections, part name is {}, need to rebuild {} projections", new_data_part->name, projections_to_build.size());
 
     while (checkOperationIsNotCanceled(manipulation_entry) && (block = mutating_stream->read()))
-    {  
+    {
         if (minmax_idx)
             minmax_idx->update(block, data.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
 
@@ -1070,7 +1070,7 @@ void MergeTreeDataMutator::mutateAllPartColumns(
 {
     if (mutating_stream == nullptr)
         throw Exception("Cannot mutate part columns with uninitialized mutations stream. It's a bug", ErrorCodes::LOGICAL_ERROR);
-    
+
     if (new_data_part->versions->enable_compact_map_data)
     {
         LOG_WARNING(log, "Try to mutate all columns to new part {} with compact map enabled, enable_compact_map_data"

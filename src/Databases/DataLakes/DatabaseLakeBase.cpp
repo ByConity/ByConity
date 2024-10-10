@@ -49,7 +49,7 @@ StoragePtr DatabaseLakeBase::tryGetTable(const String & table_name, ContextPtr l
         {},
         {},
         false);
-    auto metadata = ret->getInMemoryMetadata();
+    auto metadata = ret->getInMemoryMetadataCopy();
     ret->setInMemoryMetadata(metadata);
     return ret;
 }

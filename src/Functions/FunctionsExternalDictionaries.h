@@ -149,6 +149,12 @@ public:
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const final { return true; }
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0}; }
@@ -293,6 +299,12 @@ public:
     bool isVariadic() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
+
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
 
     bool useDefaultImplementationForConstants() const final { return true; }
     bool useDefaultImplementationForNulls() const final { return false; }
@@ -654,6 +666,12 @@ private:
 
     bool isVariadic() const override { return true; }
 
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const final { return true; }
 
     bool isDeterministic() const override { return false; }
@@ -808,6 +826,12 @@ private:
     bool isVariadic() const override { return true; }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
+
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -968,6 +992,12 @@ private:
     bool isInjective(const ColumnsWithTypeAndName & /*sample_columns*/) const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0}; }
 
@@ -1027,6 +1057,12 @@ public:
 
 private:
     size_t getNumberOfArguments() const override { return 3; }
+
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
 
     bool useDefaultImplementationForConstants() const final { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
@@ -1095,6 +1131,12 @@ public:
 private:
     size_t getNumberOfArguments() const override { return 2; }
 
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0}; }
     bool isDeterministic() const override { return false; }
@@ -1155,6 +1197,12 @@ public:
 private:
     size_t getNumberOfArguments() const override { return 0; }
     bool isVariadic() const override { return true; }
+
+    // Side effect, see also 01852_dictionary_found_rate_long
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
 
     bool useDefaultImplementationForConstants() const final { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return {0}; }

@@ -242,7 +242,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
     }
 
     if (resource_group != nullptr)
-        group_it = resource_group->run(query_, query_context);
+        group_it = resource_group->run(*query_context);
 
     {
         {

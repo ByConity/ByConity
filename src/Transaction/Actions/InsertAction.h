@@ -70,6 +70,8 @@ public:
 
     CnchDedupHelper::DedupTaskPtr getDedupTask() const;
 
+    void setFromAttach() { from_attach = true; }
+
 private:
     const StoragePtr table;
     MutableMergeTreeDataPartsCNCHVector parts;
@@ -78,6 +80,7 @@ private:
     CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
     bool executed{false};
+    bool from_attach{false};
     LoggerPtr log{getLogger("InsertAction")};
     UInt64 * block_id = nullptr;
 };

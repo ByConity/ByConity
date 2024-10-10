@@ -609,7 +609,7 @@ IngestParts IngestPartition::generateIngestParts(MergeTreeData & data, const Mer
 
 ASTPtr IngestPartition::getDefaultFilter(const String & column_name)
 {
-    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
+    auto name_type = target_table->getInMemoryMetadataPtr()->getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
     Field value = name_type.type->getDefault();
     auto literal = std::make_shared<ASTLiteral>(value);
     auto identifier = std::make_shared<ASTIdentifier>(column_name);

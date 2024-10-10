@@ -2350,6 +2350,16 @@ String StepPrinter::printDistinctStep(const DistinctStep & step)
     details << "limit:\\n";
     details << step.getLimitHint();
     details << "|";
+    if (step.preDistinct())
+    {
+        details << "pre";
+        details << "|";
+    }
+    if (!step.canToAgg())
+    {
+        details << "can not to agg";
+        details << "|";
+    }
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)
     {

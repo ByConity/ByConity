@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -24,7 +25,13 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/Coding.h>
+#include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
+#include <Storages/MergeTree/MergeTreeReadPool.h>
+#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <Core/Names.h>
 #include <Core/Block.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchDataWriter.h>
@@ -80,6 +87,11 @@ namespace
         iters.reserve(parts.size());
         for (size_t i = 0; i < parts.size(); ++i)
         {
+            if (parts[i]->deleted)
+            {
+                iters.push_back(std::unique_ptr<IndexFile::Iterator>(IndexFile::NewEmptyIterator()));
+                continue;
+            }
             IndexFile::ReadOptions opts;
             opts.fill_cache = fill_cache;
             {
@@ -187,40 +199,54 @@ namespace
         return true;
     }
 
-    ColumnPtr loadColumn(const IMergeTreeDataPartsVector & current_dedup_new_parts, String column_name)
+    ColumnPtr loadFuncColumn(IMergeTreeDataPartPtr part, String column_name)
     {
-        MutableColumnPtr res;
         if (column_name == StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME)
-        {
-            res = DataTypeFactory::instance().get("UInt8")->createColumn();
-            for (const auto & part : current_dedup_new_parts)
-            {
-                const auto tmp_column = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadDeleteFlag()->cloneFinalized();
-                res->insertRangeFrom(*tmp_column, 0, tmp_column->size());
-            }
-        }
+            return dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadDeleteFlag();
         else if (column_name == StorageInMemoryMetadata::UPDATE_COLUMNS)
-        {
-            res = DataTypeFactory::instance().get("String")->createColumn();
-            for (const auto & part : current_dedup_new_parts)
-            {
-                const auto tmp_column = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadUpdateColumns()->cloneFinalized();
-                res->insertRangeFrom(*tmp_column, 0, tmp_column->size());
-            }
-        }
+            return dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadUpdateColumns();
         else if (column_name == StorageInMemoryMetadata::DEDUP_SORT_COLUMN)
+            return dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadDedupSort();
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown column name: {}", column_name);
+    }
+
+    bool hasSameUpdateColumns(const std::vector<NameSet> & update_column_set_list)
+    {
+        if (update_column_set_list.size() <= 1)
+            return true;
+
+        const auto & first_read_column_set = update_column_set_list[0];
+        for (size_t i = 1; i < update_column_set_list.size(); ++i)
         {
-            res = DataTypeFactory::instance().get("UInt64")->createColumn();
-            for (const auto & part : current_dedup_new_parts)
+            if (first_read_column_set.size() != update_column_set_list[i].size())
+                return false;
+            for (const auto & read_column : first_read_column_set)
             {
-                const auto tmp_column = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadDedupSort()->cloneFinalized();
-                res->insertRangeFrom(*tmp_column, 0, tmp_column->size());
+                if (!update_column_set_list[i].contains(read_column))
+                    return false;
             }
         }
-        else
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown column_name: {}", column_name);
+        return true;
+    }
 
-        return std::move(res);
+    Block getReadBlockForHistoryData(const MergeTreeMetaBase & data, const bool & optimize_for_same_update_columns, const NameSet & same_update_column_set)
+    {
+        Block res = data.getInMemoryMetadataPtr()->getSampleBlock();
+        if (optimize_for_same_update_columns)
+        {
+            Names columns_from_metadata = res.getNames();
+            for (const auto & col_name : columns_from_metadata)
+            {
+                if (!same_update_column_set.contains(col_name))
+                    continue;
+                /// For map type, we still need to read origin value even if it's in update_columns when partial_update_enable_merge_map is true
+                if (!data.getInMemoryMetadataPtr()->getColumns().getPhysical(col_name).type->isMap()
+                    || !data.getSettings()->partial_update_enable_merge_map)
+                    res.erase(col_name);
+            }
+        }
+        return res;
     }
 
     void dumpBlockForLogging(const Block & block, String block_stage, LoggerPtr log)
@@ -450,7 +476,15 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Enable bucket level unique keys, but dedup task is bucket invalid, it's a bug!");
         }
 
-        dedup_pool.scheduleOrThrowOnError([&, i]() {
+        dedup_pool.scheduleOrThrowOnError([&, i, thread_group = CurrentThread::getGroup()]() {
+            SCOPE_EXIT({
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            });
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+            setThreadName("DedupTask");
+
             DedupTaskPtr dedup_task_local;
             {
                 std::lock_guard lock(dedup_tasks_mutex);
@@ -465,13 +499,16 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             auto it = std::find_if(new_parts.begin(), new_parts.end(), [&](const auto & part) { return part->needPartialUpdateProcess(); });
             bool has_partial_update_part = it != new_parts.end();
 
+            std::vector<bool> need_dump_bitmap(visible_parts.size() + new_parts.size());
+            std::fill_n(need_dump_bitmap.begin(), need_dump_bitmap.size(), true);
+
             DeleteBitmapVector bitmaps = has_partial_update_part ?
-                processDedupSubTaskInPartialUpdateMode(visible_parts, new_parts, dedup_task_local) :
+                processDedupSubTaskInPartialUpdateMode(visible_parts, new_parts, dedup_task_local, need_dump_bitmap) :
                 dedupImpl(visible_parts, new_parts, dedup_task_local);
 
             std::lock_guard lock(mutex);
             size_t num_bitmaps_to_dump = has_partial_update_part ?
-                prepareBitmapsForPartialUpdate(visible_parts, new_parts, bitmaps, txn_id, res) :
+                prepareBitmapsForPartialUpdate(visible_parts, new_parts, bitmaps, txn_id, res, need_dump_bitmap) :
                 prepareBitmapsToDump(visible_parts, new_parts, bitmaps, txn_id, res);
 
             LOG_DEBUG(
@@ -693,7 +730,15 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
         if (bucket_level_dedup && !dedup_task->bucket_valid)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Enable bucket level unique keys, but dedup task is bucket invalid, it's a bug!");
 
-        dedup_pool.scheduleOrThrowOnError([&]() {
+        dedup_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
+            SCOPE_EXIT({
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            });
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+            setThreadName("RepairParts");
+
             Stopwatch sub_task_watch;
             log_repair_detail(dedup_task, dedup_task->new_parts);
             DeleteBitmapVector delta_bitmaps = repairImpl(dedup_task->new_parts);
@@ -821,7 +866,8 @@ size_t MergeTreeDataDeduper::prepareBitmapsForPartialUpdate(
     const IMergeTreeDataPartsVector & new_parts,
     const DeleteBitmapVector & bitmaps,
     TxnTimestamp txn_id,
-    LocalDeleteBitmaps & res)
+    LocalDeleteBitmaps & res,
+    const std::vector<bool> & need_dump_bitmap)
 {
     size_t num_bitmaps = 0;
     for (size_t i = 0; i < bitmaps.size(); ++i)
@@ -845,6 +891,16 @@ size_t MergeTreeDataDeduper::prepareBitmapsForPartialUpdate(
         }
         else /// new part
         {
+            if (need_dump_bitmap[i] == false)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Skip preparing bitmap for new part: {}, txn_id: {}",
+                    new_parts[i - visible_parts.size()]->name,
+                    txn_id.toUInt64());
+                continue;
+            }
+
             LOG_DEBUG(
                 log,
                 "Preparing bitmap for new part: {}, total bitmap cardinality: {}, txn_id: {}",
@@ -964,11 +1020,205 @@ void MergeTreeDataDeduper::logDedupDetail(const IMergeTreeDataPartsVector & visi
     LOG_DEBUG(log, msg.str());
 }
 
-DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task)
+std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTreeDataPartsVector & current_dedup_new_parts, const DedupTaskPtr & dedup_task, bool & optimize_for_same_update_columns, NameSet & same_update_column_set)
+{
+    auto metadata_snapshot = data.getInMemoryMetadataPtr();
+    auto sample_block = metadata_snapshot->getSampleBlock();
+    Names column_names = sample_block.getNames();
+    NameSet name_set = sample_block.getNameSet();
+
+    size_t read_new_part_thread_num = std::max(
+        static_cast<size_t>(1),
+        std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
+    bool use_thread_pool = read_new_part_thread_num > 1;
+    ThreadPool read_new_data_pool(read_new_part_thread_num);
+    std::vector<Block> blocks_from_current_dedup_new_parts{current_dedup_new_parts.size()};
+    std::vector<NameSet> update_column_set_list{current_dedup_new_parts.size()};
+    std::atomic<bool> optimize_for_same_update_columns_atomic = true;
+
+    auto read_new_part = [&](size_t part_id) {
+        auto & to_block = blocks_from_current_dedup_new_parts[part_id];
+        to_block = sample_block;
+        const auto & part = current_dedup_new_parts[part_id];
+        Stopwatch inner_watch;
+        UInt64 read_func_columns_ms = 0, read_cost_ms = 0;
+
+        NameSet columns_read_set;
+        Names columns_read;
+        auto update_columns = loadFuncColumn(part, StorageInMemoryMetadata::UPDATE_COLUMNS);
+        if (!update_columns->empty() && update_columns->hasEqualValues() && data.getSettings()->partial_update_optimize_for_batch_task)
+        {
+            String same_update_columns = update_columns->getDataAt(0).toString();
+            size_t last_pos = 0, pos = 0, size = same_update_columns.size();
+            LOG_DEBUG(log, "Same update columns: {}, txn id: {}, part name: {}", same_update_columns, dedup_task->txn_id, part->name);
+
+            if (size == 0)
+                columns_read = column_names;
+            else
+            {
+                /// Restore update columns must use part columns instead of storage columns
+                Names part_columns = part->getColumnsPtr()->getNames();
+                while (pos < size)
+                {
+                    last_pos = pos;
+                    /// Here we will not handle special characters like space and not support regex
+                    while (pos < size && same_update_columns[pos] != ',')
+                        pos++;
+                    size_t idx = std::stoull(same_update_columns.substr(last_pos, pos - last_pos));
+                    if (idx >= part_columns.size())
+                        LOG_WARNING(
+                            log,
+                            "Index `{}` is invalid, ignore it. Txn id: {}, part name: {}, update columns: {}",
+                            idx,
+                            dedup_task->txn_id,
+                            part->name,
+                            same_update_columns);
+                    else if (!name_set.contains(part_columns[idx]))
+                        LOG_WARNING(log, "Update column `{}` doesn't exist, ignore.", part_columns[idx]);
+                    else
+                        columns_read_set.insert(part_columns[idx]);
+                    pos++;
+                }
+
+                /// Must read necessary columns, include partition key, unique key and version
+                for (const String & col : metadata_snapshot->getColumnsRequiredForPartitionKey())
+                    columns_read_set.insert(col);
+                for (const String & col : metadata_snapshot->getColumnsRequiredForUniqueKey())
+                    columns_read_set.insert(col);
+                if (data.merging_params.hasExplicitVersionColumn())
+                    columns_read_set.insert(data.merging_params.version_column);
+
+                columns_read = {columns_read_set.begin(), columns_read_set.end()};
+            }
+        }
+        else
+        {
+            optimize_for_same_update_columns_atomic = false;
+            columns_read = column_names;
+        }
+
+        if (optimize_for_same_update_columns_atomic)
+            update_column_set_list[part_id] = {columns_read.begin(), columns_read.end()};
+
+        size_t total_size = update_columns->size();
+        to_block.insert(
+            ColumnWithTypeAndName{std::move(update_columns), std::make_shared<DataTypeString>(), StorageInMemoryMetadata::UPDATE_COLUMNS});
+
+        read_func_columns_ms = inner_watch.elapsedMilliseconds();
+        inner_watch.restart();
+
+        auto input = std::make_shared<MergeTreeSequentialSource>(
+            data,
+            data.getStorageSnapshot(metadata_snapshot, context),
+            current_dedup_new_parts[part_id],
+            /*delete_bitmap_*/ nullptr,
+            columns_read,
+            /*read_with_direct_io_*/ false,
+            /*take_column_types_from_storage*/ true);
+        QueryPipeline pipeline;
+        pipeline.init(Pipe(std::move(input)));
+        BlockInputStreamPtr input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+        input_stream->readPrefix();
+
+        while (Block block = input_stream->read())
+        {
+            for (size_t j = 0, size = block.columns(); j < size; ++j)
+            {
+                const auto source_column = block.getByPosition(j).column;
+                LOG_TRACE(log, "Column read name: {}", columns_read[j]);
+                auto mutable_column = IColumn::mutate(std::move(to_block.getByName(columns_read[j]).column));
+                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+
+                to_block.getByName(columns_read[j]).column = std::move(mutable_column);
+            }
+        }
+
+        for (size_t j = 0, size = to_block.columns(); j < size; ++j)
+        {
+            if (to_block.getByPosition(j).column->empty())
+            {
+                auto mutable_column = IColumn::mutate(std::move(to_block.getByPosition(j).column));
+                mutable_column->insertManyDefaults(total_size);
+
+                to_block.getByPosition(j).column = std::move(mutable_column);
+            }
+        }
+        read_cost_ms = inner_watch.elapsedMilliseconds();
+        inner_watch.restart();
+
+        to_block.insert(ColumnWithTypeAndName{
+            std::move(loadFuncColumn(part, StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME)),
+            std::make_shared<DataTypeUInt8>(),
+            StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME});
+        to_block.checkNumberOfRows();
+
+        auto dedup_sort_column = loadFuncColumn(part, StorageInMemoryMetadata::DEDUP_SORT_COLUMN);
+        if (dedup_sort_column)
+        {
+            to_block.insert(ColumnWithTypeAndName{
+                std::move(dedup_sort_column), std::make_shared<DataTypeUInt64>(), StorageInMemoryMetadata::DEDUP_SORT_COLUMN});
+            SortDescription sort_description;
+            sort_description.emplace_back(StorageInMemoryMetadata::DEDUP_SORT_COLUMN, 1 , 1);
+            if (!isAlreadySorted(to_block, sort_description))
+                stableSortBlock(to_block, sort_description);
+            to_block.erase(StorageInMemoryMetadata::DEDUP_SORT_COLUMN);
+        }
+
+        /// We need to add a part_id column for commit of different partial parts
+        auto part_id_column = ColumnUInt64::create();
+        part_id_column->insertMany(part_id, to_block.rows());
+        to_block.insert(
+            ColumnWithTypeAndName{std::move(part_id_column), std::make_shared<DataTypeUInt64>(), StorageInMemoryMetadata::PART_ID_COLUMN});
+        read_func_columns_ms += inner_watch.elapsedMilliseconds();
+
+        input_stream->readSuffix();
+        LOG_DEBUG(
+            log,
+            "Read new part {} cost {} ms, read func columns cost {} ms, part id: {}, columns read size: {}, txn id: {}, dedup info: {}",
+            part->name,
+            read_cost_ms,
+            read_func_columns_ms,
+            part_id,
+            columns_read.size(),
+            dedup_task->txn_id,
+            dedup_task->getDedupLevelInfo());
+    };
+    for (size_t part_id = 0; part_id < current_dedup_new_parts.size(); part_id++)
+    {
+        if (use_thread_pool)
+            read_new_data_pool.scheduleOrThrowOnError([&, part_id, thread_group = CurrentThread::getGroup()]() {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("ReadNewParts");
+                read_new_part(part_id);
+            });
+        else
+            read_new_part(part_id);
+    }
+    if (use_thread_pool)
+        read_new_data_pool.wait();
+
+    optimize_for_same_update_columns = optimize_for_same_update_columns_atomic && hasSameUpdateColumns(update_column_set_list);
+    if (optimize_for_same_update_columns)
+    {
+        if (!update_column_set_list.empty())
+            same_update_column_set = update_column_set_list[0];
+    }
+    return blocks_from_current_dedup_new_parts;
+}
+
+DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, std::vector<bool> & need_dump_bitmap)
 {
     IMergeTreeDataPartsVector current_dedup_visible_parts;
     current_dedup_visible_parts.insert(current_dedup_visible_parts.end(), visible_parts.begin(), visible_parts.end());
     DeleteBitmapVector current_iteration_bitmaps;
+    auto metadata_snapshot = data.getInMemoryMetadataPtr();
+    auto sample_block = metadata_snapshot->getSampleBlock();
+    Names column_names = sample_block.getNames();
 
     auto iterate_begin = new_parts.begin(), iterate_end = new_parts.begin();
     /// Since the partial_update_parts is incomplete, the processing logic is different from that of the normal_parts.
@@ -995,73 +1245,32 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
 
         if (partial_update_iteration)
         {
-            /// Record the time taken for each phase for subsequent analysis and performance optimization
-            std::vector<double> timer;
+            /// Record the time taken for each phase for subsequent analysis and performance optimization, metric detail:
+            /// 1. Restore block
+            /// 2. Concat block
+            /// 3. Remove duplicate key in block
+            /// 4. Calculate key
+            /// 5. Search index
+            /// 6. Query history data
+            /// 7. Handle index
+            /// 8. Replace column
+            /// 9. Generate partial part
+            std::vector<UInt64> timer;
             Stopwatch phase_watch;
             auto record_and_restart_timer = [&] (Stopwatch & watch) {
                 timer.emplace_back(watch.elapsedMilliseconds());
                 watch.restart();
             };
 
+            bool optimize_for_same_update_columns = true;
+            NameSet same_update_column_set;
             /// Phase 1: restore block from iteration current_dedup_new_parts
-            Names column_names = data.getInMemoryMetadataPtr()->getSampleBlock(/*include_func_columns*/false).getNames();
+            std::vector<Block> blocks_from_current_dedup_new_parts = restoreBlockFromNewParts(current_dedup_new_parts, dedup_task, optimize_for_same_update_columns, same_update_column_set);
 
-            std::mutex read_new_part_mutex;
-            std::vector<Block> blocks_from_current_dedup_new_parts;
-            size_t read_new_part_thread_num = std::max(
-                static_cast<size_t>(1), std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
-            bool use_thread_pool = read_new_part_thread_num > 1;
-            ThreadPool read_new_data_pool(read_new_part_thread_num);
-            auto read_new_part = [&](size_t part_id)
-            {
-                auto input = std::make_shared<MergeTreeSequentialSource>(
-                    data,
-                    data.getStorageSnapshot(data.getInMemoryMetadataPtr(), context),
-                    current_dedup_new_parts[part_id],
-                    /*delete_bitmap_*/nullptr,
-                    column_names,
-                    /*read_with_direct_io_*/false,
-                    /*take_column_types_from_storage*/true);
-                QueryPipeline pipeline;
-                pipeline.init(Pipe(std::move(input)));
-                BlockInputStreamPtr input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
-                input_stream->readPrefix();
-
-                while (Block block = input_stream->read())
-                {
-                    /// We need to add a part_id column for commit of different partial parts
-                    auto part_id_column = ColumnUInt64::create();
-                    part_id_column->insertMany(part_id, block.rows());
-                    block.insert(ColumnWithTypeAndName{std::move(part_id_column), std::make_shared<DataTypeUInt64>(), StorageInMemoryMetadata::PART_ID_COLUMN});
-
-                    std::lock_guard lock(read_new_part_mutex);
-                    blocks_from_current_dedup_new_parts.push_back(block);
-                }
-
-                input_stream->readSuffix();
-            };
-            for (size_t part_id = 0; part_id < current_dedup_new_parts.size(); part_id++)
-            {
-                if (use_thread_pool)
-                    read_new_data_pool.scheduleOrThrowOnError([&, part_id]() { read_new_part(part_id); });
-                else
-                    read_new_part(part_id);
-            }
-            if (use_thread_pool)
-                read_new_data_pool.wait();
+            record_and_restart_timer(phase_watch);
 
             Block block_to_process = concatenateBlocks(blocks_from_current_dedup_new_parts);
-            Block fake_block = generateFakeBlock(block_to_process);
             size_t block_size = block_to_process.rows();
-
-            /// restore _delete_flag_, _update_columns_, _dedup_sort_ column, then sort block using _part_id_ and _dedup_sort_
-            block_to_process.insert(ColumnWithTypeAndName{std::move(loadColumn(current_dedup_new_parts, StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME)), std::make_shared<DataTypeUInt8>(), StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME});
-            block_to_process.insert(ColumnWithTypeAndName{std::move(loadColumn(current_dedup_new_parts, StorageInMemoryMetadata::UPDATE_COLUMNS)), std::make_shared<DataTypeString>(), StorageInMemoryMetadata::UPDATE_COLUMNS});
-            block_to_process.insert(ColumnWithTypeAndName{std::move(loadColumn(current_dedup_new_parts, StorageInMemoryMetadata::DEDUP_SORT_COLUMN)), std::make_shared<DataTypeUInt64>(), StorageInMemoryMetadata::DEDUP_SORT_COLUMN});
-            SortDescription sort_description;
-            sort_description.emplace_back(StorageInMemoryMetadata::PART_ID_COLUMN, 1, 1);
-            sort_description.emplace_back(StorageInMemoryMetadata::DEDUP_SORT_COLUMN, 1 , 1);
-            stableSortBlock(block_to_process, sort_description);
 
             if (data.getSettings()->partial_update_detail_logging)
                 dumpBlockForLogging(block_to_process, "Block structure from new parts", log);
@@ -1089,7 +1298,7 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
 
             PartRowidPairs part_rowid_pairs {current_dedup_visible_parts.size()};
 
-            auto unique_key_column_names = data.getInMemoryMetadataPtr()->getUniqueKeyColumns();
+            auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
 
             ColumnWithTypeAndName delete_flag_column;
             if (block_to_process.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
@@ -1162,8 +1371,10 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 for (size_t i = 0; i < prepared_keys.size(); ++i)
                     keys_perm_info[keys_perm_info_tmp[i]] = i;
             }
+            record_and_restart_timer(phase_watch);
 
             prepared_keys_result = searchPartForKeys(current_dedup_visible_parts, prepared_keys);
+            record_and_restart_timer(phase_watch);
 
             for (size_t rowid = 0, prepared_keys_idx = 0; rowid < block_size; ++rowid)
             {
@@ -1268,48 +1479,101 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             record_and_restart_timer(phase_watch);
             /// XXX: Consider optimizing for the case if (block_size == num_filtered)
             /// Phase 4: Query data from previous parts parallel
-            Stopwatch query_data_timer;
-
-            size_t valid_num = 0, total_query_row = 0;
-            for (size_t i = 0; i < part_rowid_pairs.size(); ++i)
+            size_t valid_query_parts_num = 0, total_query_row = 0;
+            for (const auto & part_rowid_pair : part_rowid_pairs)
             {
-                if (part_rowid_pairs[i].empty())
+                if (part_rowid_pair.empty())
                     continue;
-                valid_num++;
-                total_query_row += part_rowid_pairs[i].size();
+                valid_query_parts_num++;
+                total_query_row += part_rowid_pair.size();
             }
             size_t read_history_part_thread_num = std::max(
-                static_cast<size_t>(1), std::min(valid_num, static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
+                static_cast<size_t>(1), std::min(valid_query_parts_num, static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
+            bool use_thread_pool = read_history_part_thread_num > 1;
             ThreadPool read_history_data_pool(read_history_part_thread_num);
             std::vector<Block> columns_from_storage_vector(read_history_part_thread_num);
             std::vector<PaddedPODArray<UInt32>> block_rowids_vector(read_history_part_thread_num);
-            for (size_t i = 0 ; i < read_history_part_thread_num; ++i)
-            {
-                columns_from_storage_vector[i] = data.getInMemoryMetadataPtr()->getSampleBlock();
-                read_history_data_pool.scheduleOrThrowOnError([&, i]() {
-                    size_t j = 0, cnt = 0;
-                    while (j < part_rowid_pairs.size() && cnt != i)
-                    {
-                        if (!part_rowid_pairs[j].empty())
-                            ++cnt;
-                        ++j;
-                    }
-                    cnt = 0;
-                    while (j < part_rowid_pairs.size())
-                    {
-                        if (!part_rowid_pairs[j].empty())
-                        {
-                            if (cnt == 0)
-                                readColumnsFromStorage(current_dedup_visible_parts[j], part_rowid_pairs[j], columns_from_storage_vector[i], block_rowids_vector[i]);
 
-                            if (++cnt == read_history_part_thread_num)
-                                cnt = 0;
+            auto read_history_data = [&](size_t thread_id) {
+                size_t j = 0, cnt = 0;
+                while (j < part_rowid_pairs.size() && cnt != thread_id)
+                {
+                    if (!part_rowid_pairs[j].empty())
+                        ++cnt;
+                    ++j;
+                }
+                cnt = 0;
+                while (j < part_rowid_pairs.size())
+                {
+                    if (!part_rowid_pairs[j].empty())
+                    {
+                        if (cnt == 0)
+                        {
+                            Block columns_to_read = getReadBlockForHistoryData(data, optimize_for_same_update_columns, same_update_column_set);
+                            /// Read block only necessary
+                            if (columns_to_read.columns() != 0)
+                            {
+                                if (data.getSettings()->partial_update_query_columns_thread_size == 1)
+                                    readColumnsFromStorage(
+                                        current_dedup_visible_parts[j],
+                                        part_rowid_pairs[j],
+                                        columns_to_read,
+                                        block_rowids_vector[thread_id],
+                                        dedup_task);
+                                else
+                                    readColumnsFromStorageParallel(
+                                        current_dedup_visible_parts[j],
+                                        part_rowid_pairs[j],
+                                        columns_to_read,
+                                        block_rowids_vector[thread_id],
+                                        dedup_task);
+                            }
+                            for (size_t i = 0, size = columns_from_storage_vector[thread_id].columns(); i < size; ++i)
+                            {
+                                String column_name = columns_from_storage_vector[thread_id].getByPosition(i).name;
+                                if (!columns_to_read.has(column_name))
+                                {
+                                    auto mutable_column = IColumn::mutate(std::move(columns_from_storage_vector[thread_id].getByPosition(i).column));
+                                    mutable_column->insertManyDefaults(part_rowid_pairs[j].size());
+
+                                    columns_from_storage_vector[thread_id].getByPosition(i).column = std::move(mutable_column);
+                                }
+                                else
+                                    columns_from_storage_vector[thread_id].getByPosition(i).column = std::move(columns_to_read.getByName(column_name).column);
+                            }
+                            if (columns_to_read.columns() == 0)
+                            {
+                                for (auto & pair : part_rowid_pairs[j])
+                                    block_rowids_vector[thread_id].push_back(pair.block_rowid);
+                            }
                         }
-                        j++;
+
+                        if (++cnt == read_history_part_thread_num)
+                            cnt = 0;
                     }
-                });
+                    j++;
+                }
+            };
+            for (size_t i = 0; i < read_history_part_thread_num; ++i)
+            {
+                columns_from_storage_vector[i] = metadata_snapshot->getSampleBlock();
+                if (use_thread_pool)
+                    read_history_data_pool.scheduleOrThrowOnError([&, i, thread_group = CurrentThread::getGroup()]() {
+                        SCOPE_EXIT({
+                            if (thread_group)
+                                CurrentThread::detachQueryIfNotDetached();
+                        });
+                        if (thread_group)
+                            CurrentThread::attachToIfDetached(thread_group);
+                        setThreadName("ReadOldParts");
+                        read_history_data(i);
+                    });
+                else
+                    read_history_data(i);
             }
-            read_history_data_pool.wait();
+            if (use_thread_pool)
+                read_history_data_pool.wait();
+
             for (size_t i = 0, size = columns_from_storage_vector[0].columns(); i < size; ++i)
             {
                 auto mutable_column = IColumn::mutate(std::move(columns_from_storage_vector[0].getByPosition(i).column));
@@ -1330,27 +1594,20 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             auto res = ColumnUInt64::create();
             res->insertMany(0, columns_from_storage.rows());
             columns_from_storage.insert(ColumnWithTypeAndName{std::move(res), std::make_shared<DataTypeUInt64>(), StorageInMemoryMetadata::PART_ID_COLUMN});
-            LOG_DEBUG(
-                log,
-                "Read from {} part parallel cost {}ms, total row {}",
-                part_rowid_pairs.size(),
-                query_data_timer.elapsedMilliseconds(),
-                total_query_row);
 
             if (data.getSettings()->partial_update_detail_logging)
                 dumpBlockForLogging(columns_from_storage, "Block structure from history parts", log);
 
             record_and_restart_timer(phase_watch);
             /// Phase 5: Replace column and filter data parallel.
-            replaceColumnsAndFilterData(block_to_process, columns_from_storage, filter, num_filtered, block_rowids, replace_dst_indexes, replace_src_indexes, current_dedup_new_parts);
+            replaceColumnsAndFilterData(block_to_process, columns_from_storage, filter, num_filtered, block_rowids, replace_dst_indexes, replace_src_indexes, current_dedup_new_parts, dedup_task, optimize_for_same_update_columns, same_update_column_set);
 
             if (data.getSettings()->partial_update_detail_logging)
                 dumpBlockForLogging(block_to_process, "Block structure after processing", log);
 
             record_and_restart_timer(phase_watch);
             /// Phase 6: Generate partial part
-            DeleteCallback cb = [start = current_dedup_visible_parts.size(), &delta_bitmaps](const RowPos & pos) { addRowIdToBitmap(delta_bitmaps[start + pos.child], pos.rowid); };
-            IMergeTreeDataPartsVector iteration_visible_parts = generateAndCommitPartialPartInPartialUpdateMode(block_to_process, fake_block, current_dedup_new_parts, cb, dedup_task->txn_id);
+            IMergeTreeDataPartsVector iteration_visible_parts = generateAndCommitPartialPartInPartialUpdateMode(block_to_process, current_dedup_new_parts, dedup_task);
 
             current_iteration_bitmaps = generateNextIterationBitmaps(current_dedup_visible_parts, current_dedup_new_parts, delta_bitmaps, dedup_task->txn_id);
             current_dedup_visible_parts.insert(current_dedup_visible_parts.end(), iteration_visible_parts.begin(), iteration_visible_parts.end());
@@ -1361,9 +1618,27 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 temp_visible_part->setDeleteBitmap(current_iteration_bitmaps[i]);
             }
             record_and_restart_timer(phase_watch);
-            if (timer.size() == 6)
-                LOG_DEBUG(log, "Each phase time cost(ms) for txn {}, phase 1(restore block): {}, phase 2(filter duplicate keys): {}, phase 3(search index): {}, phase 4(query history data): {}, phase 5(replace column): {}, phase 6(generate partial part): {}"
-                    , dedup_task->txn_id, timer[0], timer[1], timer[2], timer[3], timer[4], timer[5]);
+
+            chassert(timer.size() == 9);
+            LOG_DEBUG(
+                log,
+                "Partial update cost detail for txn id {}, dedup info {}: restore block cost {} ms, concat block cost {} ms, filter duplicate keys cost {} "
+                "ms, calculate key cost {} ms, search index cost {} ms, handle index cost {} ms, query history data cost {} ms(thread "
+                "size: {}, query part num: {}, query total row: {}), replace column cost {} ms, generate partial part cost {} ms",
+                dedup_task->txn_id,
+                dedup_task->getDedupLevelInfo(),
+                timer[0],
+                timer[1],
+                timer[2],
+                timer[3],
+                timer[4],
+                timer[5],
+                timer[6],
+                read_history_part_thread_num,
+                valid_query_parts_num,
+                total_query_row,
+                timer[7],
+                timer[8]);
         }
         else
         {
@@ -1378,6 +1653,11 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 temp_visible_part->setDeleteBitmap(current_iteration_bitmaps[i]);
             }
         }
+    }
+    for (size_t i = 0; i < need_dump_bitmap.size(); ++i)
+    {
+        if (i >= visible_parts.size() && current_dedup_visible_parts[i]->deleted)
+            need_dump_bitmap[i] = false;
     }
     return current_iteration_bitmaps;
 }
@@ -1394,8 +1674,9 @@ size_t MergeTreeDataDeduper::removeDupKeysInPartialUpdateMode(
     if (block_size != filter.size())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Filter size {} doesn't match block size {}", filter.size(), block_size);
 
-    auto unique_key_names = data.getInMemoryMetadataPtr()->getUniqueKeyColumns();
-    data.getInMemoryMetadataPtr()->getUniqueKeyExpression()->execute(block);
+    auto metadata_snapshot = data.getInMemoryMetadataPtr();
+    auto unique_key_names = metadata_snapshot->getUniqueKeyColumns();
+    metadata_snapshot->getUniqueKeyExpression()->execute(block);
 
     ColumnsWithTypeAndName keys;
     for (auto & name : unique_key_names)
@@ -1541,8 +1822,12 @@ SearchKeysResult MergeTreeDataDeduper::searchPartForKeys(const IMergeTreeDataPar
     return ans;
 }
 
-void MergeTreeDataDeduper::readColumnsFromStorage(const IMergeTreeDataPartPtr & part, RowidPairs & rowid_pairs,
-        Block & to_block, PaddedPODArray<UInt32> & to_block_rowids)
+void MergeTreeDataDeduper::readColumnsFromStorage(
+    const IMergeTreeDataPartPtr & part,
+    RowidPairs & rowid_pairs,
+    Block & to_block,
+    PaddedPODArray<UInt32> & to_block_rowids,
+    const DedupTaskPtr & dedup_task)
 {
     if (rowid_pairs.empty())
         return;
@@ -1557,7 +1842,7 @@ void MergeTreeDataDeduper::readColumnsFromStorage(const IMergeTreeDataPartPtr & 
         const_cast<Roaring &>(*delete_bitmap).add(pair.part_rowid);
     const_cast<Roaring &>(*delete_bitmap).flip(0, part->rows_count);
 
-    Names read_columns = data.getInMemoryMetadataPtr()->getColumns().getNamesOfPhysical();
+    Names read_columns = to_block.getNames();
     auto source = std::make_unique<MergeTreeSequentialSource>(
         data,
         data.getStorageSnapshot(data.getInMemoryMetadataPtr(), context),
@@ -1571,7 +1856,6 @@ void MergeTreeDataDeduper::readColumnsFromStorage(const IMergeTreeDataPartPtr & 
 
     QueryPipeline pipeline;
     pipeline.init(Pipe::unitePipes(std::move(pipes)));
-    pipeline.setMaxThreads(std::max(static_cast<size_t>(1), static_cast<size_t>(data.getSettings()->partial_update_query_columns_thread_size)));
 
     BlockInputStreamPtr input = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
     input->readPrefix();
@@ -1585,7 +1869,6 @@ void MergeTreeDataDeduper::readColumnsFromStorage(const IMergeTreeDataPartPtr & 
             const auto source_column = block.getByPosition(i).column;
             auto mutable_column = IColumn::mutate(std::move(to_block.getByPosition(i).column));
             mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-
             to_block.getByPosition(i).column = std::move(mutable_column);
         }
     }
@@ -1603,22 +1886,167 @@ void MergeTreeDataDeduper::readColumnsFromStorage(const IMergeTreeDataPartPtr & 
 
     LOG_DEBUG(
         log,
-        "Query for {} rows in data part {} from storage, total row {}, cost {} ms",
+        "Query for {} rows in data part {} from storage, total row {}, thread size: 1, cost {} ms, txn id: {}, dedup info: {}",
         rowid_pairs.size(),
         part->name,
         part->rows_count,
-        timer.elapsedMilliseconds());
+        timer.elapsedMilliseconds(),
+        dedup_task->txn_id,
+        dedup_task->getDedupLevelInfo());
+}
+
+void MergeTreeDataDeduper::readColumnsFromStorageParallel(
+    const IMergeTreeDataPartPtr & part,
+    const RowidPairs & rowid_pairs,
+    Block & to_block,
+    PaddedPODArray<UInt32> & to_block_rowids,
+    const DedupTaskPtr & dedup_task)
+{
+    if (rowid_pairs.empty())
+        return;
+
+    size_t block_size_before = to_block.rows();
+    Stopwatch timer;
+
+    DeleteBitmapPtr delete_bitmap(new Roaring);
+    std::unordered_map<UInt32, UInt32> part_rowid_to_block_rowid;
+    for (auto & pair : rowid_pairs)
+    {
+        const_cast<Roaring &>(*delete_bitmap).add(pair.part_rowid);
+        part_rowid_to_block_rowid[pair.part_rowid] = pair.block_rowid;
+    }
+    const_cast<Roaring &>(*delete_bitmap).flip(0, part->rows_count);
+
+    Names read_columns = to_block.getNames();
+    read_columns.push_back("_part_row_number");
+
+    RangesInDataParts parts_with_ranges(1);
+    {
+        RangesInDataPart part_with_ranges{part, 1};
+        part_with_ranges.ranges = MarkRanges{MarkRange{0, part->index_granularity.getMarksCount()}};
+        parts_with_ranges[0] = std::move(part_with_ranges);
+    }
+    size_t sum_marks = part->index_granularity.getMarksCount();
+    size_t total_rows = part->index_granularity.getTotalRows();
+    size_t num_streams = std::max(static_cast<size_t>(1), static_cast<size_t>(data.getSettings()->partial_update_query_columns_thread_size));
+
+    const auto & settings = context->getSettingsRef();
+    const auto data_settings = data.getSettings();
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter = [&](const auto &) { return delete_bitmap; };
+    size_t min_marks_for_concurrent_read = 0;
+    {
+        size_t index_granularity_bytes = 0;
+        if (part->index_granularity_info.is_adaptive)
+            index_granularity_bytes = data_settings->index_granularity_bytes;
+        min_marks_for_concurrent_read = MergeTreeDataSelectExecutor::minMarksForConcurrentRead(
+                settings.merge_tree_min_rows_for_concurrent_read,
+                settings.merge_tree_min_bytes_for_concurrent_read,
+                data_settings->index_granularity,
+                index_granularity_bytes,
+                sum_marks);
+    }
+    SelectQueryInfo query_info;
+    auto storage_snapshot = data.getStorageSnapshot(data.getInMemoryMetadataPtr(), context);
+    auto pool = std::make_shared<MergeTreeReadPool>(
+        num_streams,
+        sum_marks,
+        min_marks_for_concurrent_read,
+        std::move(parts_with_ranges),
+        delete_bitmap_getter,
+        data,
+        storage_snapshot,
+        query_info,
+        true,
+        read_columns,
+        MergeTreeReadPool::BackoffSettings(settings),
+        settings.preferred_block_size_bytes,
+        false);
+
+    Pipes pipes;
+    MergeTreeStreamSettings stream_settings {
+        .min_marks_for_concurrent_read = min_marks_for_concurrent_read,
+        .max_block_size = settings.max_block_size,
+        .preferred_block_size_bytes = settings.preferred_block_size_bytes,
+        .preferred_max_column_in_block_size_bytes = settings.preferred_max_column_in_block_size_bytes,
+        .use_uncompressed_cache = settings.use_uncompressed_cache,
+        .actions_settings = ExpressionActionsSettings::fromContext(context)
+    };
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        auto source = std::make_shared<MergeTreeThreadSelectBlockInputProcessor>(
+            i, pool, data, storage_snapshot, query_info, stream_settings);
+
+        if (i == 0)
+        {
+            /// Set the approximate number of rows for the first source only
+            source->addTotalRowsApprox(total_rows);
+        }
+
+        pipes.emplace_back(std::move(source));
+    }
+
+    QueryPipeline pipeline;
+    pipeline.init(Pipe::unitePipes(std::move(pipes)));
+
+    BlockInputStreamPtr input = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+    input->readPrefix();
+    while (Block block = input->read())
+    {
+        const auto part_row_number_column = block.getByName("_part_row_number").column;
+        block.erase("_part_row_number");
+        if (!blocksHaveEqualStructure(to_block, block))
+            throw Exception("Block structure mismatch", ErrorCodes::LOGICAL_ERROR);
+
+        for (size_t i = 0, size = to_block.columns(); i < size; ++i)
+        {
+            const auto source_column = block.getByPosition(i).column;
+            auto mutable_column = IColumn::mutate(std::move(to_block.getByPosition(i).column));
+            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+            to_block.getByPosition(i).column = std::move(mutable_column);
+        }
+
+        for (size_t i = 0;i < part_row_number_column->size(); ++i)
+        {
+            UInt64 row_number =  part_row_number_column->getUInt(i);
+            if (part_rowid_to_block_rowid.count(row_number))
+                to_block_rowids.push_back(part_rowid_to_block_rowid[row_number]);
+            else
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row number {}", row_number);
+        }
+    }
+    input->readSuffix();
+
+    if (to_block.rows() - block_size_before != rowid_pairs.size())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Block size {} is not equal to expected size {}",
+            to_block.rows() - block_size_before,
+            rowid_pairs.size());
+
+    LOG_DEBUG(
+        log,
+        "Query for {} rows in data part {} from storage, total row {}, thread size: {}, cost {} ms, txn id: {}, dedup info: {}",
+        rowid_pairs.size(),
+        part->name,
+        part->rows_count,
+        num_streams,
+        timer.elapsedMilliseconds(),
+        dedup_task->txn_id,
+        dedup_task->getDedupLevelInfo());
 }
 
 void MergeTreeDataDeduper::replaceColumnsAndFilterData(
-        Block & block,
-        Block & columns_from_storage,
-        IColumn::Filter & filter,
-        size_t & num_filtered,
-        PaddedPODArray<UInt32> & block_rowids,
-        PaddedPODArray<UInt32> & replace_dst_indexes,
-        PaddedPODArray<UInt32> & replace_src_indexes,
-        const IMergeTreeDataPartsVector & current_dedup_new_parts)
+    Block & block,
+    Block & columns_from_storage,
+    IColumn::Filter & filter,
+    size_t & num_filtered,
+    PaddedPODArray<UInt32> & block_rowids,
+    PaddedPODArray<UInt32> & replace_dst_indexes,
+    PaddedPODArray<UInt32> & replace_src_indexes,
+    const IMergeTreeDataPartsVector & current_dedup_new_parts,
+    const DedupTaskPtr & dedup_task,
+    const bool & optimize_for_same_update_columns,
+    const NameSet & same_update_column_set)
 {
     size_t block_size = block.rows();
     Stopwatch timer;
@@ -1648,11 +2076,17 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Column part_id_column is nullptr while processing partial update.");
 
         ColumnPtr update_columns;
+        NameSet column_need_complete_update;
+        if (optimize_for_same_update_columns)
+            column_need_complete_update = same_update_column_set;
+
         bool update_all = true;
         if (block.has(StorageInMemoryMetadata::UPDATE_COLUMNS))
         {
             update_columns = block.getByName(StorageInMemoryMetadata::UPDATE_COLUMNS).column;
             update_all = false;
+            if (optimize_for_same_update_columns && column_need_complete_update.size() == 1 && column_need_complete_update.begin()->empty())
+                update_all = true;
         }
 
         for (size_t i = 0, size = block.columns(); i < size; i++)
@@ -1661,7 +2095,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
             /// Skip func columns
             if (non_updatable_columns.count(col.name) || func_column_names.count(col.name))
                 continue;
-            if (update_all || col.name == StorageInMemoryMetadata::PART_ID_COLUMN)
+            if (update_all || column_need_complete_update.contains(col.name) || col.name == StorageInMemoryMetadata::PART_ID_COLUMN)
             {
                 auto default_filter = ColumnVector<UInt8>::create(block_size, 0);
                 default_filters[col.name] = std::move(default_filter);
@@ -1672,7 +2106,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
                 default_filters[col.name] = std::move(default_filter);
             }
         }
-        if (!update_all)
+        if (!update_all && !optimize_for_same_update_columns)
         {
             auto check_column = [&](String column) { return non_updatable_columns.count(column) || func_column_names.count(column) || column == StorageInMemoryMetadata::PART_ID_COLUMN; };
             std::vector<Names> part_column_list;
@@ -1691,11 +2125,19 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         }
     }
     auto parse_update_columns_time = timer.elapsedMilliseconds();
-    size_t thread_num = std::min(block.columns(), static_cast<size_t>(8));
+    size_t thread_num = std::max(static_cast<size_t>(1), std::min(block.columns(), static_cast<size_t>(data.getSettings()->partial_update_replace_columns_thread_size)));
     ThreadPool replace_column_pool(thread_num);
     for (size_t i = 0; i < thread_num; ++i)
     {
-        replace_column_pool.scheduleOrThrowOnError([&, i]() {
+        replace_column_pool.scheduleOrThrowOnError([&, i, thread_group = CurrentThread::getGroup()]() {
+            SCOPE_EXIT({
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            });
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+            setThreadName("ReplaceColumn");
+
             for (size_t j = i, size = block.columns(); j < size; j += thread_num)
             {
                 auto & col = block.getByPosition(j);
@@ -1769,7 +2211,13 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         });
     }
     replace_column_pool.wait();
-    LOG_DEBUG(log, "Replace columns and filter data cost {}ms, parse update columns const {}ms", timer.elapsedMilliseconds(), parse_update_columns_time);
+    LOG_DEBUG(
+        log,
+        "Replace columns and filter data cost {} ms, parse update columns const {} ms, txn id: {}, dedup info: {}",
+        timer.elapsedMilliseconds(),
+        parse_update_columns_time,
+        dedup_task->txn_id,
+        dedup_task->getDedupLevelInfo());
 }
 
 void MergeTreeDataDeduper::parseUpdateColumns(
@@ -1809,66 +2257,114 @@ void MergeTreeDataDeduper::parseUpdateColumns(
     }
 }
 
-IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPartialUpdateMode(Block & block, Block & fake_block, const IMergeTreeDataPartsVector & new_parts, DeleteCallback delete_cb, TxnTimestamp txn_id)
+IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPartialUpdateMode(
+    Block & block,
+    const IMergeTreeDataPartsVector & new_parts,
+    const DedupTaskPtr & dedup_task)
 {
     MergeTreeDataWriter writer(const_cast<MergeTreeMetaBase &>(data), IStorage::StorageLocation::AUXILITY);
-    CnchDataWriter cnch_writer(const_cast<MergeTreeMetaBase &>(data), context, ManipulationType::Insert, txn_id.toString());
+    CnchDataWriter cnch_writer(const_cast<MergeTreeMetaBase &>(data), context, ManipulationType::Insert, dedup_task->txn_id.toString());
 
-    /// Remove func columns before selector splits block
-    NamesAndTypesList func_columns = data.getInMemoryMetadataPtr()->getFuncColumns();
-    for (auto & col_name : block.getNames())
-    {
-        if (func_columns.contains(col_name))
-            block.erase(col_name);
-    }
+    Stopwatch watch;
+    UInt64 split_block_ms = 0, write_part_ms = 0, dump_part_ms = 0;
 
-    /// Split block into parts using _part_id_ column
-    Blocks blocks_with_part_id;
+    /// Generate into one large block.
     size_t split_block_num = new_parts.size();
-    for (size_t i = 0; i < split_block_num; ++i)
-        blocks_with_part_id.emplace_back(block.cloneEmpty());
-
-    IColumn::Selector selector = IColumn::Selector(block.rows());
-    ColumnPtr part_id_column = block.getByName(StorageInMemoryMetadata::PART_ID_COLUMN).column;
-    if (!part_id_column)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Column part_id_column is nullptr while processing partial update.");
-
-    for (size_t row_num = 0; row_num < block.rows(); row_num++)
-        selector[row_num] = get<UInt64>((*part_id_column)[row_num]);
-
-    for (size_t col = 0; col < block.columns(); ++col)
-    {
-        MutableColumns scattered = block.getByPosition(col).column->scatter(split_block_num, selector);
-        for (size_t i = 0; i < split_block_num; ++i)
-            blocks_with_part_id[i].getByPosition(col).column = std::move(scattered[i]);
-    }
+    bool need_dump_part = block.rows() > 0;
 
     /// Remove column not in header
-    auto header_block = data.getInMemoryMetadataPtr()->getSampleBlock(/*include_func_columns*/false);
-    for (auto & block_with_part_id : blocks_with_part_id)
-    {
-        for (auto & col_name : block_with_part_id.getNames())
-            if (!header_block.has(col_name))
-                block_with_part_id.erase(col_name);
-    }
+    auto header_block = data.getInMemoryMetadataPtr()->getSampleBlock();
+    for (auto & col_name : block.getNames())
+        if (!header_block.has(col_name))
+            block.erase(col_name);
+
+    split_block_ms = watch.elapsedMilliseconds();
+    watch.restart();
 
     IMergeTreeDataPartsVector partial_update_parts;
+    size_t write_part_thread_num
+        = std::max(static_cast<size_t>(1), std::min(split_block_num, static_cast<size_t>(data.getSettings()->cnch_write_part_threads)));
+    ThreadPool write_part_pool(write_part_thread_num);
+    bool use_thread_pool = write_part_thread_num > 1;
+
+    IMutableMergeTreeDataPartsVector mutable_partial_update_parts{split_block_num};
+    auto write_delta_part = [&](size_t split_block_id) {
+        if (!need_dump_part || split_block_id != 0)
+        {
+            auto drop_part_info = new_parts[split_block_id]->info;
+            drop_part_info.level += 1;
+            drop_part_info.hint_mutation = 0;
+            drop_part_info.mutation = context->getCurrentTransactionID().toUInt64();
+            auto disk = data.getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
+            auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
+
+            auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
+                data, drop_part_info.getPartName(), drop_part_info, single_disk_volume, std::nullopt);
+
+            drop_part->partition = std::move(new_parts[split_block_id]->partition);
+            drop_part->bucket_number = new_parts[split_block_id]->bucket_number;
+            drop_part->deleted = true;
+            drop_part->partial_update_state = PartialUpdateState::RWProcessFinished;
+
+            mutable_partial_update_parts[split_block_id] = drop_part;
+        }
+        if (need_dump_part && split_block_id == 0)
+        {
+            LOG_TRACE(
+                log,
+                "Part id: {}, part name: {}, delta part size: {}, txn id: {}, dedup info: {}",
+                split_block_id,
+                new_parts[split_block_id]->name,
+                block.rows(),
+                dedup_task->txn_id,
+                dedup_task->getDedupLevelInfo());
+            mutable_partial_update_parts[split_block_id] = writer.writeTempPartialUpdatePart(
+                block,
+                data.getInMemoryMetadataPtr(),
+                context,
+                new_parts[split_block_id]);
+        }
+    };
+
     for (size_t i = 0; i < split_block_num; ++i)
     {
-        bool use_fake_block = (blocks_with_part_id[i].rows() == 0);
-        MergeTreeMutableDataPartPtr partial_update_part = writer.writeTempPartialUpdatePart(use_fake_block ? fake_block : blocks_with_part_id[i], data.getInMemoryMetadataPtr(), context, new_parts[i]);
-        auto dumped_data = cnch_writer.dumpAndCommitCnchParts({partial_update_part});
-
-        dumped_data.parts[0]->setPreviousPart(new_parts[i]);
-        if (use_fake_block)
-        {
-            RowPos res;
-            res.child = i;
-            res.rowid = 0;
-            delete_cb(res);
-        }
-        partial_update_parts.push_back(dumped_data.parts[0]);
+        if (use_thread_pool)
+            write_part_pool.scheduleOrThrowOnError([&, i, thread_group = CurrentThread::getGroup()]() {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("WriteDeltaPart");
+                write_delta_part(i);
+            });
+        else
+            write_delta_part(i);
     }
+    if (use_thread_pool)
+        write_part_pool.wait();
+    write_part_ms = watch.elapsedMilliseconds();
+    watch.restart();
+
+    auto dumped_data = cnch_writer.dumpAndCommitCnchParts(mutable_partial_update_parts);
+    for (size_t i = 0; i < split_block_num; ++i)
+    {
+        dumped_data.parts[i]->setPreviousPart(new_parts[i]);
+        partial_update_parts.push_back(dumped_data.parts[i]);
+    }
+
+    dump_part_ms = watch.elapsedMilliseconds();
+    LOG_DEBUG(
+        log,
+        "Commit partial update part detail: split block cost {} ms, write part cost {} ms, thread pool size is {}, dump part cost {} ms, "
+        "txn id: {}, dedup info: {}",
+        split_block_ms,
+        write_part_ms,
+        write_part_thread_num,
+        dump_part_ms,
+        dedup_task->txn_id,
+        dedup_task->getDedupLevelInfo());
 
     return partial_update_parts;
 }

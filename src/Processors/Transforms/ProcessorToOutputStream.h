@@ -1,6 +1,7 @@
 #pragma once
-#include <Processors/IProcessor.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <Processors/IProcessor.h>
+#include "IO/Progress.h"
 
 namespace DB
 {
@@ -8,11 +9,11 @@ namespace DB
 class ProcessorToOutputStream : public IProcessor
 {
 public:
-    explicit ProcessorToOutputStream(BlockOutputStreamPtr stream_);
+    explicit ProcessorToOutputStream(BlockOutputStreamPtr stream_, const String & output_inserted_rows_name_);
 
     String getName() const override { return "ProcessorToOutputStream"; }
 
-    static Block newHeader();
+    static Block newHeader(const String & output_inserted_rows_name);
     Chunk getReturnChunk();
 
     Status prepare() override;
@@ -20,6 +21,10 @@ public:
 
     InputPort & getInputPort() { return input; }
     OutputPort & getOutputPort() { return output; }
+    void setProgressCallback(ProgressCallback progress_callback_)
+    {
+        progress_callback = std::move(progress_callback_);
+    }
 
 protected:
     InputPort & input;
@@ -35,7 +40,7 @@ protected:
 private:
     BlockOutputStreamPtr stream;
     size_t total_rows;
-
+    ProgressCallback progress_callback;
 };
 
 }

@@ -80,4 +80,5 @@ DataTypePtr getLeastSupertypeOrString(const TypeIndexSet & types, bool allow_ext
 
 DataTypePtr tryGetLeastSupertype(const TypeIndexSet & types, bool allow_extended_conversion=false);
 
+DataTypePtr getCommonType(const DataTypes & types, bool enable_implicit_arg_type_convert, bool allow_extended_conversion);
 }

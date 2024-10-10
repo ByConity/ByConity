@@ -35,6 +35,12 @@ bool aeolusCheck(const Context & context, const String & full_table_name)
             continue;
 
         StorageID table_id{database_name, table_name};
+        if (auto tenant_id = getCurrentTenantId(); !tenant_id.empty() && !table_id.database_name.empty())
+        {
+            table_id.database_name = tenant_id + '.' + database_name;
+            allowed_tables.emplace(table_id.getFullNameNotQuoted());
+        }
+
         /// tryGetTable below requires resolved table id
         StorageID resolved = context.tryResolveStorageID(table_id);
         if (!resolved)
@@ -42,7 +48,7 @@ bool aeolusCheck(const Context & context, const String & full_table_name)
 
         /// access_table_names need to have resolved name, otherwise tryGetTable below will fail
         if (table_id.database_name.empty() && !resolved.database_name.empty())
-            allowed_tables.emplace(resolved.getDatabaseName() + "." + resolved.getTableName());
+            allowed_tables.emplace(formatTenantDatabaseName(resolved.getDatabaseName()) + "." + resolved.getTableName());
     }
 
     return allowed_tables.count(full_table_name) > 0;

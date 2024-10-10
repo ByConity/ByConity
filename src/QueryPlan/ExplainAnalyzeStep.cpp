@@ -30,7 +30,10 @@ void ExplainAnalyzeStep::transformPipeline(QueryPipeline & pipeline, const Build
     if (!query_plan_ptr)
         throw Exception("QueryPlan is not set", ErrorCodes::LOGICAL_ERROR);
     pipeline.resize(1);
-    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExplainAnalyzeTransform>(header, kind, query_plan_ptr, context, segment_descriptions, settings); });
+    pipeline.addSimpleTransform([&](const Block & header) {
+        return std::make_shared<ExplainAnalyzeTransform>(
+            header, output_stream->header, kind, query_plan_ptr, context, segment_descriptions, settings);
+    });
 }
 
 void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)

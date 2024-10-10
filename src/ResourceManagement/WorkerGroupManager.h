@@ -75,7 +75,6 @@ private:
     void dropWorkerGroupImpl(const std::string & group_id, std::lock_guard<bthread::Mutex> * wg_lock);
 
     friend class ResourceManagerController;
-    friend class WorkerGroupResourceCoordinator;
 };
 
 }

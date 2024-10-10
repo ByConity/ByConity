@@ -63,7 +63,7 @@ void Scheduler::dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const Segm
     else
     {
         // NodeType::Local can be optimize
-        sendPlanSegmentToAddress(address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr, worker_id);
+        send_plan_segment_func(address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr, worker_id);
     }
 
     if (const auto & id_to_addr_iter = dag_graph_ptr->id_to_address.find(task.segment_id);

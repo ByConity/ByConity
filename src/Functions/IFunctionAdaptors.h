@@ -73,6 +73,8 @@ public:
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
 
+    bool isSuitableForConstantFoldingInOptimizer() const override { return function->isSuitableForConstantFoldingInOptimizer(); }
+
     ColumnPtr getConstantResultForNonConstArguments(const ColumnsWithTypeAndName & arguments_, const DataTypePtr & result_type_) const override
     {
         return function->getConstantResultForNonConstArguments(arguments_, result_type_);

@@ -83,3 +83,13 @@ Projection
          └─ Filter
             └─ Projection
                └─ TableScan default.test46006
+Projection
+└─ Union
+   ├─ MergingAggregated
+   │  └─ Gather Exchange
+   │     └─ Aggregating
+   │        └─ Filter
+   │           └─ TableScan default.test46006
+   └─ ReadStorageRowCount
+3
+0

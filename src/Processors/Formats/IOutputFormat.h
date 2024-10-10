@@ -107,6 +107,9 @@ public:
     static Chunk prepareTotals(Chunk chunk);
 
     void setOutFileTarget(OutfileTargetPtr outfile_target);
+
+    virtual void closeFile();
+
     void setMPPQueryCoordinator(MPPQueryCoordinatorPtr coordinator_)
     {
         coordinator = std::move(coordinator_);

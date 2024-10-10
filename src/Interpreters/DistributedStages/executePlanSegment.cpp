@@ -75,7 +75,7 @@ void executePlanSegmentInternal(
     if (settings.debug_plan_generation)
         return;
 
-    bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode;
+    bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode || settings.report_segment_profiles;
     auto executor = std::make_shared<PlanSegmentExecutor>(
         std::move(plan_segment_instance), std::move(context), std::move(process_plan_segment_entry));
     if (async)

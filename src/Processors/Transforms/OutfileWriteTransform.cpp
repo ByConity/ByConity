@@ -61,6 +61,7 @@ void OutfileWriteTransform::consume(Chunk chunk)
 void OutfileWriteTransform::onFinish()
 {
     output_format->flush();
+    output_format->closeFile();
     output.finish();
 }
 

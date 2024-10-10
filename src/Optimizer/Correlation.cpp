@@ -127,8 +127,10 @@ std::pair<Names, Names> DecorrelationResult::buildJoinClause(PlanNodePtr & query
 
             if (!JoinCommon::isJoinCompatibleTypes(query_key_type, subquery_key_type))
             {
-                auto common_type = getLeastSupertype(DataTypes{query_key_type, subquery_key_type},
-                                                     context->getSettingsRef().allow_extended_type_conversion);
+                auto common_type = getCommonType(
+                    DataTypes{query_key_type, subquery_key_type},
+                    context->getSettingsRef().enable_implicit_arg_type_convert,
+                    context->getSettingsRef().allow_extended_type_conversion);
                 query_key_name = query_planner.addColumn(makeCastFunction(query_expr, common_type)).first;
                 subquery_key_name = subquery_planner.addColumn(makeCastFunction(subquery_expr, common_type)).first;
             }

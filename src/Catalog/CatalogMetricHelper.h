@@ -17,7 +17,13 @@
 
 #include <functional>
 #include <Common/ProfileEvents.h>
+#include <Common/ProfileEventsTimer.h>
 
+namespace ProfileEvents
+{
+    extern const Event CatalogRequest;
+    extern const Event CatalogElapsedMicroseconds;
+}
 
 namespace DB
 {
@@ -28,6 +34,7 @@ namespace Catalog
 
     static void runWithMetricSupport(const Job & job, const ProfileEvents::Event & success, const ProfileEvents::Event & failed)
     {
+        auto helper = ProfileEventsTimer(ProfileEvents::CatalogRequest, ProfileEvents::CatalogElapsedMicroseconds);
         try
         {
             job();

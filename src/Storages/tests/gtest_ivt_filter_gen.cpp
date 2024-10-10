@@ -20,7 +20,8 @@
 #include "Parsers/ParserQuery.h"
 #include "Parsers/ParserSelectQuery.h"
 #include "Storages/MergeTree/GinIndexDataPartHelper.h"
-#include "Storages/MergeTree/GinIndexStore.h"
+#include "Storages/MergeTree/GINStoreReader.h"
+#include "Storages/MergeTree/GINStoreWriter.h"
 #include "Storages/MergeTree/MergeTreeIndexInverted.h"
 #include "Storages/MergeTree/MergeTreeIndices.h"
 
@@ -128,11 +129,11 @@ struct IvtFilterCtx
         DiskPtr disk = std::make_shared<DiskLocal>("idx_disk", suite.store_path, DiskStats());
         {
             disk->createDirectories(table);
-            GinIndexStorePtr write_store = std::make_shared<GinIndexStore>("idx_store",
-                std::make_unique<GinDataLocalPartHelper>(disk, table), segment_size);
+            auto write_store = GINStoreWriter::open(GINStoreVersion::v0, "idx_store",
+                std::make_unique<GinDataLocalPartHelper>(disk, table), segment_size, 1.0);
 
             auto idx_agg = std::dynamic_pointer_cast<MergeTreeIndexAggregatorInverted>(
-                idx->createIndexAggregatorForPart(write_store));
+                idx->createIndexAggregatorForPart(write_store.get()));
 
             size_t pos = 0;
             idx_agg->update(block, &pos, block.rows());
@@ -144,10 +145,8 @@ struct IvtFilterCtx
         }
         /// Create read store
         {
-            store = std::make_shared<GinIndexStore>("idx_store", std::make_unique<GinDataLocalPartHelper>(disk, table));
-            GinIndexStoreDeserializer deserializer(store);
-            deserializer.readSegments();
-            deserializer.readSegmentDictionaries();
+            store = GINStoreReader::open("idx_store", std::make_unique<GinDataLocalPartHelper>(disk, table),
+                nullptr);
         }
     }
 
@@ -161,7 +160,7 @@ struct IvtFilterCtx
     std::shared_ptr<const MergeTreeConditionInverted> idx_cond;
     std::shared_ptr<MergeTreeIndexGranuleInverted> idx_granule;
 
-    GinIndexStorePtr store;
+    std::shared_ptr<GINStoreReader> store;
 };
 
 void verifyFilter(const roaring::Roaring& filter, const std::vector<size_t>& row_id)

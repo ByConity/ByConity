@@ -400,7 +400,7 @@ IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<S
             pool.scheduleOrThrowOnError(createExceptionHandledJob(
                 [&merge_tree, new_name, &volume, part_name, &parts, &lock]() {
                     auto part = std::make_shared<MergeTreeDataPartCNCH>(*merge_tree, new_name, volume, part_name + '/');
-                    part->loadFromFileSystem(false);
+                    part->loadFromFileSystem();
                     part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;
 
                     // See https://xxx

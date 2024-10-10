@@ -136,6 +136,7 @@ namespace ErrorCodes
     extern const int CANNOT_ASSIGN_ALTER;
     extern const int UNKNOWN_FORMAT_VERSION;
     extern const int NOT_IMPLEMENTED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
@@ -1379,7 +1380,7 @@ void StorageCnchMergeTree::restoreDataFromBackup(
         for (const auto & cnch_part : restore_parts)
         {
             // TODO: Parallel load parts
-            cnch_part->loadFromFileSystem(/* load_hint_mutation */false);
+            cnch_part->loadFromFileSystem();
         }
 
         // 4. Commit part to catalog
@@ -1407,6 +1408,8 @@ ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsWithDBM(ContextPtr local
     if (local_context->getCnchCatalog())
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
+        if (!cur_txn)
+            throw Exception("Current transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
         if (cur_txn->isSecondary())
         {
             /// Get all parts in the partition list
@@ -1938,8 +1941,8 @@ namespace
 
 void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const
 {
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
 
     const auto & settings = local_context->getSettingsRef();
 
@@ -2170,7 +2173,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
 
             dropped_columns.emplace(command.column_name);
         }
-        else if (command.isRequireMutationStage(getInMemoryMetadata()))
+        else if (command.isRequireMutationStage(*getInMemoryMetadataPtr()))
         {
             /// This alter will override data on disk. Let's check that it doesn't
             /// modify immutable column.
@@ -2386,7 +2389,7 @@ void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, 
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
 {
     const Settings & settings = local_context->getSettingsRef();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
     auto mutation_commands = commands.getMutationCommands(old_metadata, false, local_context);
 
     if (settings.force_alter_conflict_check)
@@ -2427,7 +2430,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     }
 
     auto table_id = getStorageID();
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
     auto action = txn->createActionWithLocalContext<DDLAlterAction>(local_context, shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
@@ -2568,6 +2571,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "max_addition_bg_task_num",
         "max_addition_mutation_task_num",
         "max_partition_for_multi_select",
+        "max_partitions_per_insert_block",
 
         "cnch_merge_parts_cache_timeout",
         "cnch_merge_parts_cache_min_count",
@@ -2775,7 +2779,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
         }
     }
 
-    if (!getInMemoryMetadata().hasUniqueKey() && command.staging_area)
+    if (!getInMemoryMetadataPtr()->hasUniqueKey() && command.staging_area)
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "DROP/DETACH STAGED PARTITION/PART command is only for unique table, table {} does not have unique key.",

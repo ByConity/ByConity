@@ -1104,11 +1104,13 @@ public:
         if (const auto * right_array = checkAndGetDataType<DataTypeArray>(arg_else.type.get()))
             right_id = right_array->getNestedType()->getTypeId();
 
-        if (!(callOnBasicTypes<true, true, true, false>(left_id, right_id, call)
+        if (!tryGetLeastSupertype(DataTypes{arg_then.type, arg_else.type})
+            || !(callOnBasicTypes<true, true, true, false>(left_id, right_id, call)
             || (res = executeTyped<UUID, UUID>(cond_col, arguments, result_type, input_rows_count))
             || (res = executeString(cond_col, arguments, result_type))
             || (res = executeGenericArray(cond_col, arguments, result_type))
             || (res = executeTuple(arguments, result_type, input_rows_count))))
+
         {
             return executeGeneric(cond_col, arguments, input_rows_count);
         }

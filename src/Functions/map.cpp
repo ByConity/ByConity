@@ -937,6 +937,12 @@ public:
 
     size_t getNumberOfArguments() const override { return 0; }
 
+    // function may output large-sized array, see also https://meego.larkoffice.com/clickhousech/story/detail/5285221241
+    bool isSuitableForConstantFoldingInOptimizer() const override
+    {
+        return false;
+    }
+
     bool useDefaultImplementationForConstants() const override { return true; }
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }

@@ -44,8 +44,13 @@ namespace
 
     /// Performs a request to get the size and last modification time of an object.
     std::pair<std::optional<ObjectInfo>, Aws::S3::S3Error> tryGetObjectInfo(
-        const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id,
-        const S3Settings::ReadWriteSettings & /*request_settings*/, bool with_metadata, bool for_disk_s3)
+        const Aws::S3::S3Client & client,
+        const String & bucket,
+        const String & key,
+        const String & version_id,
+        const S3Settings::RequestSettings & /*request_settings*/,
+        bool with_metadata,
+        bool for_disk_s3)
     {
         auto outcome = headObject(client, bucket, key, version_id, for_disk_s3);
         if (!outcome.IsSuccess())
@@ -74,7 +79,7 @@ ObjectInfo getObjectInfo(
     const String & bucket,
     const String & key,
     const String & version_id,
-    const S3Settings::ReadWriteSettings & request_settings,
+    const S3Settings::RequestSettings & request_settings,
     bool with_metadata,
     bool for_disk_s3,
     bool throw_on_error)
@@ -98,7 +103,7 @@ size_t getObjectSize(
     const String & bucket,
     const String & key,
     const String & version_id,
-    const S3Settings::ReadWriteSettings & request_settings,
+    const S3Settings::RequestSettings & request_settings,
     bool for_disk_s3,
     bool throw_on_error)
 {
@@ -110,7 +115,7 @@ bool objectExists(
     const String & bucket,
     const String & key,
     const String & version_id,
-    const S3Settings::ReadWriteSettings & request_settings,
+    const S3Settings::RequestSettings & request_settings,
     bool for_disk_s3)
 {
     auto [object_info, error] = tryGetObjectInfo(client, bucket, key, version_id, request_settings, {}, for_disk_s3);
@@ -129,7 +134,7 @@ void checkObjectExists(
     const String & bucket,
     const String & key,
     const String & version_id,
-    const S3Settings::ReadWriteSettings & request_settings,
+    const S3Settings::RequestSettings & request_settings,
     bool for_disk_s3,
     std::string_view description)
 {

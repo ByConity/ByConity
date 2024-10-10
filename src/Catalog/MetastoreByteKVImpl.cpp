@@ -16,10 +16,16 @@
 #if 0
 #include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/CatalogUtils.h>
+#include <Common/ProfileEventsTimer.h>
 #include <iostream>
 #include <client.h>
 #include <common/defines.h>
 
+namespace ProfileEvents
+{
+    extern const int KvRpcRequest;
+    extern const int KvRpcElapsedMicroseconds;
+}
 namespace DB
 {
 
@@ -80,6 +86,7 @@ void MetastoreByteKVImpl::init()
 
 void MetastoreByteKVImpl::put(const String & key, const String & value, bool if_not_exists)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     assertNotReadonly(key);
     PutRequest put_req;
     PutResponse put_resp;
@@ -93,6 +100,7 @@ void MetastoreByteKVImpl::put(const String & key, const String & value, bool if_
 
 void MetastoreByteKVImpl::putTTL(const String & key, const String & value, UInt64 ttl)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     assertNotReadonly(key);
     PutRequest put_req{this->table_name, key, value, ttl};
     PutResponse put_resp;
@@ -102,6 +110,7 @@ void MetastoreByteKVImpl::putTTL(const String & key, const String & value, UInt6
 
 std::pair<bool, String> MetastoreByteKVImpl::putCAS(const String & key, const String & value, const String & expected, [[maybe_unused]]bool with_old_value)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     assertNotReadonly(key);
     PutRequest put_req;
     PutResponse put_resp;
@@ -122,6 +131,7 @@ std::pair<bool, String> MetastoreByteKVImpl::putCAS(const String & key, const St
 
 uint64_t MetastoreByteKVImpl::get(const String & key, String & value)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     GetRequest get_req;
     GetResponse get_resp;
     get_req.table = this->table_name;
@@ -134,6 +144,7 @@ uint64_t MetastoreByteKVImpl::get(const String & key, String & value)
 
 std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::vector<String> & keys)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     std::vector<std::pair<String, UInt64>> res;
     res.reserve(keys.size());
 
@@ -175,6 +186,7 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
 
 bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     bytekv::sdk::WriteBatchRequest wb_req;
     bytekv::sdk::WriteBatchResponse wb_resp;
     std::vector<Slice> expected_values;
@@ -256,6 +268,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
 
 void MetastoreByteKVImpl::drop(const String & key, const UInt64 & expected_version)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     assertNotReadonly(key);
     DeleteRequest del_req;
     DeleteResponse del_resp;
@@ -278,6 +291,7 @@ MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getAll()
 
 MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String & partition_id, const size_t & limit, uint32_t scan_batch_size, const String & start_key)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     ScanRequest scan_req;
     scan_req.scan_batch_count = scan_batch_size;
     scan_req.limit = limit;
@@ -302,6 +316,7 @@ MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String &
 
 MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByRange(const String & range_start, const String & range_end, const bool include_start, const bool include_end)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     ScanRequest scan_req;
     ScanResponse scan_resp;
 
@@ -321,6 +336,7 @@ MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByRange(const String & 
 
 void MetastoreByteKVImpl::clean(const String & prefix)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     auto batch_delete = [&](std::vector<String> & keys)
     {
         WriteBatchRequest wb_req;
@@ -360,6 +376,7 @@ void MetastoreByteKVImpl::clean(const String & prefix)
 
 void MetastoreByteKVImpl::cleanAll()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     ScanRequest scan_req;
     scan_req.scan_batch_count = DEFAULT_SCAN_BATCH_COUNT;
     scan_req.table = table_name;

@@ -58,7 +58,8 @@ DistinctStep::DistinctStep(
     const SizeLimits & set_size_limits_,
     UInt64 limit_hint_,
     const Names & columns_,
-    bool pre_distinct_)
+    bool pre_distinct_,
+    bool can_to_agg_)
     : ITransformingStep(
             input_stream_,
             input_stream_.header,
@@ -67,6 +68,7 @@ DistinctStep::DistinctStep(
     , limit_hint(limit_hint_)
     , columns(columns_)
     , pre_distinct(pre_distinct_)
+    , can_to_agg(can_to_agg_)
 {
     if (!output_stream->distinct_columns.empty() /// Columns already distinct, do nothing
         && (!pre_distinct /// Main distinct
@@ -143,7 +145,7 @@ std::shared_ptr<DistinctStep> DistinctStep::fromProto(const Protos::DistinctStep
     for (const auto & element : proto.columns())
         columns.emplace_back(element);
     auto pre_distinct = proto.pre_distinct();
-    auto step = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct);
+    auto step = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct, true );
     step->setStepDescription(step_description);
     return step;
 }
@@ -160,7 +162,7 @@ void DistinctStep::toProto(Protos::DistinctStep & proto, bool) const
 
 std::shared_ptr<IQueryPlanStep> DistinctStep::copy(ContextPtr) const
 {
-    return std::make_shared<DistinctStep>(input_streams[0], set_size_limits, limit_hint, columns, pre_distinct);
+    return std::make_shared<DistinctStep>(input_streams[0], set_size_limits, limit_hint, columns, pre_distinct, can_to_agg);
 }
 
 }

@@ -109,8 +109,6 @@ public:
 };
 
 using FileClientPtr = std::shared_ptr<IFileClient>;
-
-
 struct CnchFileArguments
 {
     String url;
@@ -126,33 +124,4 @@ struct CnchFileArguments
 
     ASTPtr partition_by;
 };
-
-using S3ClientPtr = std::shared_ptr<Aws::S3::S3Client>;
-struct StorageS3Configuration
-{
-    S3::URI uri;
-    S3ClientPtr client;
-    UInt64 max_list_nums{1000};
-
-    S3::AuthSettings auth_settings;
-    S3Settings::ReadWriteSettings rw_settings;
-
-    /// Headers from ast is a part of static configuration.
-    HTTPHeaderEntries headers_from_ast{};
-
-    bool updated{false};
-
-    explicit StorageS3Configuration(
-        const String & url_,
-        const S3::AuthSettings & auth_settings_ = {},
-        const S3Settings::ReadWriteSettings & rw_settings_ = {},
-        const HTTPHeaderEntries & headers_from_ast_ = {})
-        : uri(S3::URI(url_, true)), auth_settings(auth_settings_), rw_settings(rw_settings_), headers_from_ast(headers_from_ast_)
-    {
-    }
-
-    void updateS3Client(const ContextPtr & ctx, const CnchFileArguments & arguments);
-};
-
-
 }

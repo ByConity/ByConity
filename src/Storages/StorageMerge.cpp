@@ -645,7 +645,7 @@ void StorageMerge::alter(
 {
     auto table_id = getStorageID();
 
-    StorageInMemoryMetadata storage_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata storage_metadata = getInMemoryMetadataCopy();
     params.apply(storage_metadata, local_context);
     DatabaseCatalog::instance().getDatabase(table_id.database_name, local_context)->alterTable(local_context, table_id, storage_metadata);
     setInMemoryMetadata(storage_metadata);

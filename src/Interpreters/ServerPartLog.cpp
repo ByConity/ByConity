@@ -66,6 +66,8 @@ NamesAndTypesList ServerPartLogElement::getNamesAndTypes()
         {"duration_ms", std::make_shared<DataTypeUInt64>()},
         {"peak_memory_usage", std::make_shared<DataTypeUInt64>()},
 
+        {"from_attach", std::make_shared<DataTypeUInt8>()},
+
         {"error", std::make_shared<DataTypeUInt8>()},
         {"exception", std::make_shared<DataTypeString>()},
     };
@@ -110,6 +112,7 @@ void ServerPartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(duration_ms);
     columns[i++]->insert(peak_memory_usage);
 
+    columns[i++]->insert(from_attach);
     columns[i++]->insert(error);
     columns[i++]->insert(exception);
 }
@@ -129,7 +132,8 @@ bool ServerPartLog::addNewParts(
     UInt8 error,
     const Strings & source_part_names,
     UInt64 duration_ns,
-    UInt64 peak_memory_usage)
+    UInt64 peak_memory_usage,
+    bool from_attach)
 {
     std::shared_ptr<ServerPartLog> server_part_log = local_context->getServerPartLog();
     if (!server_part_log)
@@ -162,6 +166,8 @@ bool ServerPartLog::addNewParts(
         elem.duration_ms = duration_ns / 1000000;
         elem.peak_memory_usage = peak_memory_usage;
 
+
+        elem.from_attach = from_attach;
         elem.error = error;
 
         server_part_log->add(elem);
@@ -179,7 +185,7 @@ bool ServerPartLog::addNewParts(
             add(part, false);
         for (const auto & part : staged_parts)
             add(part, true);
-        
+
         if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage_id))
         {
             if (type == ServerPartLogElement::INSERT_PART && !parts.empty())

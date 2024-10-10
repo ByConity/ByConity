@@ -20,7 +20,7 @@ public:
     bool supportsOptimizer() const override { return true; }
     bool supportsDistributedRead() const override { return true; }
 
-    bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
+    bool isBucketTable() const override { return getInMemoryMetadataPtr()->isClusterByKeyDefined(); }
     bool isTableClustered(ContextPtr /* context*/) const override { return isBucketTable(); }
 
 protected:

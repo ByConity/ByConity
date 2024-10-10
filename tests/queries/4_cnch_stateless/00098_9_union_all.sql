@@ -1,1 +1,2 @@
+set dialect_type='ANSI';
 SELECT * FROM (SELECT 1 UNION ALL SELECT 2) ORDER BY 1 ASC;

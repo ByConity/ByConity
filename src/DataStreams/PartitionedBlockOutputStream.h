@@ -13,7 +13,8 @@ namespace DB
 class PartitionedBlockOutputStream : public IBlockOutputStream
 {
 public:
-    static constexpr auto PARTITION_ID_WILDCARD = "{_partition_id}";
+    static constexpr auto PARTITION_ID_WILDCARD = "partition_*";
+    static constexpr auto PARTITION_ID_REPLACE = "*";
 
     PartitionedBlockOutputStream(const ContextPtr & context_, const ASTPtr & partition_by, const Block & sample_block_);
 

@@ -7,6 +7,7 @@
 #include <Protos/enum.pb.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <common/types.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -87,6 +88,7 @@ public:
     }
     static PlanSegmentProfilePtr fromProto(const Protos::PlanSegmentProfileRequest & proto);
     void toProto(Protos::PlanSegmentProfileRequest & proto);
+    static PlanSegmentProfilePtr getFromProcessors(const Processors & processors, ContextPtr context);
 };
 
 }

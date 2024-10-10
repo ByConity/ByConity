@@ -3635,7 +3635,8 @@ namespace Catalog
                 fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txnID.toUInt64());
 
                 Protos::DataModelPartVector staged_part_models;
-                fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
+                /// In some cases, mutation version is not equal to txn id due to part chain, we must pass the txn id to fillPartsModel method.
+                fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts(), txnID.toUInt64());
 
                 finishCommitInBatch(
                     table,
@@ -3788,7 +3789,7 @@ namespace Catalog
                 if (parts_to_remove.empty() && bitmaps_to_remove.empty() && staged_parts_to_remove.empty())
                 {
                     fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txn_id);
-                    fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
+                    fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts(), txn_id);
 
                     finishCommitInBatch(
                         table,
@@ -3829,7 +3830,7 @@ namespace Catalog
                             ErrorCodes::LOGICAL_ERROR);
 
                     fillPartsModel(*table, parts_to_write, *part_models.mutable_parts(), txn_id);
-                    fillPartsModel(*table, staged_parts_to_write, *staged_part_models.mutable_parts());
+                    fillPartsModel(*table, staged_parts_to_write, *staged_part_models.mutable_parts(), txn_id);
 
                     finishCommitInBatch(
                         table,
@@ -6944,7 +6945,8 @@ namespace Catalog
         const IMergeTreeDataPartsVector & parts,
         const IMergeTreeDataPartsVector & staged_parts,
         const DeleteBitmapMetaPtrVector & detached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps)
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const UInt64 & txn_id)
     {
         if (detached_part_names.size() != parts.size() + staged_parts.size())
         {
@@ -6989,7 +6991,8 @@ namespace Catalog
                         {},
                         detached_bitmaps,
                         bitmaps,
-                        DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS,
+                        txn_id);
                 return;
             }
             catch (Exception & e)
@@ -7002,10 +7005,10 @@ namespace Catalog
         }
 
         Protos::DataModelPartVector commit_parts;
-        fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts());
+        fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts(), txn_id);
 
         Protos::DataModelPartVector commit_staged_parts;
-        fillPartsModel(*to_tbl, staged_parts, *commit_staged_parts.mutable_parts());
+        fillPartsModel(*to_tbl, staged_parts, *commit_staged_parts.mutable_parts(), txn_id);
 
         meta_proxy->attachDetachedParts(
             name_space,
@@ -7039,7 +7042,8 @@ namespace Catalog
         const IMergeTreeDataPartsVector & attached_staged_parts,
         const IMergeTreeDataPartsVector & parts,
         const DeleteBitmapMetaPtrVector & attached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps)
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const UInt64 & txn_id)
     {
         if (attached_parts.size() + attached_staged_parts.size() != parts.size())
         {
@@ -7071,7 +7075,7 @@ namespace Catalog
                         , target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
                 context.getCnchServerClientPool().get(target_host)->redirectDetachAttachedS3Parts(
                     to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), attached_parts, attached_staged_parts, parts, {}, {}, attached_bitmaps, bitmaps, {}, {}
-                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_PARTS);
+                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_PARTS, txn_id);
                 return;
             }
             catch (Exception & e)
@@ -7090,7 +7094,7 @@ namespace Catalog
             if (part != nullptr)
             {
                 commit_parts.emplace_back(Protos::DataModelPart());
-                fillPartModel(*to_tbl, *part, commit_parts.back().value());
+                fillPartModel(*to_tbl, *part, commit_parts.back().value(), txn_id);
             }
             else
             {
@@ -7186,7 +7190,8 @@ namespace Catalog
                         bitmap_names,
                         {},
                         {},
-                        DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW,
+                        0);
                 return;
             }
             catch (Exception & e)
@@ -7254,7 +7259,7 @@ namespace Catalog
                         ,target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
                 context.getCnchServerClientPool().get(target_host)->redirectDetachAttachedS3Parts(
                     nullptr, from_tbl->getStorageUUID() , UUID(stringToUUID(to_uuid)), {}, {}, {}, attached_part_names, attached_bitmap_names, {}, {}, detached_part_metas, detached_bitmap_metas
-                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_RAW);
+                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_RAW, 0);
                 return;
             }
             catch (Exception & e)
@@ -7602,7 +7607,7 @@ namespace Catalog
 
         //check schema compatibility and merge part schema
         auto partial_schema = DB::getConcreteObjectColumns(
-            parts.begin(), parts.end(), table->getInMemoryMetadata().columns, [](const auto & part) { return part->getColumns(); });
+            parts.begin(), parts.end(), table->getInMemoryMetadataPtr()->getColumns(), [](const auto & part) { return part->getColumns(); });
 
         // compare with existed schema , check if it need to insert
         // Attention: this comparison will scan existed partial schema from meta store, it may cost too many meta store resource.
@@ -7630,14 +7635,14 @@ namespace Catalog
         auto existed_assembled_schema = DB::getConcreteObjectColumns(
             committed_partial_schema_list.begin(),
             committed_partial_schema_list.end(),
-            cnch_table->getInMemoryMetadata().getColumns(),
+            cnch_table->getInMemoryMetadataPtr()->getColumns(),
             [](const auto & partial_schema_) { return partial_schema_; });
 
         committed_partial_schema_list.emplace_back(partial_schema);
         auto new_assembled_schema = DB::getConcreteObjectColumns(
             committed_partial_schema_list.begin(),
             committed_partial_schema_list.end(),
-            cnch_table->getInMemoryMetadata().getColumns(),
+            cnch_table->getInMemoryMetadataPtr()->getColumns(),
             [](const auto & partial_schema_) { return partial_schema_; });
 
         if (new_assembled_schema != existed_assembled_schema)

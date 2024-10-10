@@ -30,7 +30,8 @@ TableFinishStep::TableFinishStep(
 {
     if (insert_select_with_profiles)
     {
-        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        Block new_header
+            = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), output_affected_row_count_symbol)};
         output_stream = DataStream{.header = std::move(new_header)};
     }
     else
@@ -56,6 +57,7 @@ void TableFinishStep::toProto(Protos::TableFinishStep & proto, bool) const
         throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
     target->toProto(*proto.mutable_target());
     proto.set_output_affected_row_count_symbol(output_affected_row_count_symbol);
+    proto.set_insert_select_with_profiles(insert_select_with_profiles);
     serializeASTToProto(query, *proto.mutable_query());
 }
 
@@ -64,7 +66,10 @@ std::shared_ptr<TableFinishStep> TableFinishStep::fromProto(const Protos::TableF
     auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     auto target = TableWriteStep::Target::fromProto(proto.target(), context);
     auto output_affected_row_count_symbol = proto.output_affected_row_count_symbol();
-    auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol, proto.has_query() ? deserializeASTFromProto(proto.query()) : nullptr);
+    bool insert_select_with_profiles = proto.has_insert_select_with_profiles() ? proto.insert_select_with_profiles()
+                                                                               : context->getSettingsRef().insert_select_with_profiles;
+    auto step = std::make_shared<TableFinishStep>(
+        base_input_stream, target, output_affected_row_count_symbol, proto.has_query() ? deserializeASTFromProto(proto.query()) : nullptr, insert_select_with_profiles);
     step->setStepDescription(step_description);
     return step;
 }

@@ -30,7 +30,7 @@ public:
         input_streams = input_streams_;
         if (insert_select_with_profiles)
         {
-            Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+            Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), output_affected_row_count_symbol)};
             output_stream = DataStream{.header = std::move(new_header)};
         }
         else
