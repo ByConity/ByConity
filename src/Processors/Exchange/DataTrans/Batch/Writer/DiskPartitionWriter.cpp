@@ -32,12 +32,12 @@ namespace ErrorCodes
 }
 
 DiskPartitionWriter::DiskPartitionWriter(
-    ContextPtr context_, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExchangeDataKeyPtr key_)
+    ContextPtr context_, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExtendedExchangeDataKey key_)
     : IBroadcastSender(true)
     , context(std::move(context_))
     , mgr(mgr_)
     , header(std::move(header_))
-    , key(std::move(key_))
+    , extended_key(std::move(key_))
     , log(getLogger("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
@@ -45,10 +45,11 @@ DiskPartitionWriter::DiskPartitionWriter(
     if (auto manager = mgr.lock(); manager)
         disk = manager->getDisk();
     else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *key);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *extended_key.key);
     auto query_expiration_ts = context->getQueryExpirationTimeStamp();
     query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
-    LOG_TRACE(log, "constructed for key:{}", *key);
+    LOG_TRACE(log, "constructed for key:{}", *extended_key.key);
 }
 
 DiskPartitionWriter::~DiskPartitionWriter()
@@ -60,9 +61,12 @@ DiskPartitionWriter::~DiskPartitionWriter()
         {
             QueryExchangeLogElement element;
             element.initial_query_id = context->getInitialQueryId();
-            element.exchange_id = key->exchange_id;
-            element.partition_id = key->partition_id;
-            element.parallel_index = key->parallel_index;
+            element.exchange_id = extended_key.key->exchange_id;
+            element.partition_id = extended_key.key->partition_id;
+            element.parallel_index = extended_key.key->parallel_index;
+            element.write_segment = extended_key.write_segment_id;
+            element.read_segment = extended_key.read_segment_id;
+            element.exchange_mode = static_cast<UInt16>(extended_key.exchange_mode);
             element.event_time
                 = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             element.send_time_ms = sender_metrics.send_time_ms.get_value();
@@ -139,7 +143,10 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
                     status_code,
                     true,
                     fmt::format(
-                        "wait flushing data to disk timeout for key:{} done:{} data_queue->closed():{}", *key, done, data_queue->closed()));
+                        "wait flushing data to disk timeout for key:{} done:{} data_queue->closed():{}",
+                        *extended_key.key,
+                        done,
+                        data_queue->closed()));
                 if (enable_disk_writer_metrics)
                     sender_metrics.message = ret.message;
                 return ret;
@@ -151,12 +158,12 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
             }
             /// commit file by renaming
             if (auto manager = mgr.lock())
-                disk->replaceFile(manager->getTemporaryFileName(*key), manager->getFileName(*key));
+                disk->replaceFile(manager->getTemporaryFileName(*extended_key.key), manager->getFileName(*extended_key.key));
             else
             {
                 sender_metrics.finish_code.store(BroadcastStatusCode::SEND_UNKNOWN_ERROR, std::memory_order_release);
                 status_code = static_cast<BroadcastStatusCode>(sender_metrics.finish_code.load(std::memory_order_acquire));
-                auto ret = BroadcastStatus(status_code, true, fmt::format("disk exchange manager invalid key:{}", *key));
+                auto ret = BroadcastStatus(status_code, true, fmt::format("disk exchange manager invalid key:{}", *extended_key.key));
                 if (enable_disk_writer_metrics)
                     sender_metrics.message = ret.message;
                 return ret;
@@ -171,7 +178,7 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
         }
         if (enable_disk_writer_metrics)
             sender_metrics.message = message;
-        LOG_TRACE(log, "finished for key:{} status change to code:{} message:{}", *key, status_code, sender_metrics.message);
+        LOG_TRACE(log, "finished for key:{} status change to code:{} message:{}", *extended_key.key, status_code, sender_metrics.message);
     }
     else
     {
@@ -192,10 +199,11 @@ void DiskPartitionWriter::runWriteTask()
         s.start();
     auto manager = mgr.lock();
     if (!manager)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *key);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *extended_key.key);
 
     /// create buffer and set compression codec
-    auto buf = manager->createFileBufferForWrite(key);
+    auto buf = manager->createFileBufferForWrite(extended_key.key);
     auto codec = context->getSettingsRef().disk_shuffle_files_codec;
     std::shared_ptr<CompressedWriteBuffer> compressed_out
         = std::make_shared<CompressedWriteBuffer>(*buf, CompressionCodecFactory::instance().get(codec, {}));
@@ -255,7 +263,7 @@ void DiskPartitionWriter::runWriteTask()
 
     SCOPE_EXIT({
         /// update written bytes before notify
-        manager->updateWrittenBytes(key->query_unique_id, key, buf->count());
+        manager->updateWrittenBytes(extended_key.key->query_unique_id, extended_key.key, buf->count());
         {
             std::unique_lock<bthread::Mutex> lock(done_mutex);
             done = true;

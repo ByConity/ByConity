@@ -26,6 +26,7 @@
 #include <Poco/Exception.h>
 #include <Common/Exception.h>
 #include <Common/tests/gtest_global_context.h>
+#include "Interpreters/DistributedStages/ExchangeMode.h"
 
 using namespace DB;
 using namespace UnitTest;
@@ -56,7 +57,9 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
     context->getExchangeDataTracker()->registerExchange(std::to_string(key->query_unique_id), key->exchange_id, 0);
     mgr->createWriteTaskDirectory(
         key->query_unique_id, std::to_string(key->query_unique_id), fmt::format("127.0.0.1:{}", brpc_server_port));
-    DiskPartitionWriterPtr writer = std::make_shared<DiskPartitionWriter>(context, mgr, header, std::move(key));
+    ExtendedExchangeDataKey extended_key{
+        .key = key, .write_segment_id = 2, .read_segment_id = 1, .exchange_mode = ExchangeMode::REPARTITION};
+    DiskPartitionWriterPtr writer = std::make_shared<DiskPartitionWriter>(context, mgr, header, std::move(extended_key));
     auto origin_chunk = createUInt8Chunk(10, 1, 7);
     BroadcastStatus status = writer->sendImpl(std::move(origin_chunk));
     ASSERT_EQ(status.code, BroadcastStatusCode::RUNNING) << fmt::format("status_code:{} message:{}", status.code, status.message);

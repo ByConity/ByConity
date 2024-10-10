@@ -16,6 +16,7 @@
 #pragma once
 
 #include <string>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <common/types.h>
@@ -63,6 +64,15 @@ struct ExchangeDataKey
 
 using ExchangeDataKeyPtr = std::shared_ptr<ExchangeDataKey>;
 using ExchangeDataKeyPtrs = std::vector<ExchangeDataKeyPtr>;
+
+/// exchange data key with extra information
+struct ExtendedExchangeDataKey
+{
+    ExchangeDataKeyPtr key;
+    UInt64 write_segment_id;
+    UInt64 read_segment_id;
+    ExchangeMode exchange_mode;
+};
 
 struct ExchangeDataKeyHashFunc
 {

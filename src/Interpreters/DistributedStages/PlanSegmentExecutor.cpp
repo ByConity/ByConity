@@ -572,7 +572,12 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             if (settings.bsp_mode)
             {
                 data_key->parallel_index = plan_segment_instance->info.parallel_id;
-                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
+                ExtendedExchangeDataKey extended_key{
+                    .key = data_key,
+                    .write_segment_id = plan_segment->getPlanSegmentId(),
+                    .read_segment_id = cur_plan_segment_output->getPlanSegmentId(),
+                    .exchange_mode = exchange_mode};
+                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, extended_key);
                 auto instance_id = context->getPlanSegmentInstanceId();
                 disk_exchange_mgr->submitWriteTask(current_tx_id, instance_id, writer, thread_group);
                 sender = writer;
