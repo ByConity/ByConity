@@ -13,6 +13,18 @@ AddressInfo getLocalAddress(const Context & query_context)
 
 AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_context)
 {
+    if(query_context->getSettingsRef().enable_internal_communication_user)
+    {
+        // Trick for avoiding RBAC performace loss
+        static auto [user, password] = query_context->getCnchInterserverCredentials();
+        return AddressInfo(
+            host_with_ports.host,
+            host_with_ports.tcp_port,
+            user,
+            password,
+            host_with_ports.rpc_port);
+    }
+
     const ClientInfo & info = query_context->getClientInfo();
     return AddressInfo(
         host_with_ports.host,
@@ -20,6 +32,7 @@ AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_c
         info.current_user,
         info.current_password,
         host_with_ports.rpc_port);
+
 }
 
 void sendPlanSegmentToAddress(

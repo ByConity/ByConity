@@ -33,7 +33,7 @@ SET bsp_mode=0; -- bsp mode does not support bucket join
 SET enum_replicate_no_stats=0,enable_bucket_shuffle=1;
 SELECT 'enable bucket shuffle';
 SELECT 'dtspartition';
-SELECT *　FROM bucket_dtspartition b　LEFT JOIN normal n ON b.d=n.b ORDER BY d;
+SELECT *　FROM bucket_dtspartition b　LEFT JOIN normal n ON b.d=n.b ORDER BY d SETTINGS enable_internal_communication_user=0;
 SELECT *　FROM bucket_dtspartition b　Right JOIN normal n ON b.d=n.b ORDER BY b;
 SELECT *　FROM bucket_dtspartition_with_range b　LEFT JOIN normal n ON b.d=n.b ORDER BY d;
 SELECT *　FROM bucket_dtspartition_with_range b　RIGHT JOIN normal n ON b.d=n.b ORDER BY b;
