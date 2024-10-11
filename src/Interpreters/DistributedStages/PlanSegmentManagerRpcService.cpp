@@ -319,7 +319,7 @@ void PlanSegmentManagerRpcService::prepareCommonParams(
     UInt32 query_settings_buf_size,
     brpc::Controller * cntl,
     std::shared_ptr<Protos::QueryCommon> & query_common,
-    std::shared_ptr<butil::IOBuf> & settings_io_buf)
+    std::shared_ptr<SettingsChanges> & settings_changes)
 {
     if (major_revision != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
         throw Exception(
@@ -355,16 +355,27 @@ void PlanSegmentManagerRpcService::prepareCommonParams(
                 ErrorCodes::LOGICAL_ERROR);
         }
     }
-    settings_io_buf = std::make_shared<butil::IOBuf>(settings_common_buf.movable());
+    auto settings_io_buf = std::make_shared<butil::IOBuf>(settings_common_buf.movable());
+    if (!settings_io_buf->empty())
+    {
+        /// apply settings changed
+        ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
+        Settings settings;
+        const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
+        if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
+            settings.read(settings_read_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
+        else
+            settings.read(settings_read_buf, SettingsWriteFormat::BINARY);
+        auto changes = settings.changes();
+        settings_changes = std::make_shared<SettingsChanges>(changes);
+    }
 }
 
 ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
     ContextMutablePtr global_context,
     std::shared_ptr<Protos::QueryCommon> & query_common,
-    std::shared_ptr<butil::IOBuf> & settings_io_buf,
     UInt16 remote_side_port,
-    PlanSegmentInstanceId instance_id,
-    const AddressInfo & execution_address)
+    PlanSegmentInstanceId instance_id)
 {
     /// Create context.
     ContextMutablePtr query_context;
@@ -420,22 +431,28 @@ ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
     client_info.current_address = std::move(current_socket_address);
     client_info.rpc_port = query_common->coordinator_address().exchange_port();
 
+    if (query_common->has_parent_query_id())
+    {
+        client_info.parent_initial_query_id = query_common->parent_query_id();
+        query_context->setInternalQuery(query_common->is_internal_query());
+    }
+
+    return query_context;
+}
+
+void PlanSegmentManagerRpcService::initQueryContext(
+    ContextMutablePtr query_context,
+    std::shared_ptr<Protos::QueryCommon> query_common,
+    std::shared_ptr<SettingsChanges> settings_changes,
+    const AddressInfo & execution_address)
+{
     /// Authentication
     const auto & current_user = execution_address.getUser();
     query_context->setUser(current_user, execution_address.getPassword(), query_context->getClientInfo().current_address);
 
-    if (!settings_io_buf->empty())
-    {
-        ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
-        /// Sets an extra row policy based on `client_info.initial_user`
-        // query_context->setInitialRowPolicy();
-        /// apply settings changed
-        const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
-        if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
-            const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
-        else
-            const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
-    }
+    /// apply settings changed, must after setUser
+    if (settings_changes)
+        query_context->applySettingsChanges(*settings_changes);
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
@@ -452,20 +469,12 @@ ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
     if (!query_context->hasQueryContext())
         query_context->makeQueryContext();
 
-    query_context->setQueryExpirationTimeStamp();
-
-    if (query_common->has_parent_query_id())
-    {
-        client_info.parent_initial_query_id = query_common->parent_query_id();
-        query_context->setInternalQuery(query_common->is_internal_query());
-    }
-
-    return query_context;
+    query_context->initQueryExpirationTimeStamp();
 }
 
 void PlanSegmentManagerRpcService::executePlanSegment(
     std::shared_ptr<Protos::QueryCommon> query_common,
-    std::shared_ptr<butil::IOBuf> settings_io_buf,
+    std::shared_ptr<SettingsChanges> settings_changes,
     UInt16 remote_side_port,
     UInt32 segment_id,
     PlanSegmentExecutionInfo & execution_info,
@@ -477,7 +486,7 @@ void PlanSegmentManagerRpcService::executePlanSegment(
 
     ThreadFromGlobalPool async_thread([global_context = context,
                                        query_common = std::move(query_common),
-                                       settings_io_buf = std::move(settings_io_buf),
+                                       settings_changes = std::move(settings_changes),
                                        remote_side_port = remote_side_port,
                                        segment_id = segment_id,
                                        execution_info = std::move(execution_info),
@@ -488,13 +497,9 @@ void PlanSegmentManagerRpcService::executePlanSegment(
         try
         {
             if (!query_context)
-                query_context = createQueryContext(
-                    global_context,
-                    query_common,
-                    settings_io_buf,
-                    remote_side_port,
-                    {segment_id, execution_info.parallel_id},
-                    execution_info.execution_address);
+                query_context = createQueryContext(global_context, query_common, remote_side_port, {segment_id, execution_info.parallel_id});
+
+            initQueryContext(query_context, query_common, settings_changes, execution_info.execution_address);
 
             if (!process_plan_segment_entry)
                 process_plan_segment_entry = query_context->getPlanSegmentProcessList().insertGroup(query_context, segment_id);
@@ -523,12 +528,12 @@ void PlanSegmentManagerRpcService::executePlanSegment(
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__, query_context ? query_context->getCurrentQueryId() : "");
-            if (before_execute)
+            if (before_execute && query_context)
             {
                 int exception_code = getCurrentExceptionCode();
                 auto exception_message = getCurrentExceptionMessage(false);
 
-                auto result = convertFailurePlanSegmentStatusToResult(query_context, execution_info, exception_code, exception_message);
+                auto result = convertFailurePlanSegmentStatusToResult(std::move(query_context), execution_info, exception_code, exception_message);
                 reportExecutionResult(result);
             }
         }
@@ -554,14 +559,14 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                 context->getEpoch());
 
         auto query_common = std::make_shared<Protos::QueryCommon>();
-        std::shared_ptr<butil::IOBuf> settings_io_buf;
+        std::shared_ptr<SettingsChanges> settings_changes;
         prepareCommonParams(
             request->brpc_protocol_major_revision(),
             request->query_common_buf_size(),
             request->query_settings_buf_size(),
             cntl,
             query_common,
-            settings_io_buf);
+            settings_changes);
 
         PlanSegmentExecutionInfo execution_info;
         execution_info.parallel_id = request->parallel_id();
@@ -601,7 +606,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         executePlanSegment(
             std::move(query_common),
-            std::move(settings_io_buf),
+            std::move(settings_changes),
             cntl->remote_side().port,
             request->plan_segment_id(),
             execution_info,
@@ -629,14 +634,14 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
     try
     {
         auto query_common = std::make_shared<Protos::QueryCommon>();
-        std::shared_ptr<butil::IOBuf> settings_io_buf;
+        std::shared_ptr<SettingsChanges> settings_changes;
         prepareCommonParams(
             request->brpc_protocol_major_revision(),
             request->query_common_buf_size(),
             request->query_settings_buf_size(),
             cntl,
             query_common,
-            settings_io_buf);
+            settings_changes);
 
         // prepare segmentGroup
         std::vector<size_t> segment_ids;
@@ -650,7 +655,7 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
 
         const auto execution_address = AddressInfo(request->execution_address());
         auto first_query_context
-            = createQueryContext(context, query_common, settings_io_buf, cntl->remote_side().port, *first_instance_id, execution_address);
+            = createQueryContext(context, query_common, cntl->remote_side().port, *first_instance_id);
         auto process_plan_segment_entries = first_query_context->getPlanSegmentProcessList().insertGroup(first_query_context, segment_ids);
 
         const auto & headers = request->plan_segment_headers();
@@ -678,7 +683,7 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
 
             executePlanSegment(
                 query_common,
-                settings_io_buf,
+                settings_changes,
                 cntl->remote_side().port,
                 header.plan_segment_id(),
                 execution_info,

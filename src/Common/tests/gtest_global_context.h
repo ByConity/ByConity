@@ -121,14 +121,16 @@ inline const ContextHolder & getContext()
     return holder;
 }
 
-inline void setQueryDuration()
+inline void setQueryDuration(DB::ContextMutablePtr context = nullptr)
 {
-    auto & context = getContext().context;
+    if (!context)
+        context = getContext().context;
+
     auto & client_info = context->getClientInfo();
 
     const auto current_time = std::chrono::system_clock::now();
     client_info.initial_query_start_time = time_in_seconds(current_time);
     client_info.initial_query_start_time_microseconds = time_in_microseconds(current_time);
 
-    context->setQueryExpirationTimeStamp();
+    context->initQueryExpirationTimeStamp();
 }

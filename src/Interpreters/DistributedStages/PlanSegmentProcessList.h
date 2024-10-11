@@ -87,9 +87,6 @@ public:
     bool emplace_null(std::vector<size_t> segment_ids)
     {
         std::unique_lock lock(mutex);
-        // for batch mode
-        if (segment_ids.size() != 1 && !segment_queries.empty())
-            return false;
 
         for (const auto segment_id : segment_ids)
         {

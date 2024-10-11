@@ -135,6 +135,7 @@ TEST_F(PlanSegmentExecutorTest, ExecuteTest)
     context->getClientInfo().initial_query_id = plan_segment.getQueryId();
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     context->setCoordinatorAddress(coordinator_address);
+    setQueryDuration(context);
 
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
@@ -245,6 +246,7 @@ TEST_F(PlanSegmentExecutorTest, ExecuteAsyncTest)
     context->getClientInfo().initial_query_id = plan_segment.getQueryId();
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     context->setCoordinatorAddress(coordinator_address);
+    setQueryDuration(context);
 
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
@@ -358,6 +360,7 @@ TEST_F(PlanSegmentExecutorTest, ExecuteCancelTest)
     context->getClientInfo().initial_query_id = plan_segment.getQueryId();
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     context->setCoordinatorAddress(coordinator_address);
+    setQueryDuration(context);
 
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
@@ -489,6 +492,7 @@ void planExecutor(String query_id, AddressInfo coordinator_address)
         context->getClientInfo().initial_query_id = plan_segment.getQueryId();
         context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
         context->setCoordinatorAddress(coordinator_address);
+        setQueryDuration(context);
 
         DataStream datastream{.header = header};
         auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);

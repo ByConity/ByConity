@@ -105,7 +105,7 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         client_info.initial_query_id = request->registry().query_id(); /// needed for query exchange log initial_query_id
         client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
         client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
-        query_context->setQueryExpirationTimeStamp();
+        query_context->initQueryExpirationTimeStamp();
         auto query_id = request->registry().query_id();
         auto coordinator_addr = request->registry().coordinator_address();
         /// we need to do this as to avoid previous sender waitBecomeRealSender in finish

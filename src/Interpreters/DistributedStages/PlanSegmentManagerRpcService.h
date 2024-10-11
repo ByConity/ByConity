@@ -152,19 +152,25 @@ private:
         UInt32 query_settings_buf_size,
         brpc::Controller * cntl,
         std::shared_ptr<Protos::QueryCommon> & query_common,
-        std::shared_ptr<butil::IOBuf> & settings_io_buf);
+        std::shared_ptr<SettingsChanges> & settings_changes);
 
+    // can be call both sync or async
     static ContextMutablePtr createQueryContext(
         ContextMutablePtr global_context,
         std::shared_ptr<Protos::QueryCommon> & query_common,
-        std::shared_ptr<butil::IOBuf> & settings_io_buf,
         UInt16 remote_side_port,
-        PlanSegmentInstanceId instance_id,
+        PlanSegmentInstanceId instance_id);
+
+    // only can be call in async thread
+    static void initQueryContext(
+        ContextMutablePtr query_context,
+        std::shared_ptr<Protos::QueryCommon> query_common,
+        std::shared_ptr<SettingsChanges> settings_changes,
         const AddressInfo & execution_address);
 
     void executePlanSegment(
         std::shared_ptr<Protos::QueryCommon> query_common,
-        std::shared_ptr<butil::IOBuf> settings_io_buf,
+        std::shared_ptr<SettingsChanges> settings_changes,
         UInt16 remote_side_port,
         UInt32 segment_id,
         PlanSegmentExecutionInfo & execution_info,

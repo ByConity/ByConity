@@ -37,7 +37,7 @@ public:
         DISK_READER = 1
     };
     explicit BrpcExchangeReceiverRegistryService(ContextMutablePtr context_)
-        : context(context_), max_buf_size(context_->getSettingsRef().exchange_stream_max_buf_size)
+        : context(std::move(context_)), max_buf_size(context->getSettingsRef().exchange_stream_max_buf_size)
     {
     }
     explicit BrpcExchangeReceiverRegistryService(int max_buf_size_) : max_buf_size(max_buf_size_)

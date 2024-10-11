@@ -77,7 +77,7 @@ SchedulerTestContext createSchedulerTestContext(size_t parallel_size, const std:
     result.query_context = getContext().createQueryContext("q1", settings);
     DB::TxnTimestamp t1 = 1;
     result.query_context->initCnchServerResource(t1);
-    result.query_context->setQueryExpirationTimeStamp();
+    result.query_context->initQueryExpirationTimeStamp();
 
     /// prepare plan segment
     result.segments = {std::make_shared<DB::PlanSegment>(2, "q1", "c1"), std::make_shared<DB::PlanSegment>(1, "q1", "c2")};

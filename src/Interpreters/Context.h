@@ -594,7 +594,7 @@ protected:
     QueueThrottlerDeleterPtr queue_throttler_ptr;
     bool enable_worker_fault_tolerance = false;
 
-    timespec query_expiration_timestamp{};
+    std::optional<timespec> query_expiration_timestamp;
 
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
@@ -1762,8 +1762,8 @@ public:
     void removeRunningBackupTask(const String & backup_id);
 
     UInt32 getQueryMaxExecutionTime() const;
-    timespec getQueryExpirationTimeStamp() const { return query_expiration_timestamp; }
-    void setQueryExpirationTimeStamp();
+    timespec getQueryExpirationTimeStamp() const;
+    void initQueryExpirationTimeStamp();
 
     AsynchronousReaderPtr getThreadPoolReader() const;
 #if USE_LIBURING

@@ -1004,7 +1004,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             query_table = query_with_table_output->table;
         }
 
-        context->setQueryExpirationTimeStamp();
+        context->initQueryExpirationTimeStamp();
+
         auto * insert_query = ast->as<ASTInsertQuery>();
         if (insert_query && insert_query->data)
         {

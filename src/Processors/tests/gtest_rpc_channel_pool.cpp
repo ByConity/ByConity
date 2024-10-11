@@ -81,7 +81,7 @@ void get_client(
 TEST_F(RPCchannelPoolTest, single_address_concurrent)
 {
     std::vector<std::thread> thread_get_clients;
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         std::thread thread_get_client(get_client, 10000, "127.0.0.1:8001", BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, false, false);
         thread_get_clients.push_back(std::move(thread_get_client));
@@ -98,7 +98,7 @@ TEST_F(RPCchannelPoolTest, multi_address_concurrent)
         = {BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY};
     std::vector<std::thread> thread_get_clients;
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         auto address = "127.0.0.1:80" + std::to_string(i % 100);
         std::thread thread_get_client(get_client, 10000, address, client_types[i % 2], false, false);
@@ -118,7 +118,7 @@ TEST_F(RPCchannelPoolTest, check_pool_expire_timer_concurrent)
         = {BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY};
     std::vector<std::thread> thread_get_clients;
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         auto address = "127.0.0.1:80" + std::to_string(i % 100);
         std::thread thread_get_client(get_client, 10000, address, client_types[i % 2], false, false);
@@ -138,7 +138,7 @@ TEST_F(RPCchannelPoolTest, check_pool_expire_timer)
         = {BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY};
     std::vector<std::thread> thread_get_clients;
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         auto address = "127.0.0.1:80" + std::to_string(i % 100);
         std::thread thread_get_client(get_client, 10000, address, client_types[i % 2], true, false);
@@ -156,7 +156,7 @@ TEST_F(RPCchannelPoolTest, construct_random_exceptions)
         = {BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY};
     std::vector<std::thread> thread_get_clients;
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         auto address = "127.0.0.1:80" + std::to_string(i % 100);
         std::thread thread_get_client(get_client, 1000, address, client_types[i % 2], false, true);

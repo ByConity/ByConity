@@ -123,7 +123,7 @@ TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
     auto sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(receiver_data2);
     sender_1->accept(getContext().context, header);
     sender_2->accept(getContext().context, header);
-    setQueryDuration();
+    setQueryDuration(getContext().context);
     sender_1->send(origin_chunk.clone());
     sender_2->send(origin_chunk.clone());
 
@@ -160,6 +160,7 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
 
 void sender_thread(BroadcastSenderProxyPtr sender, Chunk chunk)
 {
+    setQueryDuration(getContext().context);
     BroadcastStatus status = sender->send(std::move(chunk));
 }
 
