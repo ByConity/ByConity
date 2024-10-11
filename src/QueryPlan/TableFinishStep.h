@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Interpreters/Context_fwd.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <QueryPlan/TableWriteStep.h>
@@ -22,6 +23,8 @@ public:
     {
         return Type::TableFinish;
     }
+    
+    void preExecute(ContextMutablePtr context);
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;

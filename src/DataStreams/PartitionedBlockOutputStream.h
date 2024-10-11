@@ -36,9 +36,9 @@ public:
 
     static void validatePartitionKey(const String & str, bool allow_slash);
 
-    static String replaceWildcards(const String & haystack, const String & partition_id);
+    static String replaceWildcards(const String & haystack, const String & partition_id, UInt32 parallel_index);
 
-    ContextPtr global_context;
+    ContextPtr query_context; // Note: make sure init by `query_context` but `global_context`
     Block sample_block;
 
 private:

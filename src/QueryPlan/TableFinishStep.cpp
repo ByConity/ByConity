@@ -3,7 +3,17 @@
 #include <Parsers/ASTSerDerHelper.h>
 #include <QueryPlan/TableFinishStep.h>
 #include <Storages/IStorage.h>
-#include "Processors/Transforms/TableFinishTransform.h"
+#include <Common/Stopwatch.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Processors/Transforms/TableFinishTransform.h>
+#include <Storages/RemoteFile/StorageCnchHDFS.h>
+#include <Storages/RemoteFile/StorageCnchS3.h>
+
+namespace ProfileEvents
+{
+    extern const int TableFinishStepPreClearHDFSTableMicroseconds;
+    extern const int TableFinishStepPreClearS3TableMicroseconds;
+}
 
 namespace DB
 {
@@ -36,6 +46,32 @@ TableFinishStep::TableFinishStep(
     }
     else
         output_stream = {input_stream_.header};
+}
+
+
+void TableFinishStep::preExecute(ContextMutablePtr query_context)
+{
+    // FIXME(jiashuo): not thred-safe, don't `insert overwrite` same table or different table with same path in parallel
+    if (auto * hdfs_table = dynamic_cast<StorageCnchHDFS *>(target->getStorage().get()))
+    {
+        if (auto * insert = dynamic_cast<ASTInsertQuery *>(query.get()); insert->is_overwrite)
+        {
+            Stopwatch watch;
+            query_context->setSetting("prefer_cnch_catalog", hdfs_table->settings.prefer_cnch_catalog.value);
+            hdfs_table->clear(query_context);
+            ProfileEvents::increment(ProfileEvents::TableFinishStepPreClearHDFSTableMicroseconds, watch.elapsedMicroseconds());
+        }
+    }
+    else if (auto * s3_table = dynamic_cast<StorageCnchS3 *>(target->getStorage().get()))
+    {
+        if (auto * insert = dynamic_cast<ASTInsertQuery *>(query.get()); insert->is_overwrite)
+        {
+            Stopwatch watch;
+            query_context->setSetting("prefer_cnch_catalog", hdfs_table->settings.prefer_cnch_catalog.value);
+            s3_table->clear(query_context);
+            ProfileEvents::increment(ProfileEvents::TableFinishStepPreClearS3TableMicroseconds, watch.elapsedMicroseconds());
+        }
+    }
 }
 
 std::shared_ptr<IQueryPlanStep> TableFinishStep::copy(ContextPtr) const

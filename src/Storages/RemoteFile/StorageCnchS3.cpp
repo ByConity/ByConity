@@ -1,5 +1,6 @@
 #include <Storages/StorageS3Settings.h>
-#include "common/types.h"
+#include <common/logger_useful.h>
+#include <common/types.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -32,6 +33,7 @@
 #    include <re2/stringpiece.h>
 #    include <Common/Exception.h>
 #    include <Common/parseGlobs.h>
+#    include <DataStreams/PartitionedBlockOutputStream.h>
 
 namespace ProfileEvents
 {
@@ -188,11 +190,21 @@ void StorageCnchS3::readByLocal(
     return storage->read(query_plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
 }
 
-Strings StorageCnchS3::readFileList()
+Strings StorageCnchS3::readFileList(ContextPtr)
 {
     if (arguments.is_glob_path)
         return ListKeysWithRegexpMatching(s3_util->getClient(), s3_uri);
     return file_list;
+}
+
+void StorageCnchS3::clear(ContextPtr) 
+{
+    if (s3_uri.key.find(PartitionedBlockOutputStream::PARTITION_ID_WILDCARD) != String::npos)
+    {
+        auto key_prefix = s3_uri.key.substr(0, s3_uri.key.find_first_of("*?{"));
+        s3_util->deleteObjectsWithPrefix(key_prefix, [](const S3::S3Util &, const String &){return true;});
+        LOG_WARNING(log, "You now clear the {} dir {}", getStorageID().getNameForLogs(), s3_uri.toString());
+    }
 }
 
 

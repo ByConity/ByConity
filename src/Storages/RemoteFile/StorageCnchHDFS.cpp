@@ -1,3 +1,4 @@
+#include <common/logger_useful.h>
 #include <Common/config.h>
 
 #if USE_HDFS
@@ -30,6 +31,7 @@
 #    include <Common/RemoteHostFilter.h>
 #    include <Common/SettingsChanges.h>
 #    include <Common/parseGlobs.h>
+#    include <DataStreams/PartitionedBlockOutputStream.h>
 
 namespace DB
 {
@@ -115,11 +117,45 @@ Strings ListFiles(const ContextPtr & context, const Strings & uris)
     return results;
 }
 
-Strings StorageCnchHDFS::readFileList()
+Strings StorageCnchHDFS::readFileList(ContextPtr query_context)
 {
     if (arguments.is_glob_path)
-        return ListFilesWithGlobs(getContext(), FileURI(arguments.url), {});
-    return ListFiles(getContext(), file_list);
+        return ListFilesWithGlobs(query_context, FileURI(arguments.url), {});
+    return ListFiles(query_context, file_list);
+}
+
+void StorageCnchHDFS::clear(ContextPtr query_context) {
+    HDFSURI file(arguments.url);
+
+    Poco::URI poco_uri(file.host_name);
+    HDFSBuilderPtr builder = query_context->getHdfsConnectionParams().createBuilder(poco_uri);
+    auto fs = createHDFSFS(builder.get());
+    if (arguments.url.find(PartitionedBlockOutputStream::PARTITION_ID_WILDCARD) != String::npos)
+    {
+        // hdfsExists()=0 means exit
+        if (hdfsExists(fs.get(), file.dir_path.c_str()))
+        {
+            LOG_TRACE(log, "Skip clear the {} not exist dir {}", getStorageID().getNameForLogs(), file.dir_path);
+            return;
+        }
+        
+        HDFSFileInfo ls;
+        ls.file_info = hdfsListDirectory(fs.get(), file.dir_path.c_str(), &ls.length);
+        if (!ls.file_info->mSize)
+        {
+            LOG_TRACE(log, "Skip clear the {} empty dir {}", getStorageID().getNameForLogs(), file.dir_path);
+            return;
+        }
+
+        if (!hdfsDelete(fs.get(), file.dir_path.c_str(), true))
+        {
+            LOG_WARNING(log, "You now clear the {} dir {}", getStorageID().getNameForLogs(), file.dir_path);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to delete the {} dir {}, error: {}", getStorageID().getNameForLogs(), file.dir_path, hdfsGetLastError());
+        }
+    }
 }
 
 void StorageCnchHDFS::readByLocal(
@@ -134,7 +170,7 @@ void StorageCnchHDFS::readByLocal(
         unsigned num_streams)
 {
     auto storage = StorageCloudHDFS::create(
-        getContext(),
+        query_context,
         getStorageID(),
         storage_snapshot->metadata->getColumns(),
         storage_snapshot->metadata->getConstraints(),
@@ -155,7 +191,7 @@ BlockOutputStreamPtr StorageCnchHDFS::write(const ASTPtr & query, const StorageM
 
 BlockOutputStreamPtr StorageCnchHDFS::writeByLocal(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
-    auto storage = StorageCloudHDFS::create(getContext(), getStorageID(), metadata_snapshot->getColumns(), metadata_snapshot->getConstraints(), file_list, metadata_snapshot->getSettingsChanges(), arguments, settings);
+    auto storage = StorageCloudHDFS::create(query_context, getStorageID(), metadata_snapshot->getColumns(), metadata_snapshot->getConstraints(), file_list, metadata_snapshot->getSettingsChanges(), arguments, settings);
     auto streams = storage->write(query, metadata_snapshot, query_context);
     /// todo(jiashuo): insert new file and update the new file list in cache
     // file_list = storage->file_list;

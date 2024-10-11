@@ -306,7 +306,8 @@ void IStorageCnchFile::checkAlterSettings(const AlterCommands & commands) const
            "cnch_vw_write", //not use currently
            "cnch_vw_task", //not use currently
            "resources_assign_type",
-           "simple_hash_resources"};
+           "simple_hash_resources",
+           "prefer_cnch_catalog"};
 
     /// Check whether the value is legal for Setting.
     /// For example, we have a setting item, `SettingBool setting_test`
@@ -331,7 +332,7 @@ void IStorageCnchFile::checkAlterSettings(const AlterCommands & commands) const
 
 Strings IStorageCnchFile::getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query)
 {
-    Strings total_files = readFileList();
+    Strings total_files = readFileList(query_context);
 
     if (query && virtual_header)
     {

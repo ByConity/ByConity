@@ -343,6 +343,11 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
             insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node, insert_select_with_profiles),
         {insert_node});
 
+    if (auto table_finish = std::dynamic_pointer_cast<TableFinishStep>(return_node->getStep()))
+    {
+        table_finish->preExecute(context);
+    }
+
     PRINT_PLAN(return_node, plan_insert);
     return {return_node, {}};
 }

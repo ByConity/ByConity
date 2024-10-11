@@ -1195,6 +1195,9 @@
     M(GinIndexFilterResultCacheHit, "Number of posting list result cache hit") \
     M(GinIndexFilterResultCacheMiss, "Number of posting list result cache miss") \
     M(PrimaryAndSecondaryIndexFilterTime, "Time used in primary index and secondary indices filterr, in micro seconds") \
+\
+    M(TableFinishStepPreClearHDFSTableMicroseconds, "") \
+    M(TableFinishStepPreClearS3TableMicroseconds, "") \
 
 namespace ProfileEvents
 {

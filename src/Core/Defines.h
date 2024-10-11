@@ -127,7 +127,6 @@ constexpr auto TOS_PSM = "toutiao.tos.tosapi";
 #define DBMS_BRPC_PROTOCOL_MINOR_VERSION 4
 
 #define TEST_KNOB_FORCE_META_REBUILD 0x08ull
-#define ALL_TABLE_FALLBACK_CNCH_CATALOG "ALL_TABLE_FALLBACK_CNCH_CATALOG"
 
 /// SERVER VW
 constexpr auto DEFAULT_SERVER_VW_NAME = "server_vw_default";

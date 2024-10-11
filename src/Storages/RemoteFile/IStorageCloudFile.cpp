@@ -24,6 +24,7 @@
 #include <Storages/getVirtualsForStorage.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
+#include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/parseGlobs.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
@@ -216,9 +217,9 @@ public:
 
     BlockOutputStreamPtr createStreamForPartition(const String & partition_id) override
     {
-        auto path = PartitionedBlockOutputStream::replaceWildcards(uri, partition_id);
+        auto path = PartitionedBlockOutputStream::replaceWildcards(uri, partition_id, query_context->getPlanSegmentInstanceId().parallel_index);
         PartitionedBlockOutputStream::validatePartitionKey(path, true);
-        return std::make_shared<FileBlockOutputStream>(global_context, client, path, format, sample_block, compression_method);
+        return std::make_shared<FileBlockOutputStream>(query_context, client, path, format, sample_block, compression_method);
     }
 
 private:
@@ -434,7 +435,7 @@ void IStorageCloudFile::read(
 
 BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, const ContextPtr query_context)
 {
-    String current_uri = file_list.back();
+    String current_uri = file_list.front();
     bool has_wildcards = current_uri.find(PartitionedFileBlockOutputStream::PARTITION_ID_WILDCARD) != String::npos;
     const auto * insert_query = dynamic_cast<const ASTInsertQuery *>(query.get());
     auto partition_by_ast = insert_query ? (insert_query->partition_by ? insert_query->partition_by : arguments.partition_by) : nullptr;
@@ -452,20 +453,28 @@ BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const Storag
     else
     {
         if (arguments.is_glob_path)
-            throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "URI '{}' contains globs, so the table is in readonly mode", arguments.url);
+        {
+            if (!has_wildcards)
+                throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "URI '{}' contains globs and no `{}`, so the table is in readonly mode", arguments.url, PartitionedFileBlockOutputStream::PARTITION_ID_WILDCARD);
+            if (!partition_by_ast)
+            {
+                current_uri = PartitionedBlockOutputStream::replaceWildcards(current_uri, "", query_context->getPlanSegmentInstanceId().parallel_index);
+                LOG_TRACE(log, "URI `{}` has `{}` but no partition by so replace wildcards without parition_id to {}", arguments.url, PartitionedFileBlockOutputStream::PARTITION_ID_WILDCARD, current_uri);
+            }
+        }
 
         FileURI file_uri(current_uri);
         if (client->exist(file_uri.file_path) && !query_context->getSettingsRef().overwrite_current_file)
         {
             if (query_context->getSettingsRef().insert_new_file)
             {
-                auto pos = file_list[0].find_first_of('.', file_list[0].find_last_of('/'));
+                auto pos = current_uri.find_first_of('.', current_uri.find_last_of('/'));
                 size_t index = file_list.size();
                 String new_uri;
                 do
                 {
-                    new_uri = file_list[0].substr(0, pos) + "." + std::to_string(index)
-                        + (pos == std::string::npos ? "" : file_list[0].substr(pos));
+                    new_uri = current_uri.substr(0, pos) + "." + std::to_string(index)
+                        + (pos == std::string::npos ? "" : current_uri.substr(pos));
                     ++index;
                 } while (client->exist(new_uri));
 
