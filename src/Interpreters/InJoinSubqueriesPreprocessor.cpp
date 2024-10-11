@@ -97,6 +97,9 @@ private:
         if (distributed_product_mode == DistributedProductMode::LOCAL)
         {
             /// Convert distributed table to corresponding remote table.
+            StorageDistributed * distributed = dynamic_cast<StorageDistributed *>(storage.get());
+            if (!distributed)
+                return;
 
             std::string database;
             std::string table;
