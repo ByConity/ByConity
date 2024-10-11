@@ -315,4 +315,15 @@ DataTypePtr StorageSnapshot::getConcreteType(const String & column_name) const
     return metadata->getColumns().get(column_name).type;
 }
 
+NamesAndTypesList StorageSnapshot::getSubcolumnsOfObjectColumns() const
+{
+    auto all_columns = getMetadataForQuery()->getColumns().get(GetColumnsOptions::All);
+    auto size = all_columns.size();
+    extendObjectColumns(all_columns, object_columns, true);
+    auto start_it = all_columns.begin();
+    std::advance(start_it, size);
+    NamesAndTypesList result;
+    result.splice(result.end(), all_columns, start_it, all_columns.end());
+    return result;
+}
 }

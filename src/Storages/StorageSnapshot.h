@@ -138,6 +138,8 @@ struct StorageSnapshot
     /// If we have a projection then we should use its metadata.
     StorageMetadataPtr getMetadataForQuery() const { return projection ? projection->metadata : metadata; }
 
+    NamesAndTypesList getSubcolumnsOfObjectColumns() const;
+
 private:
     void init();
 

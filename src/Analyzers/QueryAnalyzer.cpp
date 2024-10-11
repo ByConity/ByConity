@@ -601,7 +601,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         analysis.storage_results[&db_and_table] = StorageAnalysis{storage_id.getDatabaseName(), storage_id.getTableName(), storage};
     }
 
-    StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();
+    StorageMetadataPtr metadata_snapshot = storage->getInMemoryMetadataPtr();
 
     // For StorageDistributed, the metadata of distributed table may diff with the metadata of local table.
     // In this case, we use the one of local table.
@@ -612,32 +612,45 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         {
             StorageID local_id{storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()};
             auto storage_local = DatabaseCatalog::instance().getTable(local_id, context);
-            storage_metadata = storage_local->getInMemoryMetadataPtr();
+            metadata_snapshot = storage_local->getInMemoryMetadataPtr();
         }
     }
 
-    const auto & columns_description = storage_metadata->getColumns();
+    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
+    const auto & columns_description = metadata_snapshot->getColumns();
     ScopePtr scope;
     FieldDescriptions fields;
     ASTIdentifier * origin_table_ast = &db_and_table;
 
     auto add_field = [&](const String & name, const DataTypePtr & type, bool substitude_for_asterisk) {
         fields.emplace_back(
-            name, type, column_prefix, storage, storage_metadata, origin_table_ast, name, fields.size(), substitude_for_asterisk);
+            name, type, column_prefix, storage, metadata_snapshot, origin_table_ast, name, fields.size(), substitude_for_asterisk);
     };
 
     // get columns
     {
+        auto get_columns_options = GetColumnsOptions(GetColumnsOptions::All);
+        if (storage->supportsSubcolumns())
+            get_columns_options.withSubcolumns();
+        if (storage->supportsDynamicSubcolumns())
+            get_columns_options.withExtendedObjects();
+
+        Names all_column_names;
+        for (const auto & column : storage_snapshot->getColumns(get_columns_options))
+            all_column_names.emplace_back(column.name);
+
+        Block type_provider = storage_snapshot->getSampleBlockForColumns(all_column_names, {});
+
         for (const auto & column : columns_description.getOrdinary())
         {
             LOG_TRACE(logger, "analyze table {}, add ordinary field {}", full_table_name, column.name);
-            add_field(column.name, column.type, true);
+            add_field(column.name, type_provider.getByName(column.name).type, true);
         }
 
         for (const auto & column : columns_description.getMaterialized())
         {
             LOG_TRACE(logger, "analyze table {}, add materialized field {}", full_table_name, column.name);
-            add_field(column.name, column.type, false);
+            add_field(column.name, type_provider.getByName(column.name).type, false);
         }
 
         for (const auto & column : storage->getVirtuals())
@@ -651,7 +664,16 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
             for (const auto & column : columns_description.getSubcolumnsOfAllPhysical())
             {
                 LOG_TRACE(logger, "analyze table {}, add subcolumn field {}", full_table_name, column.name);
-                add_field(column.name, column.type, false);
+                add_field(column.name, type_provider.getByName(column.name).type, false);
+            }
+        }
+
+        if (storage->supportsDynamicSubcolumns())
+        {
+            for (const auto & column : storage_snapshot->getSubcolumnsOfObjectColumns())
+            {
+                LOG_TRACE(logger, "analyze table {}, add dynamic subcolumn field {}", full_table_name, column.name);
+                add_field(column.name, type_provider.getByName(column.name).type, false);
             }
         }
 

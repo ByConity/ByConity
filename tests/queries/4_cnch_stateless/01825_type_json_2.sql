@@ -2,7 +2,7 @@
 
 set allow_experimental_object_type = 1;
 set dialect_type = 'MYSQL';
-set enable_optimizer = 0;
+SET block_json_query_in_optimizer = 0;
 
 drop table if EXISTS t_json_function;
 CREATE TABLE t_json_function
