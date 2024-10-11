@@ -4,24 +4,29 @@
 #include "IO/SeekableReadBuffer.h"
 
 #include <Storages/NexusFS/NexusFS.h>
+#include <Storages/NexusFS/NexusFSBufferWithHandle.h>
+#include <folly/io/IOBuf.h>
 
 namespace DB
 {
 
-class ReadBufferFromFileWithNexusFS : public ReadBufferFromFileBase
+class ReadBufferFromNexusFS : public ReadBufferFromFileBase
 {
 
 public:
-    explicit ReadBufferFromFileWithNexusFS(
+    explicit ReadBufferFromNexusFS(
         size_t buf_size,
+        bool actively_prefetch,
         std::unique_ptr<ReadBufferFromFileBase> source_read_buffer,
         NexusFS &nexus_fs);
 
-    ~ReadBufferFromFileWithNexusFS() override = default;
+    ~ReadBufferFromNexusFS() override;
 
     bool nextImpl() override;
 
     off_t seek(off_t off, int whence) override;
+
+    void prefetch(Priority priority) override;
 
     IAsynchronousReader::Result readInto(char * data, size_t size, size_t offset, size_t ignore) override;
 
@@ -38,14 +43,26 @@ public:
     bool isSeekCheap() override { return false; }
 
 private:
-    LoggerPtr log = getLogger("ReadBufferFromFileWithNexusFS");
+
+    bool hasPendingDataToRead();
+
+    void resetPrefetch();
+
+    LoggerPtr log = getLogger("ReadBufferFromNexusFS");
 
     const String file_name;
     std::unique_ptr<ReadBufferFromFileBase> source_read_buffer;
     NexusFS &nexus_fs;
 
+    const size_t buf_size = 0;
     off_t offset = 0;
     off_t read_until_position = 0;
+
+    bool read_to_internal_buffer = false;
+    NexusFSBufferWithHandle nexusfs_buffer;
+
+    const bool actively_prefetch = false;
+    std::future<NexusFSBufferWithHandle> prefetch_future;
 };
 
 }

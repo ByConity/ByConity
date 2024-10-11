@@ -1,0 +1,29 @@
+logger:
+  level: trace
+  log: /var/log/byconity/out.log
+  errorlog: /var/log/byconity/err.log
+  testlog: /var/log/byconity/test.log
+  size: 1000M
+  count: 10
+listen_host: "0.0.0.0"
+path: /var/byconity/
+timezone: Europe/Moscow
+perQuery: 1
+resource_manager:
+  port: 28989
+  vws:
+    vw:
+      - name: vw_default
+        type: default
+        num_workers: 1
+        worker_groups:
+          worker_group:
+            name: wg_default
+            type: Physical
+      - name: vw_write
+        type: write
+        num_workers: 1
+        worker_groups:
+          worker_group:
+            name: wg_write
+            type: Physical

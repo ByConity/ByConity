@@ -1114,21 +1114,55 @@
     M(RegionManagerNumInMemBufCleanupRetries, "RegionManager number of in-memory buffer cleanup retries") \
     M(RegionManagerCleanRegionRetries, "RegionManager number of clean region retries") \
 \
-    M(NexusFSDiskCacheHit, "NexusFS disk cache hits") \
-    M(NexusFSDiskCacheHitInflightInsert, "NexusFS disk cache hits on in-flight inserts") \
-    M(NexusFSDiskCacheMiss, "NexusFS disk cache misses") \
+    M(NexusFSHit, "NexusFS hits") \
+    M(NexusFSHitInflightInsert, "NexusFS hits on in-flight inserts") \
+    M(NexusFSMiss, "NexusFS missed") \
+    M(NexusFSPreload, "NexusFS preloads") \
+    M(NexusFSDeepRetry, "NexusFS deep retries") \
     M(NexusFSDiskCacheEvict, "NexusFS disk cache evicts") \
-    M(NexusFSDiskCachePreload, "NexusFS disk cache preloads") \
-    M(NexusFSDiskCacheLookupRetries, "NexusFS disk cache retries in lookup") \
-    M(NexusFSDiskCacheInsertRetries, "NexusFS disk cache retries in insert") \
+    M(NexusFSDiskCacheInsertRetries, "NexusFS disk cache retries when insert") \
     M(NexusFSDiskCacheError, "NexusFS disk cache errors") \
-    M(NexusFSDiskCacheBytesRead, "NexusFS disk cache total bytes read") \
-    M(NexusFSDiskCacheBytesWrite, "NexusFS disk cache total bytes write") \
-    M(NexusFSMemoryBufferHit, "NexusFS memory buffer hits") \
-    M(NexusFSMemoryBufferMiss, "NexusFS memory buffer misses") \
-    M(NexusFSMemoryBufferEvict, "NexusFS memory buffer evicts") \
-    M(NexusFSMemoryBufferError, "NexusFS memory buffer errors") \
-    M(NexusFSMemoryBufferBytesRead, "NexusFS memory buffer total bytes read") \
+    M(NexusFSDiskCacheBytesRead, "NexusFS disk cache bytes read") \
+    M(NexusFSDiskCacheBytesWrite, "NexusFS disk cache bytes write") \
+    M(NexusFSReadFromInsertCxt, "NexusFS ReadFromInsertCxt successes") \
+    M(NexusFSReadFromInsertCxtRetry, "NexusFS ReadFromInsertCxt retries") \
+    M(NexusFSReadFromInsertCxtDeepRetry, "NexusFS ReadFromInsertCxt deep retries") \
+    M(NexusFSReadFromInsertCxtBytesRead, "NexusFS ReadFromInsertCxt bytes read") \
+    M(NexusFSReadFromInsertCxtNonCopy, "NexusFS ReadFromInsertCxt by non-copying method successes") \
+    M(NexusFSReadFromInsertCxtNonCopyBytesRead, "NexusFS ReadFromInsertCxt by non-copying method bytes read") \
+    M(NexusFSReadFromDisk, "NexusFS ReadFromDisk successes") \
+    M(NexusFSReadFromDiskRetry, "NexusFS ReadFromDisk retries") \
+    M(NexusFSReadFromDiskDeepRetry, "NexusFS ReadFromDisk deep retries") \
+    M(NexusFSReadFromDiskBytesRead, "NexusFS ReadFromDisk bytes read") \
+    M(NexusFSReadFromBuffer, "NexusFS ReadFromBuffer successes") \
+    M(NexusFSReadFromBufferRetry, "NexusFS ReadFromBuffer retries") \
+    M(NexusFSReadFromBufferDeepRetry, "NexusFS ReadFromBuffer deep retries") \
+    M(NexusFSReadFromBufferBytesRead, "NexusFS ReadFromBuffer bytes read") \
+    M(NexusFSReadFromBufferNonCopy, "NexusFS ReadFromBuffer by non-copying method successes") \
+    M(NexusFSReadFromBufferNonCopyBytesRead, "NexusFS ReadFromBuffer by non-copying method bytes read") \
+    M(NexusFSReadFromSourceBytesRead, "NexusFS bytes read from source") \
+    M(NexusFSReadFromSourceMicroseconds, "NexusFS read from source microseconds") \
+    M(NexusFSTimeout, "NexusFS read timeouts") \
+    M(NexusFSPrefetchToBuffer, "NexusFS PrefetchToBuffer successes") \
+    M(NexusFSPrefetchToBufferBytesRead, "NexusFS PrefetchToBuffer bytes read") \
+    M(NexusFSBufferHit, "NexusFS buffer hits") \
+    M(NexusFSBufferMiss, "NexusFS buffer misses") \
+    M(NexusFSBufferPreload, "NexusFS buffer preloads") \
+    M(NexusFSBufferPreloadRetry, "NexusFS buffer retries in preload") \
+    M(NexusFSBufferEmptyCoolingQueue, "NexusFS buffer cooling queue empty") \
+    M(NexusFSInodeManagerLookupMicroseconds, "NexusFS InodeManager lookup microseconds") \
+    M(NexusFSInodeManagerInsertMicroseconds, "NexusFS InodeManager insert microseconds") \
+\
+    M(ReadFromNexusFSReadBytes, "Read bytes from nuxusfs.") \
+    M(ReadFromNexusFSSeeks, "Total number of seeks for async buffer") \
+    M(ReadFromNexusFSPrefetchRequests, "Number of prefetches made with asynchronous reading from nuxusfs") \
+    M(ReadFromNexusFSUnusedPrefetches, "Number of prefetches pending at buffer destruction") \
+    M(ReadFromNexusFSPrefetchedReads, "Number of reads from prefetched buffer") \
+    M(ReadFromNexusFSPrefetchTaskWait, "Number of waiting when reading from prefetched buffer") \
+    M(ReadFromNexusFSPrefetchTaskNotWait, "Number of not waiting when reading from prefetched buffer") \
+    M(ReadFromNexusFSPrefetchedBytes, "Number of bytes from prefetched buffer") \
+    M(ReadFromNexusFSAsynchronousWaitMicroseconds, "Time spent in waiting for asynchronous nuxusfs reads.") \
+    M(ReadFromNexusFSSynchronousWaitMicroseconds, "Time spent in waiting for synchronous nuxusfs reads.") \
 \
     M(TSORequest, "Number requests sent to TSO") \
     M(TSORequestMicroseconds, "Total time spent in get timestamp from TSO") \
@@ -1246,13 +1280,20 @@ uint64_t Counters::getIOReadTime(bool use_async_read) const
         if (use_async_read)
         {
             return counters[ProfileEvents::RemoteFSAsynchronousReadWaitMicroseconds]
-                + counters[ProfileEvents::RemoteFSSynchronousReadWaitMicroseconds] + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+                + counters[ProfileEvents::RemoteFSSynchronousReadWaitMicroseconds]
+                + counters[ProfileEvents::DiskReadElapsedMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSAsynchronousWaitMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSSynchronousWaitMicroseconds];
         }
         // Else, we calculate the origin read IO time
         else
         {
-            return counters[ProfileEvents::HDFSReadElapsedMicroseconds] + counters[ProfileEvents::ReadBufferFromS3ReadMicroseconds]
-                + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+            return counters[ProfileEvents::HDFSReadElapsedMicroseconds]
+                + counters[ProfileEvents::ReadBufferFromS3ReadMicroseconds]
+                + counters[ProfileEvents::DiskReadElapsedMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSAsynchronousWaitMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSSynchronousWaitMicroseconds]
+                - counters_holder[ProfileEvents::NexusFSReadFromSourceMicroseconds];
         }
     }
 
@@ -1272,14 +1313,19 @@ uint64_t Counters::Snapshot::getIOReadTime(bool use_async_read) const
         {
             return counters_holder[ProfileEvents::RemoteFSAsynchronousReadWaitMicroseconds]
                 + counters_holder[ProfileEvents::RemoteFSSynchronousReadWaitMicroseconds]
-                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds];
+                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSAsynchronousWaitMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSSynchronousWaitMicroseconds];
         }
         // Else, we calculate the origin read IO time
         else
         {
             return counters_holder[ProfileEvents::HDFSReadElapsedMicroseconds]
                 + counters_holder[ProfileEvents::ReadBufferFromS3ReadMicroseconds]
-                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds];
+                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSAsynchronousWaitMicroseconds]
+                + counters_holder[ProfileEvents::ReadFromNexusFSSynchronousWaitMicroseconds]
+                - counters_holder[ProfileEvents::NexusFSReadFromSourceMicroseconds];
         }
     }
 

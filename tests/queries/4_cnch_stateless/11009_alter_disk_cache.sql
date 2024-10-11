@@ -1,7 +1,7 @@
 USE test;
 set bsp_max_retry_num=0; -- disable bsp retry
 DROP TABLE IF EXISTS at_dc;
-CREATE TABLE at_dc(a UInt32, p UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p;
+CREATE TABLE at_dc(a UInt32, p UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p SETTINGS enable_nexus_fs = 0;
 INSERT INTO at_dc VALUES (1, 1), (2, 1), (3, 1);
 INSERT INTO at_dc VALUES (4, 2), (5, 2), (6, 2);
 
@@ -23,7 +23,7 @@ SELECT a FROM at_dc WHERE p = 1 ORDER BY a SETTINGS disk_cache_mode = 'FORCE_DIS
 DROP TABLE at_dc;
 
 DROP TABLE IF EXISTS test_bucket_preload;
-CREATE TABLE test_bucket_preload(a UInt32, p UInt32, c UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p CLUSTER BY c INTO 3 BUCKETS SETTINGS parts_preload_level = 1;
+CREATE TABLE test_bucket_preload(a UInt32, p UInt32, c UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p CLUSTER BY c INTO 3 BUCKETS SETTINGS parts_preload_level = 1, enable_nexus_fs = 0;
 INSERT INTO test_bucket_preload SELECT number, 1, number % 7 FROM numbers(10);
 SELECT '---bucket---';
 
@@ -39,7 +39,7 @@ DROP TABLE test_bucket_preload;
 DROP TABLE IF EXISTS 11009_alter_disk_cache;
 
 SELECT '---all segments stores in single compressed block---';
-CREATE TABLE 11009_alter_disk_cache (d Decimal(4, 3)) ENGINE = CnchMergeTree ORDER BY d SETTINGS index_granularity = 1, parts_preload_level = 1;
+CREATE TABLE 11009_alter_disk_cache (d Decimal(4, 3)) ENGINE = CnchMergeTree ORDER BY d SETTINGS index_granularity = 1, parts_preload_level = 1, enable_nexus_fs = 0;
 INSERT INTO 11009_alter_disk_cache SELECT toDecimal64(number, 3) FROM numbers(10000);
 ALTER DISK CACHE PRELOAD TABLE test.11009_alter_disk_cache SYNC SETTINGS parts_preload_level = 3;
 SELECT d FROM 11009_alter_disk_cache WHERE toFloat64(d) = 7777.0 settings disk_cache_mode = 'FORCE_DISK_CACHE';

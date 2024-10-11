@@ -13,7 +13,7 @@ create table test.multi_index_table
 ENGINE = CnchMergeTree
 PARTITION BY toStartOfInterval(ts, toIntervalHour(12))
 ORDER BY ts
-SETTINGS index_granularity = 8;
+SETTINGS index_granularity = 8, enable_nexus_fs = 0;
 
 insert into table test.multi_index_table  values ('2023-10-17 00:11:58.996', 'preload_test1', 'preload_test2', [1, 2, 3, 4, 5])
 
@@ -38,7 +38,7 @@ create table test.multi_index_table
 ENGINE = CnchMergeTree
 PARTITION BY toStartOfInterval(ts, toIntervalHour(12))
 ORDER BY ts
-SETTINGS index_granularity = 8;
+SETTINGS index_granularity = 8, enable_nexus_fs = 0;
 
 insert into table test.multi_index_table  values ('2022-10-17 00:11:58.996', 'preload_test1', 'preload_test2', [1, 2, 3, 4, 5])
 

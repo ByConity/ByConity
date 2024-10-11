@@ -40,6 +40,7 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/UniqueKeyIndexCache.h>
+#include <Storages/NexusFS/NexusFS.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -720,6 +721,15 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 new_values["FileDiskCacheDataFiles"] = file_disk_cache->getDataCache()->getKeyCount();
                 new_values["FileDiskCacheDataBytes"] = file_disk_cache->getDataCache()->getCachedSize();
             }
+        }
+    }
+
+    {
+        if (auto nexus_fs = getContext()->getNexusFS())
+        {
+            new_values["NexusFSNumSegments"] = nexus_fs->getNumSegments();
+            new_values["NexusFSNumFiles"] = nexus_fs->getNumFileMetas();
+            new_values["NexusFSNumInodes"] = nexus_fs->getNumInodes();
         }
     }
 

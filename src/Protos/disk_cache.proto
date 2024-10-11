@@ -70,6 +70,33 @@ message NexusFSIndexBucket {
     repeated NexusFSIndexEntry entries = 2;
 }
 
+message NexusFSFileSegment {
+    required uint64 segment_id = 1;
+    required uint32 address_rid = 2;
+    required uint32 address_offset = 3;
+    required uint32 size = 4;
+}
+
+message NexusFSFileMeta
+{
+    required string file_name = 1;
+    required uint64 file_size = 2;
+    repeated NexusFSFileSegment segments = 3;
+}
+
+message NexusFSInode {
+    required string node_key = 1;
+    required uint64 node_id = 2;
+    repeated NexusFSFileMeta files = 3;
+}
+
+message NexusFSInodeManager {
+    required string prefix = 1;
+    required string surfix = 2;
+    required NexusFSInode root_inode = 3;
+    repeated NexusFSInode inodes = 4;
+}
+
 message NexusFSConfig {
     required uint64 version = 1;
     required uint64 cache_size = 2;
@@ -77,8 +104,6 @@ message NexusFSConfig {
     required uint32 alloc_align_size = 4;
     required uint32 region_size = 5;
     required uint32 segment_size = 6;
-    optional uint64 hole_count = 7;
-    optional uint64 hole_size_total = 8;
-    optional bool reinsertion_policy_enabled = 9;
-    optional uint64 used_size_bytes = 10;
+    required string file_prefix = 7;
+    required string file_surfix = 8;
 }

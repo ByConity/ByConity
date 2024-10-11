@@ -17,6 +17,7 @@
 
 #include "Common/ObjectPool.h"
 #include "Common/config.h"
+#include "Storages/HDFS/HDFSCommon.h"
 #if USE_HDFS
 
 #include "Core/Defines.h"
@@ -65,6 +66,12 @@ public:
     bool isSeekCheap() override { return true; }
 
 private:
+
+    void initImpl();
+
+    const String hdfs_file_path;
+    const HDFSConnectionParams hdfs_params;
+    const off_t read_until_position;
     ReadSettings settings;
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;
