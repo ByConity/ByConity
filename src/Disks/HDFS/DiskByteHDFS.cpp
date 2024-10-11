@@ -21,7 +21,7 @@
 #include <Disks/IO/AsynchronousBoundedReadBuffer.h>
 #include <IO/HDFSRemoteFSReader.h>
 #include <IO/PFRAWSReadBufferFromFS.h>
-#include <IO/ReadBufferFromFileWithNexusFS.h>
+#include <IO/ReadBufferFromNexusFS.h>
 #include <IO/Scheduler/IOScheduler.h>
 #include <IO/WSReadBufferFromFS.h>
 #include <Interpreters/Context.h>
@@ -237,18 +237,21 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
     }
     else
     {
+        auto nexus_fs = settings.enable_nexus_fs ? Context::getGlobalContextInstance()->getNexusFS() : nullptr;
+        bool use_external_buffer = nexus_fs ? false : settings.remote_fs_prefetch;
         std::unique_ptr<ReadBufferFromFileBase> impl;
+        impl = std::make_unique<ReadBufferFromByteHDFS>(
+            file_path, hdfs_params, settings, nullptr, 0, use_external_buffer);
 
-        impl = std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params, settings,
-                nullptr, 0, /* use_external_buffer */ settings.remote_fs_prefetch);
-        if (settings.enable_nexus_fs)
+        if (nexus_fs)
         {
-            auto nexus_fs = Context::getGlobalContextInstance()->getNexusFS();
-            if (nexus_fs)
-                impl = std::make_unique<ReadBufferFromFileWithNexusFS>(nexus_fs->getSegmentSize(), std::move(impl), *nexus_fs);
+            impl = std::make_unique<ReadBufferFromNexusFS>(
+                settings.local_fs_buffer_size,
+                settings.remote_fs_prefetch,
+                std::move(impl),
+                *nexus_fs);
         }
-
-        if (settings.remote_fs_prefetch)
+        else if (settings.remote_fs_prefetch)
         {
             auto global_context = Context::getGlobalContextInstance();
             auto reader = global_context->getThreadPoolReader();

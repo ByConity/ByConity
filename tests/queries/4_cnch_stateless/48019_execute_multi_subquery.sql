@@ -1,7 +1,6 @@
 set dialect_type='ANSI';
 set data_type_default_nullable=false;
 set enable_optimizer_for_create_select=1;
-set fallback_use_cnch_catalog = 'NONE';
 
 DROP TABLE if exists multi_subquery_source;
 DROP TABLE if exists multi_subquery_target;

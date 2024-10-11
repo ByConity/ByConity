@@ -12,6 +12,11 @@
 #include <common/defines.h>
 #include <common/types.h>
 
+namespace DB::NexusFSComponents
+{
+class BlockHandle;
+}
+
 namespace DB::HybridCache
 {
 
@@ -183,23 +188,9 @@ public:
     // Returns the region id.
     RegionId id() const { return region_id; }
 
-    void addKey(UInt64 key)
-    {
-        std::lock_guard g{lock};
-        keys.push_back(key);
-    }
-
-    void resetKeys()
-    {
-        std::lock_guard g{lock};
-        keys.clear();
-    }
-
-    void getKeys(std::vector<UInt64> &keys_)
-    {
-        std::lock_guard g{lock};
-        keys_ = keys;
-    }
+    void addHandle(std::shared_ptr<NexusFSComponents::BlockHandle> &handle);
+    void resetHandles();
+    void getHandles(std::vector<std::shared_ptr<NexusFSComponents::BlockHandle>> &handles_);
 
 private:
     UInt32 activeOpenLocked() const;
@@ -232,7 +223,7 @@ private:
     UInt32 num_items{0};
     std::unique_ptr<Buffer> buffer{nullptr};
 
-    std::vector<UInt64> keys;
+    std::vector<std::shared_ptr<NexusFSComponents::BlockHandle>> handles;
 
     mutable TimedMutex lock{TimedMutex::Options(false)};
     mutable ConditionVariable cond;

@@ -7,7 +7,7 @@
 #include <Poco/Util/MapConfiguration.h>
 #include <gtest/gtest.h>
 #include <Common/tests/gtest_utils.h>
-#include <IO/ReadBufferFromFileWithNexusFS.h>
+#include <IO/ReadBufferFromNexusFS.h>
 #include <Storages/NexusFS/NexusFS.h>
 #include <IO/ReadBufferFromString.h>
 
@@ -31,6 +31,8 @@ public:
     std::string getFileName() const override { return path; }
 
     off_t getPosition() override { return pos - working_buffer.begin(); }
+
+    size_t getFileSize() override { return working_buffer.size(); }
 
     off_t seek(off_t off, int whence) override
     {
@@ -58,15 +60,24 @@ private:
     const String path;
 };
 
-TEST(ReadBufferFromFileWithNexusFSTest, Read)
+TEST(ReadBufferFromNexusFSTest, Read)
 {
+    const UInt32 segment_size = 128;
     AutoPtr<AbstractConfiguration> conf(new MapConfiguration());
     conf->setBool("nexus_fs.use_memory_device", true);
-    conf->setUInt64("nexus_fs.cache_size", 64 * MiB);
+    conf->setUInt64("nexus_fs.cache_size", 512 * 10);
     conf->setUInt64("nexus_fs.region_size", 512);
-    conf->setUInt64("nexus_fs.segment_size", 128);
+    conf->setUInt64("nexus_fs.segment_size", segment_size);
     conf->setUInt("nexus_fs.alloc_align_size", 32);
     conf->setUInt("nexus_fs.io_align_size", 32);
+    conf->setUInt("nexus_fs.clean_regions_pool", 3);
+    conf->setUInt("nexus_fs.clean_region_threads", 2);
+    conf->setUInt("nexus_fs.num_in_mem_buffers", 6);
+    conf->setBool("nexus_fs.enable_memory_buffer", true);
+    conf->setUInt("nexus_fs.reader_threads", 8);
+    conf->setUInt64("nexus_fs.memory_buffer_size", 128 * 6);
+    conf->setDouble("nexus_fs.memory_buffer_cooling_percent", 0.4);
+    conf->setDouble("nexus_fs.memory_buffer_freed_percent", 0.2);
 
     NexusFSConfig nexusfs_conf;
     nexusfs_conf.loadFromConfig(*conf);
@@ -79,38 +90,47 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
     String large_data;
     for (int i = 0; i < large_len; i++)
         large_data.push_back(i % 26 + 'a');
+    for (int i = 0; i < large_len; i += segment_size)
+    {
+        auto s = fmt::format("seg#{}", i / segment_size);
+        for (int j = 0; j < s.size(); j++)
+        {
+            if (i + j < large_len)
+                large_data[i + j] = s[j];
+        }
+    }
 
     // small read
     {
         auto source = std::make_unique<ReadIndirectBuffer>("file1", small_data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(source), *nexus_fs);
+        ReadBufferFromNexusFS read_buffer(segment_size, true, std::move(source), *nexus_fs);
 
         char buffer[small_len + 5];
         memset(buffer, 0, small_len + 5);
         auto bytes_read = read_buffer.readBig(buffer, small_len);
 
         ASSERT_EQ(bytes_read, small_len);
-        ASSERT_TRUE(strcmp(buffer, small_data.c_str()) == 0); 
+        EXPECT_STREQ(buffer, small_data.c_str()); 
     }
 
     // large read
     {
         auto source = std::make_unique<ReadIndirectBuffer>("file2", large_data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(source), *nexus_fs);
+        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(source), *nexus_fs);
 
         char buffer[large_len + 5];
         memset(buffer, 0, large_len + 5);
         auto bytes_read = read_buffer.readBig(buffer, large_len);
 
         ASSERT_EQ(bytes_read, large_len);
-        ASSERT_TRUE(strcmp(buffer, large_data.c_str()) == 0); 
+        EXPECT_STREQ(buffer, large_data.c_str()); 
     }
 
     // with seek
     {
         constexpr int off = 200;
         auto source = std::make_unique<ReadIndirectBuffer>("file3", large_data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(source), *nexus_fs);
+        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(source), *nexus_fs);
 
         char buffer[large_len - off + 5];
         memset(buffer, 0, large_len - off + 5);
@@ -118,7 +138,21 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         auto bytes_read = read_buffer.readBig(buffer, large_len - off);
 
         ASSERT_EQ(bytes_read, large_len - off);
-        ASSERT_TRUE(strcmp(buffer, large_data.substr(off).c_str()) == 0); 
+        EXPECT_STREQ(buffer, large_data.substr(off).c_str()); 
+    }
+
+    // read nexus_fs disk cache
+    {
+        String data;
+        auto fake_source = std::make_unique<ReadIndirectBuffer>("file2", data);
+        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(fake_source), *nexus_fs);
+
+        char buffer[large_len + 5];
+        memset(buffer, 0, large_len + 5);
+        auto bytes_read = read_buffer.readBig(buffer, large_len);
+
+        ASSERT_EQ(bytes_read, large_len);
+        EXPECT_STREQ(buffer, large_data.c_str()); 
     }
 
     // multi thread
@@ -128,14 +162,35 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         for (int i = 0; i < n; i++)
             threads[i] = std::thread([&](){
                 auto source = std::make_unique<ReadIndirectBuffer>("file4", large_data);
-                ReadBufferFromFileWithNexusFS read_buffer(128, std::move(source), *nexus_fs);
+                ReadBufferFromNexusFS read_buffer(segment_size, true, std::move(source), *nexus_fs);
 
                 char buffer[large_len + 5];
                 memset(buffer, 0, large_len + 5);
                 auto bytes_read = read_buffer.readBig(buffer, large_len);
 
                 ASSERT_EQ(bytes_read, large_len);
-                ASSERT_TRUE(strcmp(buffer, large_data.c_str()) == 0); 
+                EXPECT_STREQ(buffer, large_data.c_str()); 
+            });
+        
+        for (int i = 0; i < n; i++)
+            threads[i].join();
+    }
+
+    // multi thread, non-aligned buffer size
+    {
+        constexpr int n = 20;
+        std::vector<std::thread> threads(n);
+        for (int i = 0; i < n; i++)
+            threads[i] = std::thread([&](){
+                auto source = std::make_unique<ReadIndirectBuffer>("file5", large_data);
+                ReadBufferFromNexusFS read_buffer(93, true, std::move(source), *nexus_fs);
+
+                char buffer[large_len + 5];
+                memset(buffer, 0, large_len + 5);
+                auto bytes_read = read_buffer.readBig(buffer, large_len);
+
+                ASSERT_EQ(bytes_read, large_len);
+                EXPECT_STREQ(buffer, large_data.c_str()); 
             });
         
         for (int i = 0; i < n; i++)
@@ -150,8 +205,8 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         std::vector<std::thread> threads(n);
         for (int i = 0; i < n; i++)
             threads[i] = std::thread([&](){
-                auto source = std::make_unique<ReadIndirectBuffer>("file5", large_data);
-                ReadBufferFromFileWithNexusFS read_buffer(128, std::move(source), *nexus_fs);
+                auto source = std::make_unique<ReadIndirectBuffer>("file6", large_data);
+                ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(source), *nexus_fs);
                 std::default_random_engine local_generator;
                 local_generator.seed(i);
 
@@ -165,7 +220,7 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
                     auto bytes_read = read_buffer.read(buffer, local_buffer_size);
 
                     ASSERT_EQ(bytes_read, local_buffer_size);
-                    ASSERT_TRUE(strcmp(buffer, large_data.substr(offset, local_buffer_size).c_str()) == 0); 
+                    EXPECT_STREQ(buffer, large_data.substr(offset, local_buffer_size).c_str());
                 }
             });
         
@@ -173,27 +228,12 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
             threads[i].join();
     }
 
-    // read nexus_fs disk cache
-    {
-        String data;
-        auto fake_source = std::make_unique<ReadIndirectBuffer>("file2", data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(fake_source), *nexus_fs);
-
-        char buffer[large_len + 5];
-        memset(buffer, 0, large_len + 5);
-        auto bytes_read = read_buffer.readBig(buffer, large_len);
-
-        ASSERT_EQ(bytes_read, large_len);
-        ASSERT_TRUE(strcmp(buffer, large_data.c_str()) == 0); 
-    }
-
     // read until pos
     {
         constexpr int until_pos = 678;
         constexpr int offset = 123;
-        String data;
-        auto fake_source = std::make_unique<ReadIndirectBuffer>("file2", data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(fake_source), *nexus_fs);
+        auto source = std::make_unique<ReadIndirectBuffer>("file2", large_data);
+        ReadBufferFromNexusFS read_buffer(segment_size, true, std::move(source), *nexus_fs);
 
         char buffer[until_pos - offset + 5];
         memset(buffer, 0, until_pos - offset + 5);
@@ -202,15 +242,14 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         auto bytes_read = read_buffer.read(buffer, large_len);
 
         ASSERT_EQ(bytes_read, until_pos - offset);
-        ASSERT_TRUE(strcmp(buffer, large_data.substr(offset, bytes_read).c_str()) == 0); 
+        EXPECT_STREQ(buffer, large_data.substr(offset, bytes_read).c_str()); 
     }
 
     // read until end
     {
-        constexpr int offset = 256;
-        String data;
-        auto fake_source = std::make_unique<ReadIndirectBuffer>("file3", data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(fake_source), *nexus_fs);
+        constexpr int offset = 200;
+        auto source = std::make_unique<ReadIndirectBuffer>("file5", large_data);
+        ReadBufferFromNexusFS read_buffer(segment_size, true, std::move(source), *nexus_fs);
 
         char buffer[large_len - offset + 5];
         memset(buffer, 0, large_len - offset + 5);
@@ -219,15 +258,15 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         auto bytes_read = read_buffer.read(buffer, large_len);
 
         ASSERT_EQ(bytes_read, large_len - offset);
-        ASSERT_TRUE(strcmp(buffer, large_data.substr(offset).c_str()) == 0);
+        EXPECT_STREQ(buffer, large_data.substr(offset).c_str());
     }
 
     // readInto
     {
-        constexpr int off = 200;
+        constexpr int off = 256;
         String data;
-        auto fake_source = std::make_unique<ReadIndirectBuffer>("file2", data);
-        ReadBufferFromFileWithNexusFS read_buffer(128, std::move(fake_source), *nexus_fs);
+        auto fake_source = std::make_unique<ReadIndirectBuffer>("file5", data);
+        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(fake_source), *nexus_fs);
 
         char buffer[large_len - off + 5];
         memset(buffer, 0, large_len - off + 5);
@@ -243,7 +282,7 @@ TEST(ReadBufferFromFileWithNexusFSTest, Read)
         }
 
         ASSERT_EQ(bytes_read, large_len - off);
-        ASSERT_TRUE(strcmp(buffer, large_data.substr(off).c_str()) == 0); 
+        EXPECT_STREQ(buffer, large_data.substr(off).c_str()); 
     }
 
     conf.reset();

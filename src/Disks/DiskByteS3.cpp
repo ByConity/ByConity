@@ -25,7 +25,7 @@
 #include <IO/PFRAWSReadBufferFromFS.h>
 #include <IO/RAReadBufferFromS3.h>
 #include <IO/ReadBufferFromS3.h>
-#include <IO/ReadBufferFromFileWithNexusFS.h>
+#include <IO/ReadBufferFromNexusFS.h>
 #include <IO/ReadSettings.h>
 #include <IO/S3Common.h>
 #include <IO/S3RemoteFSReader.h>
@@ -247,20 +247,21 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
     {
         ReadSettings modified_settings{settings};
         modified_settings.for_disk_s3 = true;
+        auto nexus_fs = settings.enable_nexus_fs ? Context::getGlobalContextInstance()->getNexusFS() : nullptr;
+        bool use_external_buffer = nexus_fs ? false : settings.remote_fs_prefetch;
         std::unique_ptr<ReadBufferFromFileBase> impl;
-        {
-            impl = std::make_unique<ReadBufferFromS3>(
-                s3_util.getClient(), s3_util.getBucket(), object_key, modified_settings, 3, false, settings.remote_fs_prefetch);
-        }
+        impl = std::make_unique<ReadBufferFromS3>(
+            s3_util.getClient(), s3_util.getBucket(), object_key, modified_settings, 3, false, use_external_buffer);
 
-        if (settings.enable_nexus_fs)
+        if (nexus_fs)
         {
-            auto nexus_fs = Context::getGlobalContextInstance()->getNexusFS();
-            if (nexus_fs)
-                impl = std::make_unique<ReadBufferFromFileWithNexusFS>(nexus_fs->getSegmentSize(), std::move(impl), *nexus_fs);
+            impl = std::make_unique<ReadBufferFromNexusFS>(
+                settings.local_fs_buffer_size,
+                settings.remote_fs_prefetch,
+                std::move(impl),
+                *nexus_fs);
         }
-
-        if (settings.remote_fs_prefetch)
+        else if (settings.remote_fs_prefetch)
         {
             auto impl = std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
                 s3_util.getBucket(), object_key, modified_settings, 3, false, /* use_external_buffer */true);

@@ -1,11 +1,12 @@
 #include <memory>
-#include <QueryPlan/PlanCache.h>
+#include <Analyzers/Analysis.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/PlanCache.h>
-#include <Analyzers/Analysis.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/VersionHelper.h>
+#include <Interpreters/StorageID.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
 
 namespace DB
 {
@@ -85,7 +86,6 @@ PlanNodePtr PlanCacheManager::getNewPlanNode(PlanNodePtr node, ContextMutablePtr
         if (result_node)
             children.emplace_back(result_node);
     }
-
     return PlanNodeBase::createPlanNode(node->getId(), node->getStep()->copy(context), children);
 }
 
@@ -117,6 +117,17 @@ QueryPlanPtr PlanCacheManager::getPlanFromCache(UInt128 query_hash, ContextMutab
         if (!plan_object || !plan_object->plan_root)
             return nullptr;
 
+        // check storage version
+        for (auto & item : plan_object->query_info->tables_version)
+        {
+            auto storage = DatabaseCatalog::instance().tryGetTable(item.first, context);
+            if (!storage || storage->latest_version.toUInt64() != item.second)
+            {
+                cached.remove(query_hash);
+                return nullptr;
+            }
+        }
+
         // check statistic version
         for (auto & item : plan_object->query_info->stats_version)
         {
@@ -129,6 +140,7 @@ QueryPlanPtr PlanCacheManager::getPlanFromCache(UInt128 query_hash, ContextMutab
                 return nullptr;
             }      
         }
+
         PlanNodeId max_id;
         auto root  = PlanCacheManager::getNewPlanNode(plan_object->plan_root, context, false, max_id);
         CTEInfo cte_info;
@@ -173,14 +185,14 @@ bool PlanCacheManager::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, A
     for (const auto & cte : plan->getCTEInfo().getCTEs())
         plan_object.cte_map.emplace(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, true, max_id));
 
-    plan_object.query_info = std::make_shared<PlanCacheManager::QueryInfo>();
+    plan_object.query_info = std::make_shared<PlanCacheManager::PlanCacheInfo>();
     const auto & used_columns_map = analysis->getUsedColumns();
     for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
     {
         if (!storage_analysis.storage)
             continue;
         auto storage_id = storage_analysis.storage->getStorageID();
-        if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
+        if (auto it = used_columns_map.find(storage_id); it != used_columns_map.end())
         {
             for (const auto & column : it->second)
                 plan_object.query_info->query_access_info[backQuoteIfNeed(storage_id.getDatabaseName())][storage_id.getFullTableName()].emplace_back(column);
@@ -190,6 +202,7 @@ bool PlanCacheManager::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, A
         auto version_value = Statistics::getVersion(context, table_identifier);
         Int64 version = version_value.has_value() ? version_value.value().convertTo<Int64>() : 0;
         plan_object.query_info->stats_version[storage_id] = version;
+        plan_object.query_info->tables_version[storage_id] = storage_analysis.storage->latest_version.toUInt64();
     }
     cache.add(query_hash, plan_object);
     return true;

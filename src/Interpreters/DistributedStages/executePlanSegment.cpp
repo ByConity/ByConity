@@ -238,7 +238,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     cntl->request_attachment().append(attachment.movable());
     cntl->set_timeout_ms(context.getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds());
     google::protobuf::Closure * done = brpc::NewCallback(
-        &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context.getWorkerStatusManager(), async_context, worker_id);
+        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id);
     async_context->addCallId(call_id);
     manager_stub.submitPlanSegment(cntl, &request, response, done);
 }
@@ -283,7 +283,7 @@ void executePlanSegmentsRemotely(
     auto call_id = cntl->call_id();
     cntl->request_attachment().append(attachment.movable());
     google::protobuf::Closure * done = brpc::NewCallback(
-        &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context.getWorkerStatusManager(), async_context, worker_id);
+        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id);
     async_context->addCallId(call_id);
     manager_stub.submitPlanSegments(cntl, &request, response, done);
 }

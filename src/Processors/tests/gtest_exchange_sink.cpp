@@ -77,7 +77,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
@@ -129,7 +129,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkBufferTest)
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
@@ -181,7 +181,7 @@ TEST(ExchangeSink, LoadBalancedExchangeSinkTest)
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
@@ -240,7 +240,7 @@ TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
     auto func = createRepartitionFunction(getContext().context, arguments);
     auto total_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
@@ -306,7 +306,7 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkNormalTest)
     auto func = createRepartitionFunction(getContext().context, arguments);
     auto total_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
@@ -378,7 +378,7 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkPipelineTest)
     auto func = createRepartitionFunction(getContext().context, arguments);
     auto chunk_bytes = chunk.bytes();
 
-    setQueryDuration();
+    setQueryDuration(context);
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());

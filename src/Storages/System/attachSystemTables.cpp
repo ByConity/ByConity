@@ -52,6 +52,7 @@
 #include <Storages/System/StorageSystemModels.h>
 #include <Storages/System/StorageSystemMutations.h>
 #include <Storages/System/StorageSystemNumbers.h>
+#include <Storages/System/StorageSystemNexusFS.h>
 #include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemPartMovesBetweenShards.h>
 #include <Storages/System/StorageSystemParts.h>
@@ -226,6 +227,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
 #endif
     attach<StorageSystemIOSchedulers>(system_database, "io_schedulers");
     attach<StorageSystemIOWorkers>(system_database, "io_workers");
+    attach<StorageSystemNexusFS>(system_database, "nexus_fs");
 
 }
 

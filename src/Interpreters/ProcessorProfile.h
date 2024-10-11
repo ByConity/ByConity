@@ -79,7 +79,8 @@ struct GroupedProcessorProfile
 
     std::unordered_set<ProcessorId> processor_ids;
     bool visited = false;
-    std::unordered_map<String, GroupedProcessorProfilePtr> parents;
+    std::unordered_map<String, GroupedProcessorProfilePtr> parents; // Be careful to avoid circular dependencies between parents and children
+    std::unordered_set<int64_t> parent_step_ids;
     std::vector<GroupedProcessorProfilePtr> children;
 
     UInt64 worker_cnt = 1;

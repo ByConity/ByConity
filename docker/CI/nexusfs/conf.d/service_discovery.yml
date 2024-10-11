@@ -1,0 +1,115 @@
+service_discovery:
+  mode: local
+  cluster: default
+  disable_cache: false
+  cache_timeout: 5
+  server:
+    psm: data.cnch.server
+    node:
+      - host: server-0
+        hostname: server-0
+        ports:
+          port:
+            - name: PORT2
+              value: 21557
+            - name: PORT1
+              value: 30605
+            - name: PORT0
+              value: 52145
+            - name: PORT4
+              value: 27651
+            - name: PORT3
+              value: 45443
+            - name: PORT5
+              value: 47447
+            - name: PORT6
+              value: 60611
+      - host: server-1
+        hostname: server-1
+        ports:
+          port:
+            - name: PORT2
+              value: 21557
+            - name: PORT1
+              value: 30605
+            - name: PORT0
+              value: 52145
+            - name: PORT4
+              value: 27651
+            - name: PORT3
+              value: 45443
+            - name: PORT5
+              value: 47447
+            - name: PORT6
+              value: 60611
+  tso:
+    psm: data.cnch.tso
+    node:
+      host: tso
+      hostname: tso
+      ports:
+        port:
+          - name: PORT0
+            value: 18845
+          - name: PORT2
+            value: 9181
+  resource_manager:
+    psm: data.cnch.resource_manager
+    node:
+      host: resource-manager
+      hostname: resource-manager
+      ports:
+        port:
+          name: PORT0
+          value: 28989
+  daemon_manager:
+    psm: data.cnch.daemon_manager
+    node:
+      host: daemon-manager
+      hostname: daemon-manager
+      ports:
+        port:
+          name: PORT0
+          value: 17553
+  vw_psm: data.cnch.vw
+  vw:
+    psm: data.cnch.vw
+    node:
+      - host: worker-write
+        hostname: worker-write
+        ports:
+          port:
+            - name: PORT2
+              value: 21557
+            - name: PORT1
+              value: 30605
+            - name: PORT0
+              value: 52145
+            - name: PORT4
+              value: 27651
+            - name: PORT3
+              value: 45443
+            - name: PORT5
+              value: 47447
+            - name: PORT6
+              value: 60611
+        vw_name: vw_write
+      - host: worker-default
+        hostname: worker-default
+        ports:
+          port:
+            - name: PORT2
+              value: 21557
+            - name: PORT1
+              value: 30605
+            - name: PORT0
+              value: 52145
+            - name: PORT4
+              value: 27651
+            - name: PORT3
+              value: 45443
+            - name: PORT5
+              value: 47447
+            - name: PORT6
+              value: 60611
+        vw_name: vw_default

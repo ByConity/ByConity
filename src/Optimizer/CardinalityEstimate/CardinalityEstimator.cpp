@@ -258,7 +258,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitReadNothingStep(const ReadNothing
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitReadStorageRowCountStep(const ReadStorageRowCountStep &, CardinalityContext &)
 {
-    return std::make_shared<PlanNodeStatistics>();
+    return std::make_shared<PlanNodeStatistics>(1);
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitValuesStep(const ValuesStep & step, CardinalityContext &)

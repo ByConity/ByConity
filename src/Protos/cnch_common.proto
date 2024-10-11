@@ -147,3 +147,7 @@ message LeaderInfo {
   optional LeaderLease previous_leader_lease = 4;
 }
 
+enum ResourceRequestType {
+  RESOURCE_REQUEST = 0;
+  RESOURCE_RELEASE = 1;
+};

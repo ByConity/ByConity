@@ -26,6 +26,7 @@
 #include <Databases/IDatabase.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <common/types.h>
 #include <Common/quoteString.h>
 #include <Storages/StorageMemory.h>
@@ -360,32 +361,15 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         auto it = databases.find(tenant_db);
         if (databases.end() == it)
         {
-            if (context_->getSettingsRef().fallback_use_cnch_catalog.value == String(ALL_TABLE_FALLBACK_CNCH_CATALOG)
-                || startsWith(table_id.table_name, context_->getSettingsRef().fallback_use_cnch_catalog.value))
-            {
-               LOG_WARNING(
-                   log,
-                   "Database {} not found in local, fallback to request cnch catalog when fetching {}",
+            if (exception)
+               exception->emplace(
+                   ErrorCodes::UNKNOWN_DATABASE,
+                   "Database {} doesn't exist when fetching {}",
                    backQuoteIfNeed(table_id.getDatabaseName()),
                    table_id.getNameForLogs());
-               database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
-            }
-
-            if (!database)
-            {
-               if (exception)
-                   exception->emplace(
-                       ErrorCodes::UNKNOWN_DATABASE,
-                       "Database {} doesn't exist when fetching {}",
-                       backQuoteIfNeed(table_id.getDatabaseName()),
-                       table_id.getNameForLogs());
-               return {};
-            }
+            return {};
         }
-        else
-        {
-            database = it->second;
-        }
+        database = it->second;
     }
 
     StoragePtr table = database->tryGetTable(table_id.table_name, context_, true);

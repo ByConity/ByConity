@@ -4,6 +4,7 @@ package DB.Protos;
 
 import "data_models.proto";
 import "plan_node_utils.proto";
+import "cnch_common.proto";
 import "plan_node.proto";
 import "enum.proto";
 
@@ -272,6 +273,23 @@ message SendProgressResponse {
   optional string message = 1;
 }
 
+// ----- start resource aware scheduling -----
+message GrantResourceRequestReq
+{
+  optional ResourceRequestType req_type = 1;
+  optional string query_id = 2;
+  optional uint64 query_start_ts = 3;
+  optional uint32 segment_id = 4;
+  optional uint32 parallel_index = 5;
+  optional uint32 epoch = 6;
+  optional bool ok = 7;
+}
+
+message GrantResourceRequestResp
+{
+}
+// ----- end resource aware scheduling -----
+
 service PlanSegmentManagerService {
 
   rpc submitPlanSegment(SubmitPlanSegmentRequest) returns (ExecutePlanSegmentResponse);
@@ -291,4 +309,8 @@ service PlanSegmentManagerService {
   rpc sendProgress(SendProgressRequest) returns (SendProgressResponse);
 
   rpc sendPlanSegmentProfile(PlanSegmentProfileRequest) returns (PlanSegmentProfileResponse);
+
+  // ----- start resource aware scheduling -----
+  rpc grantResourceRequest(GrantResourceRequestReq) returns (GrantResourceRequestResp);
+  // ----- end resource aware scheduling -----
 };

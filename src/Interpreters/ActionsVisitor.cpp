@@ -419,7 +419,20 @@ SetPtr makeExplicitSet(
 
         const auto *const arg_type_ptr = typeid_cast<const DataTypeArray *>(left_arg_type.get());
         if (arg_type_ptr)
+        {
             left_arg_type = arg_type_ptr->getNestedType();
+            if (left_arg_type->getTypeId() == TypeIndex::Nothing) // Just make an empty set for empty array like arraySetCheck([], (1,2))
+            {
+                DataTypes set_element_types = {left_arg_type};
+                auto set_key = PreparedSetKey::forLiteral(*right_arg, set_element_types);
+                if (prepared_sets.count(set_key))
+                    return prepared_sets.at(set_key); /// Already prepared.
+                Block block;
+                SetPtr empty_set = std::make_shared<Set>(size_limits, create_ordered_set, context->getSettingsRef().transform_null_in);
+                prepared_sets[set_key] = empty_set;
+                return empty_set;
+            }
+        }
         else
             throw Exception("Invalid argument of function arraySet related functions", ErrorCodes::LOGICAL_ERROR);
     }

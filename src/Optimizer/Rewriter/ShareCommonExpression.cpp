@@ -4,6 +4,7 @@
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/ProjectionPlanner.h>
 #include <Optimizer/SymbolTransformMap.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/ASTVisitor.h>
 #include <Parsers/formatAST.h>
@@ -55,6 +56,12 @@ namespace
         {
             const auto & filter = dynamic_cast<FilterStep &>(*node->getStep());
             return !ExpressionDeterminism::canChangeOutputRows(filter.getFilter(), context);
+        }
+
+        if (type == IQueryPlanStep::Type::TableScan)
+        {
+            const auto & table_scan = dynamic_cast<TableScanStep &>(*node->getStep());
+            return !!dynamic_cast<StorageCnchMergeTree *>(table_scan.getStorage().get());
         }
 
         const static std::unordered_set<IQueryPlanStep::Type> sharable_steps{

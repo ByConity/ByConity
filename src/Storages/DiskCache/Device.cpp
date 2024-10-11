@@ -463,7 +463,7 @@ namespace
         auto cur_time = getSteadyClock();
         auto delay_ms = toMillis(cur_time - start_time).count();
         if (delay_ms > static_cast<Int64>(kIOTimeoutMs))
-            LOG_ERROR(getLogger("Device"),
+            LOG_WARNING(getLogger("Device"),
                 "[{}] IO timeout {}ms (submit +{}ms comp +{}ms): {}",
                 parent.context.getName(),
                 delay_ms,
@@ -526,7 +526,7 @@ namespace
             delay_ms = toMillis(cur_time - comp_time).count();
 
         if (delay_ms > static_cast<Int64>(kIOTimeoutMs))
-            LOG_ERROR(getLogger("Device"),
+            LOG_WARNING(getLogger("Device"),
                 "[{}] IOReq timeout {}ms (comp +{}ms notify +{}ms): {}",
                 context.getName(),
                 delay_ms,

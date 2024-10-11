@@ -170,7 +170,7 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
                     PlanSegmentExecutionInfo info{
                         .execution_address
                         = AddressInfo(getHostIPFromEnv(), query_context->getTCPPort(), "", "", query_context->getExchangePort())};
-                    auto result = convertFailurePlanSegmentStatusToResult(query_context, info, exception_code, exception_message);
+                    auto result = convertFailurePlanSegmentStatusToResult(std::move(query_context), info, exception_code, exception_message);
                     reportExecutionResult(result);
                 }
             }

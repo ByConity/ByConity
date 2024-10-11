@@ -432,4 +432,24 @@ void ResourceManagerServiceImpl::syncQueueDetails(
     }
 }
 
+void ResourceManagerServiceImpl::sendResourceRequest(
+    [[maybe_unused]] ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::SendResourceRequestReq * request,
+    ::DB::Protos::SendResourceRequestResp * response,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        if (!checkForLeader(response))
+            return;
+        if (!rm_controller.getResourceScheduler().queue.push(*request))
+            response->set_exception("enqueue failed");
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
 }

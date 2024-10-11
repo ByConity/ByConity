@@ -1,0 +1,174 @@
+version: "3"
+
+services:
+  # After upgrade to docker-compose v2, we could use `include` instead of `extend`.
+  hdfs-namenode:
+    extends:
+      file: ./common/hdfs.yml
+      service: hdfs-namenode
+  hdfs-datanode:
+    extends:
+      file: ./common/hdfs.yml
+      service: hdfs-datanode
+  fdb:
+    extends:
+      file: ./common/fdb.yml
+      service: fdb
+  my_mysql:
+    extends:
+      file: ./common/mysql.yml
+      service: my_mysql
+  tso:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb
+      - hdfs-namenode
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/tso/:/var/log/byconity/:rw
+    environment: &env
+      LD_LIBRARY_PATH: /opt/byconity/lib
+      PATH: /opt/byconity/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      ASAN_OPTIONS:
+      TSAN_OPTIONS:
+      IS_CI_ENV: 1
+      CI_PIPELINE_NAME: CI
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      test: ["CMD", "curl", "localhost:18845"]
+      interval: 5s
+
+  server-0:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "(udf-manager --config-file /config/server.yml & clickhouse-server --config-file /config/server.yml)"
+    depends_on:
+      tso:
+        condition: service_healthy
+    ports:
+      - "9000:52145"
+      - "127.0.0.1:8123:21557"
+      - "127.0.0.1:9004:9004"
+    environment:
+      <<: *env
+      SERVER_ID: server-0
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/server-0/:/var/log/byconity/:rw
+      - ./queries/:/opt/byconity/queries/:ro
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      test: ["CMD", "curl", "localhost:21557"]
+      interval: 5s
+
+  server-1:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "(udf-manager --config-file /config/server.yml & clickhouse-server --config-file /config/server.yml)"
+    depends_on:
+      tso:
+        condition: service_healthy
+    ports:
+      - "9001:52145"
+      - "127.0.0.1:8124:21557"
+    environment:
+      <<: *env
+      SERVER_ID: server-1
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/server-1/:/var/log/byconity/:rw
+      - ./queries/:/opt/byconity/queries/:ro
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      test: ["CMD", "curl", "localhost:52145"]
+      interval: 5s
+
+  worker-write:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+      - server-1
+    ports:
+      - "52149:52145"
+    environment:
+      <<: *env
+      WORKER_GROUP_ID: wg_write
+      VIRTUAL_WAREHOUSE_ID: vw_write
+      WORKER_ID: w0
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/worker-write/:/var/log/byconity/:rw
+      - ./queries/:/opt/byconity/queries/:ro
+    cap_add:
+      - SYS_PTRACE
+  worker-default:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "(udf-manager --config-file /config/worker.yml & clickhouse-server --config-file /config/worker.yml)"
+    depends_on:
+      - server-0
+      - server-1
+    environment:
+      <<: *env
+      WORKER_GROUP_ID: wg_default
+      VIRTUAL_WAREHOUSE_ID: vw_default
+      WORKER_ID: r0
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/worker-default/:/var/log/byconity/:rw
+      - ./queries/:/opt/byconity/queries/:ro
+    cap_add:
+      - SYS_PTRACE
+  daemon-manager:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "daemon-manager --config-file ./config/daemon-manager.yml"
+    depends_on:
+      server-0:
+        condition: service_healthy
+      server-1:
+        condition: service_healthy
+    environment:
+      <<: *env
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/daemon-manager/:/var/log/byconity/:rw
+    cap_add:
+      - SYS_PTRACE
+    restart: always
+
+  resource-manager:
+    image: hub.byted.org/bytehouse/debian.bullseye.fdb.udf:0.1
+    command: bash -c "resource-manager --config-file /config/resource-manager.yml"
+    depends_on:
+      - tso
+    volumes:
+      - ${CNCH_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ${CNCH_LIBRARY_PATH}/:/opt/byconity/lib/:ro
+      - ./nexusfs/:/config/:ro
+      - ./test_output/rm/:/var/log/byconity/:rw
+    environment:
+      <<: *env
+    cap_add:
+      - SYS_PTRACE
+
+volumes:
+  fdb-data:
+    external: false
+  hdfs-namenode:
+    external: false
+  hdfs-datanode:
+    external: false

@@ -6176,7 +6176,14 @@ UInt32 Context::getQueryMaxExecutionTime() const
         return 100 * 60 * 1000; // default as 100min
 }
 
-void Context::setQueryExpirationTimeStamp()
+timespec Context::getQueryExpirationTimeStamp() const
+{
+    if (!query_expiration_timestamp)
+        throw Exception("query_expiration_timestamp has not set.", ErrorCodes::LOGICAL_ERROR);
+    return query_expiration_timestamp.value();
+}
+
+void Context::initQueryExpirationTimeStamp()
 {
     auto initial_query_start_time_ms = client_info.initial_query_start_time_microseconds / 1000;
     // Internal queries are those executed without an independent client context,

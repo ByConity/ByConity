@@ -22,6 +22,10 @@
 #include <Core/SettingsEnums.h>
 #include <DataTypes/DataTypeCustomSimpleAggregateFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/StorageID.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/JoinGraph.h>
@@ -51,6 +55,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/CTEInfo.h>
+#include <QueryPlan/CTEVisitHelper.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/IQueryPlanStep.h>
@@ -59,16 +64,16 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
-#include "Common/LinkedHashMap.h"
 #include <Common/Exception.h>
+#include <Common/LinkedHashMap.h>
 #include <common/logger_useful.h>
-#include "QueryPlan/CTEVisitHelper.h"
 
 #include <algorithm>
 #include <map>
@@ -312,6 +317,9 @@ protected:
         if (tables.size() > JoinHyperGraph::MAX_NODE)
             return;
 
+        if (tables.size() > 1 && !context->getSettingsRef().enable_materialized_view_join_rewriting)
+            return;
+
         std::vector<MaterializedViewStructurePtr> related_materialized_views;
         std::shared_ptr<const AggregatingStep> query_aggregate = extractTopAggregate(query);
 
@@ -532,6 +540,8 @@ protected:
                 auto it = std::find_if(query_to_view_table_mappings.begin(), query_to_view_table_mappings.end(), [&](const auto & item) {
                     return item.first.storage == partition_check_result.depend_storage;
                 });
+                if (it == query_to_view_table_mappings.end() && query_to_view_table_mappings.size() == 1)
+                    it = query_to_view_table_mappings.begin();
                 if (it == query_to_view_table_mappings.end())
                 {
                     add_failure_message("union query partition predicate rewrite fail.");
@@ -655,7 +665,8 @@ protected:
             // 3. check need rollup
             // Note: aggregate always need rollup for aggregating merge tree in clickhouse,
             bool need_rollup = query_aggregate
-                && (!async_materialized_view || !view_aggregate || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
+                && (!async_materialized_view || context->getSettingsRef().enforce_materialized_view_union_rewriting || !view_aggregate
+                    || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
                     || !PredicateUtils::isFalsePredicate(union_predicate));
 
             // 3-1. query aggregate has default result if group by has empty set. not supported yet.
@@ -773,11 +784,16 @@ protected:
             required_columns_set.insert(columns.begin(), columns.end());
 
             // 6. rewrite union predicate
-            if (!PredicateUtils::isFalsePredicate(union_predicate))
+            if (!PredicateUtils::isFalsePredicate(union_predicate) || context->getSettingsRef().enforce_materialized_view_union_rewriting)
             {
                 if (query_aggregate && query->getType() != IQueryPlanStep::Type::Aggregating)
                 {
                     add_failure_message("union rewrite for aggregating only supports query with aggregates on the top");
+                    continue; // bail out
+                }
+                if (query_aggregate && !view_aggregate)
+                {
+                    add_failure_message("union rewrite for aggregating only supports view with aggregate");
                     continue; // bail out
                 }
 
@@ -918,7 +934,7 @@ protected:
             if ((node_set & filter.first) == filter.first)
                 inner_predictes.insert(inner_predictes.end(), filter.second.begin(), filter.second.end());
             else
-                outer_join_clauses[filter.first].insert(outer_predictes[filter.first].end(), filter.second.begin(), filter.second.end());
+                outer_join_clauses[filter.first].insert(outer_join_clauses[filter.first].end(), filter.second.begin(), filter.second.end());
         }
 
         auto equal_predicates = PredicateUtils::extractEqualPredicates(inner_predictes);
@@ -1251,8 +1267,21 @@ protected:
         {
             auto & candidates = it->second;
             auto candidate_it = std::min_element(candidates.begin(), candidates.end(), RewriterCandidateSort());
-            context->getOptimizerMetrics()->addMaterializedView(candidate_it->view_database_and_table_name);
-            return constructEquivalentPlan(node.shared_from_this(), *candidate_it);
+            LOG_INFO(log, "use materialized view {} for query rewriting", candidate_it->view_database_and_table_name.getFullTableName());
+            try
+            {
+                auto plan = constructEquivalentPlan(node.shared_from_this(), *candidate_it);
+                context->getOptimizerMetrics()->addMaterializedView(candidate_it->view_database_and_table_name);
+                return plan;
+            }
+            catch (...)
+            {
+                tryLogCurrentException(
+                    log,
+                    "construct equivalent plan use materialized view failed: "
+                        + candidate_it->view_database_and_table_name.getFullTableName());
+                return SimplePlanRewriter::visitPlanNode(node, c);
+            }
         }
         return SimplePlanRewriter::visitPlanNode(node, c);
     }
@@ -1285,7 +1314,8 @@ protected:
                 assignments.emplace(assignemnt.first, symbol_mapper.map(assignemnt.second));
 
             // plan aggregate + union rewrite before
-            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
+            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate)
+                || context->getSettingsRef().enforce_materialized_view_union_rewriting)
                 plan = planUnionBeforeAggragte(plan, query, candidate.union_predicate, assignments);
 
             plan = PlanNodeBase::createPlanNode(
@@ -1303,7 +1333,8 @@ protected:
                 {plan});
 
             // simple union rewrite
-            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
+            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate)
+                || context->getSettingsRef().enforce_materialized_view_union_rewriting)
                 plan = planUnion(plan, query, candidate.union_predicate);
 
                         // reallocate symbols
@@ -1444,6 +1475,7 @@ protected:
             view_name_to_aggreagte.emplace(aggregate.column_name, &aggregate);
 
         AggregateDescriptions rewrite_aggregates;
+        Names group_keys{query_step.getKeys().begin(), query_step.getKeys().end()};
         for (const auto & aggregate : query_step.getAggregates())
         {
             const auto & view_aggregate_output = assignments.at(aggregate.column_name);
@@ -1451,28 +1483,43 @@ protected:
                 throw Exception("union rewrite failed: view_aggregate_output expected as identifier", ErrorCodes::LOGICAL_ERROR);
             const auto & view_aggregate_output_name = view_aggregate_output->as<ASTIdentifier>()->name();
             const auto * view_aggreagte = view_name_to_aggreagte.at(view_aggregate_output_name);
-            if (view_aggreagte->argument_names.size() != 1)
-                throw Exception("size of rollup aggregate arguments expected be 1", ErrorCodes::LOGICAL_ERROR);
-            auto & inputs = output_to_inputs[view_aggreagte->argument_names[0]];
-            inputs.emplace_back(view_aggreagte->argument_names[0]);
-            inputs.emplace_back(aggregate.column_name);
 
-            // check whether need rewrite
-            if (view_aggreagte->function->getName().ends_with("Merge") && !aggregate.function->getName().ends_with("State"))
+            auto rewrite = aggregate;
+            if (view_aggreagte->function->getName().ends_with("Merge"))
             {
-                auto rewrite = aggregate;
+                String function_name = view_aggreagte->function->getName().substr(0, view_aggreagte->function->getName().size() - 5) + "State";
                 AggregateFunctionProperties properties;
                 rewrite.function = AggregateFunctionFactory::instance().get(
-                    aggregate.function->getName() + "State",
-                    aggregate.function->getArgumentTypes(),
-                    aggregate.function->getParameters(),
-                    properties);
-                rewrite_aggregates.emplace_back(rewrite);
+                    function_name, aggregate.function->getArgumentTypes(), aggregate.function->getParameters(), properties);
             }
-            else
+
+            // direct rollup
+            if (view_aggreagte->function->getArgumentTypes().size() == 1
+                && rewrite.function->getReturnType()->equals(*view_aggreagte->function->getArgumentTypes()[0]))
             {
-                rewrite_aggregates.emplace_back(aggregate);
+                rewrite_aggregates.emplace_back(rewrite);
+                auto & inputs = output_to_inputs[view_aggreagte->argument_names[0]];
+                inputs.emplace_back(view_aggreagte->argument_names[0]);
+                inputs.emplace_back(aggregate.column_name);
+                continue;
             }
+
+            // rollup on group by results
+            if (aggregate.function->getName() == view_aggreagte->function->getName()
+                && aggregate.function->getArgumentTypes() == view_aggreagte->function->getArgumentTypes()
+                && aggregate.function->getParameters() == view_aggreagte->function->getParameters())
+            {
+                for (size_t i = 0; i < view_aggreagte->argument_names.size(); i++)
+                {
+                    auto & inputs = output_to_inputs[view_aggreagte->argument_names[i]];
+                    inputs.emplace_back(view_aggreagte->argument_names[i]);
+                    inputs.emplace_back(aggregate.argument_names[i]);
+
+                    group_keys.emplace_back(aggregate.argument_names[i]);
+                }
+                continue;
+            }
+            throw Exception("aggregate not support", ErrorCodes::LOGICAL_ERROR);
         }
 
         InsertFilterRewriter rewriter{context, union_predicate};
@@ -1483,7 +1530,7 @@ protected:
             context->nextNodeId(),
             std::make_shared<AggregatingStep>(
                 query_with_filter->getStep()->getOutputStream(),
-                query_step.getKeys(),
+                makeDistinct(group_keys),
                 query_step.getKeysNotHashed(),
                 rewrite_aggregates,
                 query_step.getGroupingSetsParams(),
@@ -1516,6 +1563,22 @@ protected:
             {view_child, reallocate});
 
         return PlanNodeBase::createPlanNode(context->nextNodeId(), view->getStep(), {unionn});
+    }
+
+    static std::vector<String> makeDistinct(const std::vector<String> & src)
+    {
+        std::unordered_set<String> tmp;
+        std::vector<String> result;
+
+        for (const auto & str : src)
+        {
+            if (tmp.insert(str).second)
+            {
+                result.push_back(str);
+            }
+        }
+
+        return result;
     }
 
     // Union + Rollup Rewrite
@@ -1603,6 +1666,7 @@ protected:
 
 private:
     std::unordered_map<PlanNodePtr, RewriterCandidates> & match_results;
+    LoggerPtr log = getLogger("MaterializedViewCostBasedRewriter");
 
     class AggregateRewriter : public SimpleExpressionRewriter<Void>
     {
@@ -1725,6 +1789,21 @@ private:
 }
 
 bool MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+{
+    try
+    {
+        return rewriteImpl(plan, context);
+    }
+    catch (...)
+    {
+        if (context->getSettingsRef().enforce_materialized_view_rewrite)
+            throw;
+        tryLogCurrentException(log, "materialized view rewrite failed.");
+        return false;
+    }
+}
+
+bool MaterializedViewRewriter::rewriteImpl(QueryPlan & plan, ContextMutablePtr context) const
 {
     bool enforce = context->getSettingsRef().enforce_materialized_view_rewrite;
     bool verbose = context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;

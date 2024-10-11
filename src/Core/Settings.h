@@ -189,7 +189,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
     M(Bool, s3_skip_empty_files, false, "Allow to skip empty files in s3 table engine", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
-    M(Bool, insert_new_file, true, "Create new file when write data into the file, now it is just for CnchS3/CnchHDFS", 0) \
+    M(Bool, insert_new_file, false, "Create new file when write data into the file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
     M(Bool, use_uncompressed_cache, false, "Whether to use the cache of uncompressed blocks.", 0) \
     M(Bool, replace_running_query, false, "Whether the running request should be canceled with the same id as the new one.", 0) \
@@ -1233,13 +1233,9 @@ enum PreloadLevelSettings : UInt64
       "Number of thread performing background parts info collection in PartCacheManager.", \
       0) \
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
-    M(UInt64, \
-      cnch_part_allocation_algorithm, \
-      2, \
-      "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent " \
-      "hashing.", \
-      0) \
     M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
+    M(Bool, enable_internal_communication_user, true, "Enable specified user used by server for authentication on worker side.", 0) \
+    M(UInt64, cnch_part_allocation_algorithm, 2, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     M(Bool, enable_skip_non_cnch_tables_for_cnch_parts, true, "Allow to skip non cnch tables for system.cnch_parts", 0) \
     M(Bool, enable_skip_non_cnch_tables_for_cnch_trash_items, true, "Allow to skip non cnch tables for system.cnch_trash_items", 0) \
@@ -1663,7 +1659,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_join_rewriting, true, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
-    M(Bool, enable_materialized_view_union_rewriting, true, "Whether enable materialized view based rewriter for query using union", 0) \
+    M(Bool, enable_materialized_view_union_rewriting, false, "Whether enable materialized view based rewriter for query using union", 0) \
+    M(Bool, enforce_materialized_view_union_rewriting, false, "Enforce enable materialized view based rewriter for query using union, used for testing", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
@@ -1784,7 +1781,6 @@ enum PreloadLevelSettings : UInt64
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
-    M(String, fallback_use_cnch_catalog, ALL_TABLE_FALLBACK_CNCH_CATALOG, "fallback using cnch catalog to get table first when resolving database and table failed", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
     M(Bool, enable_interactive_transaction, true, "Enable interactive transaction", 0) \
     M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \
@@ -1836,6 +1832,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
+    M(Bool, enable_resource_aware_scheduler, false, "Whether to check resource before scheduling a segment instance", 0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \

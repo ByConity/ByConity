@@ -67,6 +67,8 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
     auto coordinator_address_str = extractExchangeHostPort(coordinator_address);
     plan_segment.setCoordinatorAddress(coordinator_address);
+    context->setCoordinatorAddress(coordinator_address);
+    setQueryDuration(context);
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
     PlanSegmentInputs inputs;

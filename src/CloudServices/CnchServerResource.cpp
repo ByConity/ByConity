@@ -420,11 +420,14 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         max_threads = std::min(max_threads, all_resources.size());
         ExceptionHandler exception_handler;
         ThreadPool thread_pool(max_threads);
+        std::mutex call_ids_mutex;
         for (auto & all_resource : all_resources)
         {
             thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
                 [&]() {
-                    call_ids.emplace_back(doAsyncSend(context, all_resource.first, all_resource.second, handler));
+                    auto call_id = doAsyncSend(context, all_resource.first, all_resource.second, handler);
+                    std::unique_lock lock(call_ids_mutex);
+                    call_ids.push_back(call_id);
                 },
                 exception_handler));
         }

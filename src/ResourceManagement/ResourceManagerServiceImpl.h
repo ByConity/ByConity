@@ -121,6 +121,12 @@ public:
         ::DB::Protos::SyncQueueDetailsResp * response,
         ::google::protobuf::Closure * done) override;
 
+    void sendResourceRequest(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::SendResourceRequestReq * request,
+        ::DB::Protos::SendResourceRequestResp * response,
+        ::google::protobuf::Closure * done) override;
+
 private:
     LoggerPtr log = getLogger("ResourceManagerServiceImpl");
     ResourceManagerController & rm_controller;

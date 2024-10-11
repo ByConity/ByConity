@@ -1,6 +1,7 @@
 #include "PartitionedBlockOutputStream.h"
 
 #include <Functions/FunctionsConversion.h>
+#include <common/types.h>
 #include <common/getFQDNOrHostName.h>
 #include <Common/ArenaUtils.h>
 
@@ -14,6 +15,7 @@
 #include <Parsers/ASTLiteral.h>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -25,13 +27,13 @@ namespace ErrorCodes
 
 PartitionedBlockOutputStream::PartitionedBlockOutputStream(
     const ContextPtr & context_, const ASTPtr & partition_by, const Block & sample_block_)
-    : global_context(context_), sample_block(sample_block_)
+    : query_context(context_), sample_block(sample_block_)
 {
     std::vector<ASTPtr> arguments(1, partition_by);
     ASTPtr partition_by_string = makeASTFunction(FunctionToString::name, std::move(arguments));
 
-    auto syntax_result = TreeRewriter(global_context).analyze(partition_by_string, sample_block.getNamesAndTypesList());
-    partition_by_expr = ExpressionAnalyzer(partition_by_string, syntax_result, global_context).getActions(false);
+    auto syntax_result = TreeRewriter(query_context).analyze(partition_by_string, sample_block.getNamesAndTypesList());
+    partition_by_expr = ExpressionAnalyzer(partition_by_string, syntax_result, query_context).getActions(false);
     partition_by_column_name = partition_by_string->getColumnName();
 }
 
@@ -132,9 +134,10 @@ void PartitionedBlockOutputStream::validatePartitionKey(const String & str, bool
 }
 
 
-String PartitionedBlockOutputStream::replaceWildcards(const String & haystack, const String & partition_id)
+String PartitionedBlockOutputStream::replaceWildcards(const String & haystack, const String & partition_id, UInt32 parallel_index)
 {
-    return boost::replace_all_copy(haystack, PartitionedBlockOutputStream::PARTITION_ID_REPLACE, fmt::format("{}_{}", partition_id,  getPodOrHostName()));
+    String replace_str
+        = partition_id.empty() ? fmt::format("{}_{}", parallel_index, getPodOrHostName()) : fmt::format("{}_{}_{}", partition_id, parallel_index, getPodOrHostName());
+    return boost::replace_all_copy(haystack, PartitionedBlockOutputStream::PARTITION_ID_REPLACE, replace_str);
 }
-
 }

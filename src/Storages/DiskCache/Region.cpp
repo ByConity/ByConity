@@ -1,5 +1,6 @@
 #include <Storages/DiskCache/FiberThread.h>
 #include <Storages/DiskCache/Region.h>
+#include <Storages/NexusFS/NexusFSBuffer.h>
 
 #include <tuple>
 
@@ -180,6 +181,26 @@ void Region::readFromBuffer(UInt32 from_offset, size_t size, char *to) const
     chassert(buffer != nullptr);
     chassert(from_offset + size <= buffer->size());
     memcpy(to, buffer->data() + from_offset, size);
+}
+
+void Region::addHandle(std::shared_ptr<NexusFSComponents::BlockHandle> &handle)
+{
+    std::lock_guard g{lock};
+    handles.push_back(handle);
+}
+
+void Region::resetHandles()
+{
+    std::lock_guard g{lock};
+    for (auto &handle : handles)
+        handle->invalidRelAddress();
+    handles.clear();
+}
+
+void Region::getHandles(std::vector<std::shared_ptr<NexusFSComponents::BlockHandle>> &handles_)
+{
+    std::lock_guard g{lock};
+    handles_ = handles;
 }
 
 }

@@ -152,7 +152,9 @@ std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, c
             }
 
             client = std::make_shared<RpcClient>(
-                host_port, [pool]() -> void { pool->ok_.store(false, std::memory_order_relaxed); }, &connection_pool_options);
+                host_port,
+                [pool = std::move(pool)]() -> void { pool->ok_.store(false, std::memory_order_relaxed); },
+                &connection_pool_options);
             std::atomic_store(&pool_clients[index], client);
             return client;
         }

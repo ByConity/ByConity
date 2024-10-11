@@ -9,12 +9,11 @@
 
 namespace DB
 {
-using DatabaseAndTableName = std::pair<String, String>;
 
 class ReadStorageRowCountStep : public ISourceStep
 {
 public:
-    explicit ReadStorageRowCountStep(Block output_header, ASTPtr query_, AggregateDescription agg_desc_, UInt64 num_rows_, bool is_final_agg_, DatabaseAndTableName database_and_table_ = {});
+    explicit ReadStorageRowCountStep(Block output_header, ASTPtr query_, AggregateDescription agg_desc_, bool is_final_agg_, StorageID storage_id_);
     
     String getName() const override { return "ReadStorageRowCount"; }
 
@@ -24,7 +23,9 @@ public:
 
     ASTPtr getQuery() const { return query; }
 
-    DatabaseAndTableName getDatabaseAndTableName() const { return database_and_table; }
+    StorageID getStorageID() const { return storage_id; }
+
+    void setNumRows(UInt64 num_rows_) { num_rows = num_rows_; }
 
     UInt64 getNumRows() const { return num_rows; }
 
@@ -43,7 +44,7 @@ private:
     std::shared_ptr<Cluster> optimized_cluster;
     UInt64 num_rows;
     bool is_final_agg;
-    DatabaseAndTableName database_and_table;
+    StorageID storage_id;
 };
 
 }

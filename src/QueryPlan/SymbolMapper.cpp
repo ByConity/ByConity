@@ -796,8 +796,10 @@ std::shared_ptr<OutfileFinishStep> SymbolMapper::map(const OutfileFinishStep & s
 
 std::shared_ptr<ReadStorageRowCountStep> SymbolMapper::map(const ReadStorageRowCountStep & step)
 {
-    return std::make_shared<ReadStorageRowCountStep>(
-        map(step.getOutputStream().header), step.getQuery(), step.getAggregateDescription(), step.getNumRows(), step.isFinal(), step.getDatabaseAndTableName());
+    auto new_step = std::make_shared<ReadStorageRowCountStep>(
+        map(step.getOutputStream().header), step.getQuery(), step.getAggregateDescription(), step.isFinal(), step.getStorageID());
+    new_step->setNumRows(step.getNumRows());
+    return new_step;
 }
 
 std::shared_ptr<BufferStep> SymbolMapper::map(const BufferStep & step)

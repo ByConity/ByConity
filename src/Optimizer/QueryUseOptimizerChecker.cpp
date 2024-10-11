@@ -71,7 +71,7 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     changeASTSettings(node);
 }
 
-static bool checkDatabaseAndTable(String database_name, String table_name, ContextMutablePtr context, const NameSet & ctes)
+static bool checkDatabaseAndTable(String database_name, String table_name, ContextMutablePtr context, const NameSet & ctes, String & reason)
 {
     /// not with table
     if (database_name.empty() && ctes.contains(table_name))
@@ -84,7 +84,10 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
         database_name = context->getCurrentDatabase();
 
     if (!storage_table)
+    {
+        reason = fmt::format("table not found: {}.{}", database_name, table_name);
         return false;
+    }
 
     if (database_name == "system")
         return true;
@@ -95,11 +98,21 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
         auto subquery = table_metadata_snapshot->getSelectQuery().inner_query;
 
         QueryUseOptimizerVisitor checker;
-        QueryUseOptimizerContext check_context{.context = context};
-        return ASTVisitorUtil::accept(subquery, checker, check_context);
+        QueryUseOptimizerContext check_context {.context = context};
+        if (!ASTVisitorUtil::accept(subquery, checker, check_context))
+        {
+            reason = checker.getReason();
+            return false;
+        }
+        return true;
     }
 
-    return storage_table->supportsOptimizer();
+    if (!storage_table->supportsOptimizer())
+    {
+        reason = fmt::format("unsupport storage {}: {}.{}", storage_table->getName(), database_name, table_name);
+        return false;
+    }
+    return true;
 }
 
 bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool throw_exception)
@@ -191,11 +204,8 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             if (database.empty())
                 database = context->getCurrentDatabase();
 
-            if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}))
-            {
-                reason = "unsupported storage, database: " + database + ", table: " + insert_query->table_id.getTableName();
+            if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}, reason))
                 support = false;
-            }
         }
 
         LOG_DEBUG(
@@ -228,12 +238,13 @@ bool QueryUseOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext
     return true;
 }
 
-static bool checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & ctes)
+static bool
+checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & ctes, String & reason)
 {
     if (table_expression.database_and_table_name)
     {
         auto db_and_table = DatabaseAndTableWithAlias(table_expression.database_and_table_name);
-        return checkDatabaseAndTable(db_and_table.database, db_and_table.table, context, ctes);
+        return checkDatabaseAndTable(db_and_table.database, db_and_table.table, context, ctes, reason);
     }
     return true;
 }
@@ -266,11 +277,9 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 
     for (const auto * table_expression : getTableExpressions(*select))
     {
-        if (!checkDatabaseAndTable(*table_expression, child_context.context, child_context.ctes))
-        {
-            reason = "unsupported storage: " + table_expression->formatForErrorMessage();
+        if (!checkDatabaseAndTable(*table_expression, child_context.context, child_context.ctes, reason))
             return false;
-        }
+
         if (table_expression->table_function)
         {
             const auto & function = table_expression->table_function->as<ASTFunction &>();
@@ -316,11 +325,8 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
             {
                 ASTTableExpression table_expression;
                 table_expression.database_and_table_name = table;
-                if (!checkDatabaseAndTable(table_expression, context.context, context.ctes))
-                {
-                    reason = "unsupported storage: " + table_expression.formatForErrorMessage();
+                if (!checkDatabaseAndTable(table_expression, context.context, context.ctes, reason))
                     return false;
-                }
             }
         }
     }

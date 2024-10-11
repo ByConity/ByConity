@@ -20,7 +20,6 @@
 
 #include "Common/ProfileEvents.h"
 #include "Common/Stopwatch.h"
-#include "Storages/HDFS/HDFSCommon.h"
 #include "Common/Exception.h"
 #include "common/sleep.h"
 
@@ -116,7 +115,6 @@ static void doWithRetry(std::function<void()> func)
 
 struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 {
-    HDFSConnectionParams hdfs_params;
     bool pread {false};
     RemoteReadLog * remote_read_log;
     String remote_read_context;
@@ -134,8 +132,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
         const HDFSConnectionParams & hdfs_params_,
         size_t read_until_position_,
         const ReadSettings & settings_)
-        : hdfs_params(hdfs_params_)
-        , pread(settings_.byte_hdfs_pread)
+        : pread(settings_.byte_hdfs_pread)
         , remote_read_log(settings_.remote_read_log)
         , remote_read_context(settings_.remote_read_context)
         , read_until_position(read_until_position_)
@@ -263,13 +260,22 @@ ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
     off_t read_until_position_,
     std::optional<size_t> file_size_)
     : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings.remote_fs_buffer_size, existing_memory_, alignment_, file_size_)
+    , hdfs_file_path(hdfs_file_path_)
+    , hdfs_params(hdfs_params_)
+    , read_until_position(read_until_position_)
     , settings(read_settings)
-    , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, hdfs_params_, read_until_position_, settings))
+    , impl(nullptr)
     , total_network_throttler(settings.remote_throttler)
 {
 }
 
 ReadBufferFromByteHDFS::~ReadBufferFromByteHDFS() = default;
+
+void ReadBufferFromByteHDFS::initImpl()
+{
+    chassert(!impl);
+    impl = std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path, hdfs_params, read_until_position, settings);
+}
 
 IAsynchronousReader::Result ReadBufferFromByteHDFS::readInto(char * data, size_t size, size_t read_offset, size_t ignore_bytes)
 {
@@ -310,6 +316,8 @@ IAsynchronousReader::Result ReadBufferFromByteHDFS::readInto(char * data, size_t
 
 bool ReadBufferFromByteHDFS::nextImpl()
 {
+    if (!impl)
+        initImpl();
     int bytes_read = impl->readImpl(internal_buffer.begin(), internal_buffer.size());
     if (bytes_read)
     {
@@ -339,6 +347,8 @@ off_t ReadBufferFromByteHDFS::seek(off_t offset_, int whence_)
     /// impl->getPosition() is the file position of the working buffer end
     /// Therefore working buffer corresponds to the file range
     /// [impl->getPosition() - working_buffer.size(), impl->getPosition()]
+    if (!impl)
+        initImpl();
     if (!working_buffer.empty()
         && size_t(offset_) >= impl->getPosition() - working_buffer.size()
         && offset_ <= impl->getPosition())
@@ -356,6 +366,8 @@ off_t ReadBufferFromByteHDFS::seek(off_t offset_, int whence_)
 
 off_t ReadBufferFromByteHDFS::getPosition()
 {
+    if (!impl)
+        initImpl();
     return impl->getPosition() - available();
 }
 
@@ -363,6 +375,8 @@ size_t ReadBufferFromByteHDFS::getFileSize()
 {
     if (file_size)
         return *file_size;
+    if (!impl)
+        initImpl();
 
     file_size = impl->getFileSize();
     return *file_size;
@@ -370,20 +384,27 @@ size_t ReadBufferFromByteHDFS::getFileSize()
 
 String ReadBufferFromByteHDFS::getFileName() const
 {
-    return impl->hdfs_file_path;
+    return hdfs_file_path;
 }
 
 void ReadBufferFromByteHDFS::setReadUntilPosition(size_t position)
 {
+    if (!impl)
+        initImpl();
     impl->setReadUntilPosition(position);
 }
 
 void ReadBufferFromByteHDFS::setReadUntilEnd()
 {
+    if (!impl)
+        initImpl();
     impl->setReadUntilEnd();
 }
 
-size_t ReadBufferFromByteHDFS::getFileOffsetOfBufferEnd() const {
+size_t ReadBufferFromByteHDFS::getFileOffsetOfBufferEnd() const
+{
+    if (!impl)
+        return 0; // file_offset=0 at the construction of ReadBufferFromHDFSImpl
     return impl->file_offset;
 }
 
@@ -393,7 +414,7 @@ size_t ReadBufferFromByteHDFS::readBigAt(char * to, size_t n, size_t range_begin
         return 0;
 
     auto pooled_impl = impl_pool.get([this] (){
-        return new ReadBufferFromHDFSImpl(impl->hdfs_file_path, impl->hdfs_params, 0, settings);
+        return new ReadBufferFromHDFSImpl(hdfs_file_path, hdfs_params, 0, settings);
     });
 
     pooled_impl->seek(range_begin);

@@ -222,8 +222,13 @@ BlockIO MPPQueryCoordinator::execute()
 
     if (scheduler_status && !scheduler_status->exception.empty())
     {
-        throw Exception(
-            "Query failed before final task execution, error message: " + scheduler_status->exception, scheduler_status->error_code);
+        const auto error_msg = "Query failed before final task execution, error message:" + std::move(scheduler_status->exception);
+        if (isAmbiguosError(scheduler_status->error_code))
+        {
+            auto status = waitUntilFinish(scheduler_status->error_code, error_msg);
+            throw Exception(status.summarized_error_msg, status.error_code);
+        }
+        throw Exception(error_msg, scheduler_status->error_code);
     }
 
     if (!scheduler_status || !scheduler_status->is_final_stage_start)

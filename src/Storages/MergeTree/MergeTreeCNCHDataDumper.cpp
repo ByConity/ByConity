@@ -584,21 +584,35 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
     {
         auto & checksums_files = projection_part->checksums_ptr->files;
         reordered_checksums.reserve(checksums_files.size());
-        for (const auto & col_name : projection_description.column_names)
+        auto add_to_reordered_checksums = [&](std::vector<String> extensions)
         {
-            const auto & name = ISerialization::getFileNameForStream(col_name, {});
-            for (const auto & extension : {".bin", ".mrk"})
+            for (const auto & col_name : projection_description.column_names)
             {
-                if (auto it = checksums_files.find(name + extension); it != checksums_files.end() && !it->second.is_deleted)
+                const auto & name = ISerialization::getFileNameForStream(col_name, {});
+                for (const auto & extension : extensions)
                 {
-                    reordered_checksums.push_back(&*it);
-                }
-                else
-                {
-                    LOG_ERROR(log, "Fail to find column {} in projection {}", name + extension, projection_name);
+                    if (auto it = checksums_files.find(name + extension); it != checksums_files.end() && !it->second.is_deleted)
+                    {
+                        reordered_checksums.push_back(&*it);
+                    }
+                    else
+                    {
+                        LOG_ERROR(log, "Fail to find column {} in projection {}", name + extension, projection_name);
+                    }
                 }
             }
+        };
+        if (version == MERGE_TREE_CHCH_DATA_STORAGTE_CONCENTRATED_MARK_LAYOUT_VERSION)
+        {
+            add_to_reordered_checksums({".mrk"});
+            add_to_reordered_checksums({".bin"});
         }
+        else
+        {
+            add_to_reordered_checksums({".bin", ".mrk"});
+        }
+
+
         for (auto & file : reordered_checksums)
         {
             file->second.file_offset = data_file_offset;

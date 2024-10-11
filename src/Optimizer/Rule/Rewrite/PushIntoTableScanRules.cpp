@@ -280,6 +280,9 @@ TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node
     auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
     auto * copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
 
+    if (!dynamic_cast<StorageCnchMergeTree *>(copy_table_step->getStorage().get()))
+        return {};
+
     if (copy_table_step->hasInlineExpressions())
         return {};
 

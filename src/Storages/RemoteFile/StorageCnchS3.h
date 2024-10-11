@@ -20,7 +20,9 @@ S3ClientPtr initializeS3Client(const ContextPtr & ctx, const CnchFileArguments &
 class StorageCnchS3 : public shared_ptr_helper<StorageCnchS3>, public IStorageCnchFile
 {
 public:
-    Strings readFileList() override;
+    Strings readFileList(ContextPtr query_context) override;
+
+    void clear(ContextPtr query_context) override;
 
     /// read s3 file by server local, not send resource to worker
     void readByLocal(

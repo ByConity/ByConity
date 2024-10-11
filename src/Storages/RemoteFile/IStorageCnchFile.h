@@ -45,7 +45,9 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    virtual Strings readFileList() = 0;
+    virtual Strings readFileList(ContextPtr query_context) = 0;
+
+    virtual void clear(ContextPtr query_context) = 0;
 
     /// read remote file parts by server local, not send resource to worker
     virtual void readByLocal(

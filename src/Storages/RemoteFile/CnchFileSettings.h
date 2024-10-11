@@ -18,7 +18,8 @@ struct Settings;
     M(String, cnch_vw_task, "vw_task", "", 0) \
     M(String, resources_assign_type, "server_push", "", 0) \
     M(Bool, simple_hash_resources, true, "", 0) \
-    M(Bool, cnch_temporary_table, false, "", 0)
+    M(Bool, cnch_temporary_table, false, "", 0) \
+    M(Bool, prefer_cnch_catalog, true, "", 0)
 
 /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_CNCH_FILE_SETTINGS(M) M(index_granularity)

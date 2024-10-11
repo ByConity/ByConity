@@ -439,4 +439,17 @@ AggQueryQueueMap ResourceManagerClient::syncQueueDetails(VWQueryQueueMap vw_quer
     return res;
 }
 
+void ResourceManagerClient::sendResourceRequest(const Protos::SendResourceRequestReq & request)
+{
+    brpc::Controller cntl;
+    Protos::SendResourceRequestResp response;
+    auto rpc_func = [this, &cntl, &request, &response](std::unique_ptr<Stub> & stub_) {
+        stub_->sendResourceRequest(&cntl, &request, &response, nullptr);
+
+        assertController(cntl);
+        RPCHelpers::checkResponse(response);
+    };
+
+    callToLeaderWrapper(response, rpc_func);
+}
 }

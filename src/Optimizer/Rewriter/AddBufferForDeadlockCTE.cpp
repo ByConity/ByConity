@@ -334,7 +334,7 @@ namespace
                     deadlock_ctes.emplace(node_id);
             }
 
-            left_ctes.insert(right_ctes.begin(), left_ctes.end());
+            left_ctes.insert(right_ctes.begin(), right_ctes.end());
             return left_ctes;
         }
 

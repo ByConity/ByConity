@@ -104,3 +104,8 @@ select count() from test_bitmap_index where (arraySetCheck(int_vid, 1) and array
 select count() from test_bitmap_index where (arraySetCheck(int_vid, 1) and arraySetCheck(float_vid, 2)) or arraySetCheck(int_vid, 2); -- 1
 
 drop table if exists test_bitmap_index;
+
+-- test arraySetCheck without bitmap index
+SELECT arraySetCheck([], []);
+SELECT arraySetCheck([], [1,2]);
+SELECT arraySetCheck([1], [1,2]);

@@ -1,0 +1,18 @@
+hdfs_addr: hdfs://hdfs-namenode:9000
+storage_configuration:
+  disks:
+    hdfs_disk:
+      path: /user/clickhouse/
+      type: bytehdfs
+    local_disk:
+      path: /var/byconity/data/
+      type: local
+  policies:
+    default:
+      volumes:
+        hdfs:
+          default: hdfs_disk
+          disk: hdfs_disk
+        local:
+          default: local_disk
+          disk: local_disk

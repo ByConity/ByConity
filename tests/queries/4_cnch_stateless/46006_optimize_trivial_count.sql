@@ -104,4 +104,10 @@ UNION ALL
 SELECT count(*)
 FROM test46006;
 
+drop table if exists test46006_1;
+create table test46006_1(i int) ENGINE = CnchMergeTree() partition by i order by i;
+insert into test46006_1 select count() from test46006;
+insert into test46006_1 select count() from test46006 where i<10;
+drop table if exists test46006_1;
+
 drop table if exists test46006;
