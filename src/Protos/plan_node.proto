@@ -367,6 +367,7 @@ message ReadStorageRowCountStep {
   required AggregateDescription agg_desc = 4;
   required uint64 num_rows = 5;
   required bool is_final_agg = 6;
+  optional StorageID storage_id = 7;
 }
 
 message WindowStep {

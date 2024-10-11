@@ -77,7 +77,7 @@ void LineageInfoVisitor::visitValuesNode(ValuesNode & node, LineageInfoContext &
 void LineageInfoVisitor::visitReadStorageRowCountNode(ReadStorageRowCountNode & node, LineageInfoContext & lineage_info_context)
 {
     const auto * step = node.getStep().get();
-    visitISourceNodeWithoutStorage(node, lineage_info_context, {step->getDatabaseAndTableName().first, step->getDatabaseAndTableName().second});
+    visitISourceNodeWithoutStorage(node, lineage_info_context, {step->getStorageID().getDatabaseName(), step->getStorageID().getTableName()});
 }
 
 void LineageInfoVisitor::visitExtremesNode(ExtremesNode & node, LineageInfoContext & lineage_info_context)

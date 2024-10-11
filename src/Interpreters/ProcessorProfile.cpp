@@ -161,7 +161,9 @@ std::set<GroupedProcessorProfilePtr> GroupedProcessorProfile::fillChildren(Group
         auto roots = fillChildren(item.second, visited);
         for (const auto & root : roots)
             outputs.insert(root);
+        input_processor->parent_step_ids.emplace(item.second->step_id);
     }
+    input_processor->parents.clear();
     return outputs;
 }
 
@@ -374,7 +376,7 @@ GroupedProcessorProfile::getGroupedProfileFromMetrics(std::unordered_map<UInt64,
         if (profile_map.contains(child_id))
         {
             auto child = getGroupedProfileFromMetrics(profile_map, child_id);
-            child->parents.emplace(node->processor_name, node);
+            // child->parents.emplace(node->processor_name, node);
             node->children.emplace_back(child);
         }
     }
@@ -414,10 +416,10 @@ StepProfiles GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(Groupe
             q.pop();
             auto & current_step_id = processor_profile->step_id;
             auto & inputs = processor_profile->children;
-            auto & outputs = processor_profile->parents;
+            auto & outputs = processor_profile->parent_step_ids;
 
             if (current_step_id == -1 && !outputs.empty() && processor_profile->processor_name != "output_root")
-                current_step_id = outputs.begin()->second->step_id;
+                current_step_id = *outputs.begin();
 
             step_processor_profiles_at_each_level[current_step_id].profiles_at_each_level[level].push_back(processor_profile);
 

@@ -482,7 +482,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
 
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
-        std::make_shared<OptimizeTrivialCount>(),
 
         // use property
         std::make_shared<SortingOrderedSource>(),

@@ -52,6 +52,7 @@
 #include <QueryPlan/WindowStep.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <fmt/format.h>
+#include <magic_enum.hpp>
 #include <Common/FieldVisitorToString.h>
 #include <Common/HashTable/Hash.h>
 
@@ -2088,9 +2089,9 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
 
 String StepPrinter::printReadStorageRowCountStep(const ReadStorageRowCountStep & step)
 {
-    auto database_and_table = step.getDatabaseAndTableName();
+    auto storage_id = step.getStorageID();
     std::stringstream details;
-    details << database_and_table.first << "." << database_and_table.second << "|";
+    details << storage_id.getFullTableName() << "|";
 
     auto ast = step.getQuery();
     auto * query = ast->as<ASTSelectQuery>();
@@ -3936,6 +3937,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
     auto property_str = [&](const Property & property) {
         std::stringstream ss;
         ss << property.getNodePartitioning().toString();
+        ss << "  Component:" << magic_enum::enum_name(property.getNodePartitioning().getComponent()) << "; ";
         ss << " ";
         ss << property.getCTEDescriptions().toString();
         return ss.str();

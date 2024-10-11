@@ -1,9 +1,11 @@
 #pragma once
 
+#include <unordered_set>
 #include <Interpreters/Context.h>
+#include <QueryPlan/PlanVisitor.h>
 #include <Poco/ExpireLRUCache.h>
 #include <Common/HashTable/Hash.h>
-#include <QueryPlan/PlanVisitor.h>
+#include <Interpreters/StorageID.h>
 
 namespace DB
 {
@@ -20,17 +22,18 @@ namespace PlanCacheConfig
 class PlanCacheManager
 {
 public:
-    struct QueryInfo
+    struct PlanCacheInfo
     {
         // database_name->table_name->column_names
         std::unordered_map<String, std::unordered_map<String, std::vector<String>>> query_access_info;
         std::unordered_map<StorageID, Int64> stats_version;
+        std::unordered_map<StorageID, UInt64> tables_version;
     };
     struct PlanObjectValue
     {
         PlanNodePtr plan_root;
         std::unordered_map<CTEId, PlanNodePtr> cte_map;
-        std::shared_ptr<QueryInfo> query_info;
+        std::shared_ptr<PlanCacheInfo> query_info;
     };
     using CacheType = Poco::ExpireLRUCache<UInt128, PlanObjectValue>;
 
