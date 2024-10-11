@@ -137,6 +137,7 @@ static DB::PipeFDs signal_pipe;
 
 #if USE_BREAKPAD
 static bool use_minidump = true;
+static std::atomic_bool init_minidump{false};
 static std::shared_ptr<google_breakpad::MinidumpDescriptor> descriptor;
 static std::shared_ptr<google_breakpad::ExceptionHandler> eh;
 
@@ -192,7 +193,9 @@ static void call_default_signal_handler(int sig)
 {
     signal(sig, SIG_DFL);
 #if USE_BREAKPAD
-    if (use_minidump)
+    bool not_init = false;
+    /// Only initialize minidump once
+    if (use_minidump && init_minidump.compare_exchange_strong(not_init, true))
         eh = std::shared_ptr<google_breakpad::ExceptionHandler>(
             new google_breakpad::ExceptionHandler(*descriptor, nullptr, dumpCallbackError, nullptr, true, -1));
 #endif
