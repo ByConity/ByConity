@@ -267,7 +267,6 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
     for (const auto & skip_index : skip_indices)
     {
         String stream_name = skip_index->getFileName();
-        LOG_DEBUG(getLogger(), "skip index {} ", stream_name);
         skip_indices_streams.emplace_back(
                 std::make_unique<MergeTreeDataPartWriterOnDisk::Stream>(
                         stream_name,
