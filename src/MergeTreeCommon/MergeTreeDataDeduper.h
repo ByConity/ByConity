@@ -104,7 +104,7 @@ private:
 
     /// Handling the case when new parts have partial update parts.
     /// Differentiate into different sub-iterations according to the type of part(normal_parts or partial_update_parts)
-    DeleteBitmapVector processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, std::vector<bool> & need_dump_bitmap);
+    DeleteBitmapVector processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, IMergeTreeDataPartsVector & partial_update_processed_parts);
 
     /// For partial update mode: Restore block from new parts
     std::vector<Block> restoreBlockFromNewParts(
@@ -155,8 +155,8 @@ private:
         std::function<String(size_t, size_t)> get_column_by_index,
         size_t idx);
 
-    /// For partial update mode: generate & commit partial part with data and unique index.
-    IMergeTreeDataPartsVector generateAndCommitPartialPartInPartialUpdateMode(
+    /// For partial update mode: generate & commit part with data and unique index.
+    IMergeTreeDataPartPtr generateAndCommitPartInPartialUpdateMode(
         Block & block,
         const IMergeTreeDataPartsVector & new_parts,
         const DedupTaskPtr & dedup_task);
@@ -187,11 +187,10 @@ private:
 
     size_t prepareBitmapsForPartialUpdate(
         const IMergeTreeDataPartsVector & visible_parts,
-        const IMergeTreeDataPartsVector & new_parts,
         const DeleteBitmapVector & bitmaps,
         TxnTimestamp txn_id,
         LocalDeleteBitmaps & res,
-        const std::vector<bool> & need_dump_bitmap);
+        const IMergeTreeDataPartsVector & partial_update_processed_parts);
 
     DeleteBitmapVector generateNextIterationBitmaps(
         const IMergeTreeDataPartsVector & visible_parts,

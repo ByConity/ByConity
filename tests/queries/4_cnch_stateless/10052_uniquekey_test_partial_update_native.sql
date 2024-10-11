@@ -65,8 +65,9 @@ INSERT INTO unique_partial_update_query_native VALUES ('2023-01-02', 1005, 30, '
 SELECT * FROM unique_partial_update_query_native ORDER BY id;
 
 SET enable_staging_area_for_write=1, enable_unique_partial_update=1;
--- data for unique key 1005: 2023-01-02, 1005, 30, d2, x3
+-- data for unique key 1005: 2023-01-02, 1005, 30, d2, x4
 INSERT INTO unique_partial_update_query_native (p_date, id, number, content, extra, _update_columns_) VALUES ('2023-01-02', 1005, 30, 'd1', 'x3', 'extra');  
+INSERT INTO unique_partial_update_query_native (p_date, id, number, content, extra, _update_columns_) VALUES ('2023-01-02', 1005, 30, 'd1', 'x4', 'extra');
 
 SET enable_staging_area_for_write=0, enable_unique_partial_update=0;
 -- data for unique key 1005: 2023-01-02, 1005, 40, d1, x1
@@ -148,6 +149,25 @@ INSERT INTO unique_partial_update_query_native (p_date, id, number, content, ext
 INSERT INTO unique_partial_update_query_native (p_date, id, number, content, extra, _update_columns_) VALUES ('2023-01-02', 1005, 30, 'd3', 'x2', 'p_date,id,number,content,extra');  
 
 SELECT 'Specify _update_columns_ corner case test, stage 2';
+SELECT * FROM unique_partial_update_query_native ORDER BY id;
+
+SELECT 'Modify partial_update_query_parts_thread_size test, stage 1';
+ALTER TABLE unique_partial_update_query_native DROP PARTITION id '20230102';
+ALTER TABLE unique_partial_update_query_native modify setting partial_update_query_parts_thread_size = 1;
+SYSTEM STOP MERGES unique_partial_update_query_native;
+
+SET enable_staging_area_for_write=0, enable_unique_partial_update=0;
+INSERT INTO unique_partial_update_query_native VALUES ('2023-01-02', 1004, 23, 'c4', 'e4');
+INSERT INTO unique_partial_update_query_native VALUES ('2023-01-02', 1005, 30, 'd2', 'x2');
+
+SELECT * FROM unique_partial_update_query_native ORDER BY id;
+
+SET enable_staging_area_for_write=0, enable_unique_partial_update=1;
+-- data for unique key 1004: 2023-01-02, 1004, 23, c4, x3
+-- data for unique key 1005: 2023-01-02, 1005, 30, d2, x3
+INSERT INTO unique_partial_update_query_native (p_date, id, number, content, extra, _update_columns_) VALUES ('2023-01-02', 1004, 0, '', 'x3', 'extra'), ('2023-01-02', 1005, 30, 'd1', 'x3', 'extra');
+
+SELECT 'Modify partial_update_query_parts_thread_size test, stage 2';
 SELECT * FROM unique_partial_update_query_native ORDER BY id;
 
 DROP TABLE IF EXISTS unique_partial_update_query_native;
