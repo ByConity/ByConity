@@ -118,7 +118,7 @@ public:
     void alter(const AlterCommands & params, ContextPtr context, TableLockHolder & alter_lock_holder) override
     {
         getNested()->alter(params, context, alter_lock_holder);
-        IStorage::setInMemoryMetadata(getNested()->getInMemoryMetadata());
+        IStorage::setInMemoryMetadata(getNested()->getInMemoryMetadataCopy());
     }
 
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override

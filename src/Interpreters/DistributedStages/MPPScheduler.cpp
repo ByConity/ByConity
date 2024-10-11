@@ -29,7 +29,7 @@ void MPPScheduler::genBatchTasks()
         LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
     }
 
-    while (plansegment_topology.size() > 0)
+    while (!plansegment_topology.empty())
     {
         std::vector<size_t> target_ids;
         for (const auto & [id, source_set] : plansegment_topology)

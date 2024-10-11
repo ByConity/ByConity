@@ -1,16 +1,17 @@
 #pragma once 
 
 
-#include <Common/Logger.h>
 #include <memory>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Core/SettingsEnums.h>
+#include <Common/Logger.h>
+#include <Disks/IDisk.h>
 #include <IO/SeekableReadBuffer.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/IndexFile/RemappingEnv.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/DiskCache_fwd.h>
-#include "Core/SettingsEnums.h"
-#include "Disks/IDisk.h"
-#include "Storages/DiskCache/DiskCacheLRU.h"
+#include <Storages/DiskCache/DiskCacheLRU.h>
 
 namespace DB
 {
@@ -20,7 +21,8 @@ class IGinDataPartHelper
 public:
     virtual ~IGinDataPartHelper() = default;
 
-    virtual std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name) = 0;
+    virtual std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name,
+        size_t buf_size) = 0;
     virtual std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String& file_name, size_t buf_size, WriteMode write_mode) = 0;
 
@@ -37,7 +39,8 @@ public:
     explicit GinDataLocalPartHelper(const IMergeTreeDataPart& part_);
     GinDataLocalPartHelper(const DiskPtr& disk_, const String& relative_path_);
 
-    std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name) override;
+    std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name,
+        size_t buf_size) override;
     std::unique_ptr<WriteBufferFromFileBase> writeFile(const String& file_name,
         size_t buf_size, WriteMode write_mode) override;
 
@@ -58,7 +61,8 @@ public:
     GinDataCNCHPartHelper(const IMergeTreeDataPartPtr& part_,
         const IDiskCachePtr& cache_, DiskCacheMode mode_ = DiskCacheMode::AUTO);
 
-    std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name) override;
+    std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name,
+        size_t buf_size) override;
     std::unique_ptr<WriteBufferFromFileBase> writeFile(const String& file_name,
         size_t buf_size, WriteMode write_mode) override;
 

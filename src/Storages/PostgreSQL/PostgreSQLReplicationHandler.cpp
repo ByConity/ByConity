@@ -245,8 +245,8 @@ StoragePtr PostgreSQLReplicationHandler::loadFromSnapshot(String & snapshot_name
     InterpreterInsertQuery interpreter(insert, insert_context);
     auto block_io = interpreter.execute();
 
-    const StorageInMemoryMetadata & storage_metadata = nested_storage->getInMemoryMetadata();
-    auto sample_block = storage_metadata.getSampleBlockNonMaterialized();
+    auto storage_metadata = nested_storage->getInMemoryMetadataPtr();
+    auto sample_block = storage_metadata->getSampleBlockNonMaterialized();
 
     PostgreSQLTransactionBlockInputStream<pqxx::ReplicationTransaction> input(tx, query_str, sample_block, DEFAULT_BLOCK_SIZE);
     assertBlocksHaveEqualStructure(input.getHeader(), block_io.out->getHeader(), "postgresql replica load from snapshot");

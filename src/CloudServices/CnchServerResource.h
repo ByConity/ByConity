@@ -233,6 +233,10 @@ public:
     {
         return source_task_payload;
     }
+    std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>> & getSourceTaskPayloadRef()
+    {
+        return source_task_payload;
+    }
 
 private:
     auto getLock() const

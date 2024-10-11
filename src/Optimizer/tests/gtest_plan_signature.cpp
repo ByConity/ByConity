@@ -3,8 +3,9 @@
 #include <Optimizer/PlanNodeSearcher.h>
 
 #include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <gtest/gtest.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 
 #include <string>
 #include <memory>

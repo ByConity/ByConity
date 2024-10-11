@@ -13,11 +13,6 @@ public:
     HiveORCFile();
     ~HiveORCFile() override;
 
-    std::optional<size_t> numRows() override;
-
-
-private:
-    std::optional<size_t> num_rows;
 };
 }
 

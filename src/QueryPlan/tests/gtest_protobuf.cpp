@@ -536,7 +536,7 @@ TEST_F(ProtobufTest, DistinctStep)
         for (int i = 0; i < 10; ++i)
             columns.emplace_back(fmt::format("text{}", eng() % 100));
         auto pre_distinct = eng() % 2 == 1;
-        auto result = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct);
+        auto result = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct, true);
         result->setStepDescription(step_description);
         return result;
     }();
@@ -674,7 +674,7 @@ TEST_F(ProtobufTest, TableWriteStep)
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
-        auto s = std::make_shared<TableWriteStep>(base_input_stream, target, false);
+        auto s = std::make_shared<TableWriteStep>(base_input_stream, target, false, "inserted_rows");
         s->setStepDescription(step_description);
         return s;
     }();

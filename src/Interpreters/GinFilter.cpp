@@ -1,10 +1,11 @@
 #include <cstddef>
-#include <Interpreters/GinFilter.h>
 #include <roaring.hh>
 #include <Poco/Logger.h>
+#include <common/types.h>
+#include <Common/FST.h>
+#include <Interpreters/GinFilter.h>
 #include <Storages/MergeTree/GinIndexDataPartHelper.h>
 #include <Storages/MergeTree/GinIdxFilterResultCache.h>
-#include <common/types.h>
 
 namespace DB
 {
@@ -36,30 +37,12 @@ GinFilter::GinFilter(const GinFilterParameters & params_)
 {
 }
 
-void GinFilter::add(const char * data, size_t len, UInt32 rowID, GinIndexStorePtr & store) const
+void GinFilter::add(const char * data, size_t len, UInt32 rowID, GINStoreWriter & writer)
 {
     if (len > FST::MAX_TERM_LENGTH)
         return;
 
-    StringRef term(data, len);
-    auto it = store->getPostingsListBuilder().builders.find(term);
-
-    if (it)
-    {
-        const GinIndexPostingsBuilderPtr& builder = it.getMapped();
-        if (builder->last_row_id != rowID)
-        {
-            builder->add(rowID);
-            builder->last_row_id = rowID;
-        }
-    }
-    else
-    {
-        auto builder = std::make_shared<GinIndexPostingsBuilder>();
-        builder->add(rowID);
-
-        store->setPostingsBuilder(term, builder);
-    }
+    writer.appendPostingEntry(StringRef(data, len), rowID);
 }
 
 /// This method assumes segmentIDs are in increasing order, which is true since rows are
@@ -109,8 +92,7 @@ bool GinFilter::contains(const GinFilter & filter, PostingsCacheForStore & cache
         GinPostingsCachePtr postings_cache = store.getPostings(gin_filter.getQueryString());
         if (postings_cache == nullptr)
         {
-            GinIndexStoreDeserializer reader(store.store);
-            postings_cache = reader.createPostingsCacheFromTerms(gin_filter.getTerms());
+            postings_cache = store.store->createPostingsCacheFromTerms(gin_filter.getTerms());
             store.cache[gin_filter.getQueryString()] = postings_cache;
         }
         return match(*postings_cache, result);
@@ -126,7 +108,7 @@ bool GinFilter::contains(const GinFilter & filter, PostingsCacheForStore & cache
         }
         const String& range_id = range_id_buf.str();
         std::shared_ptr<GinIdxFilterResult> cached_result = filter_result_cache->getOrSet(
-            cache_store.store->storage_info->getPartUniqueID(), cache_store.store->getName(),
+            cache_store.store->partID(), cache_store.store->name(),
             filter.getQueryString(), range_id, [&calc_filter_contains, &filter, &cache_store]() {
                 auto result = std::make_shared<GinIdxFilterResult>(false, nullptr);
                 result->filter = std::make_unique<roaring::Roaring>();

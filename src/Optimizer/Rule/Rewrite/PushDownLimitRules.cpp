@@ -59,7 +59,8 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
             distinct_step->getSetSizeLimits(),
             limit_step->getLimitValue() + limit_step->getOffsetValue(),
             distinct_step->getColumns(),
-            distinct_step->preDistinct()),
+            distinct_step->preDistinct(),
+            false),
         distinct->getChildren());
     node->replaceChildren({new_distinct});
     return TransformResult{node};

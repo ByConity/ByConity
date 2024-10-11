@@ -93,7 +93,8 @@ WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
 void WorkerStatusManager::shutdown()
 {
     stop();
-    schedule_pool.reset();
+    if (schedule_pool)
+        schedule_pool.reset();
 }
 
 WorkerStatusManager::~WorkerStatusManager()

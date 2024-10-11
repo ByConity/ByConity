@@ -64,6 +64,8 @@ struct ServerPartLogElement
     UInt64 duration_ms = 0;
     UInt64 peak_memory_usage = 0;
 
+    UInt8 from_attach = false;
+
     UInt8 error = 0;
     String exception;
 
@@ -88,7 +90,8 @@ public:
         UInt8 error,
         const Strings & source_part_names = {},
         UInt64 duration_ns = 0,
-        UInt64 peak_memory_usage = 0);
+        UInt64 peak_memory_usage = 0,
+        bool from_attach = false);
 
     static bool addRemoveParts(
         const ContextPtr & local_context,

@@ -418,6 +418,7 @@ message RedirectAttachDetachedS3PartsReq {
   repeated DataModelDeleteBitmap bitmaps = 9;
   required uint32 detached_visible_part_size = 10;
   required uint32 detached_staged_part_size = 11;
+  optional uint64 txn_id = 12;
 }
 
 message RedirectAttachDetachedS3PartsResp { optional string exception = 1; }
@@ -435,6 +436,7 @@ message RedirectDetachAttachedS3PartsReq {
   repeated DataModelDeleteBitmap bitmaps = 10;
   repeated DetachMeta detached_part_metas = 11;
   repeated DetachMeta detached_bitmap_metas = 12;
+  optional uint64 txn_id = 13;
 }
 
 message RedirectDetachAttachedS3PartsResp { optional string exception = 1; }
@@ -560,6 +562,9 @@ message GetDedupImplVersionResp
   required uint32 version = 1;
   optional string exception = 2;
 }
+
+message checkDelayInsertOrThrowIfNeededReq { required UUID storage_uuid = 1; }
+message checkDelayInsertOrThrowIfNeededResp { optional string exception = 1; }
 
 service CnchServerService {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq)
@@ -713,4 +718,7 @@ service CnchServerService {
 
   rpc getDedupImplVersion(GetDedupImplVersionReq)
       returns (GetDedupImplVersionResp);
+  
+  rpc checkDelayInsertOrThrowIfNeeded(checkDelayInsertOrThrowIfNeededReq)
+    returns (checkDelayInsertOrThrowIfNeededResp);
 };

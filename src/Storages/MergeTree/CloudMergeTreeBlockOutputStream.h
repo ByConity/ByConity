@@ -78,6 +78,8 @@ private:
     bool disable_transaction_commit{false};
     SimpleIncrement increment;
 
+    time_t last_check_parts_time = 0;
+
     ASTPtr overwrite_partition;
     NameSet overwrite_partition_ids;
 

@@ -36,14 +36,17 @@ static ITransformingStep::Traits getTraits()
         {.preserves_number_of_rows = true}};
 }
 
-TableWriteStep::TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_)
+TableWriteStep::TableWriteStep(
+    const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_, String output_affected_row_count_symbol_)
     : ITransformingStep(input_stream_, {}, getTraits())
     , target(target_)
     , insert_select_with_profiles(insert_select_with_profiles_)
+    , output_affected_row_count_symbol(output_affected_row_count_symbol_)
 {
     if (insert_select_with_profiles)
     {
-        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        Block new_header
+            = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), output_affected_row_count_symbol)};
         output_stream = DataStream{.header = std::move(new_header)};
     }
     else
@@ -136,7 +139,7 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
         case TargetType::INSERT: {
             auto * insert_target = dynamic_cast<TableWriteStep::InsertTarget *>(target.get());
             auto target_storage = DatabaseCatalog::instance().getTable(insert_target->getStorageID(), settings.context);
-            
+
             auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(
                 target_storage, settings, insert_target_header, settings.context->getSettingsRef().max_threads, false, insert_target->getQuery());
@@ -184,7 +187,7 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
                     auto stream = std::move(out_streams.back());
                     out_streams.pop_back();
 
-                    return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+                    return std::make_shared<ProcessorToOutputStream>(std::move(stream), output_affected_row_count_symbol);
                 });
             }
             else
@@ -206,7 +209,8 @@ void TableWriteStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
     if (insert_select_with_profiles)
     {
-        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        Block new_header
+            = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), output_affected_row_count_symbol)};
         output_stream = DataStream{.header = std::move(new_header)};
     }
     else
@@ -215,7 +219,7 @@ void TableWriteStep::setInputStreams(const DataStreams & input_streams_)
 
 std::shared_ptr<IQueryPlanStep> TableWriteStep::copy(ContextPtr) const
 {
-    return std::make_shared<TableWriteStep>(input_streams[0], target, insert_select_with_profiles);
+    return std::make_shared<TableWriteStep>(input_streams[0], target, insert_select_with_profiles, output_affected_row_count_symbol);
 }
 
 void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
@@ -226,14 +230,18 @@ void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
         throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
     target->toProto(*proto.mutable_target());
     proto.set_insert_select_with_profiles(insert_select_with_profiles);
+    proto.set_output_affected_row_count_symbol(output_affected_row_count_symbol);
 }
 
 std::shared_ptr<TableWriteStep> TableWriteStep::fromProto(const Protos::TableWriteStep & proto, ContextPtr context)
 {
     auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     auto target = TableWriteStep::Target::fromProto(proto.target(), context);
-    bool insert_select_with_profiles = proto.has_insert_select_with_profiles() ? proto.insert_select_with_profiles() : context->getSettingsRef().insert_select_with_profiles;
-    auto step = std::make_shared<TableWriteStep>(base_input_stream, target, insert_select_with_profiles);
+    bool insert_select_with_profiles = proto.has_insert_select_with_profiles() ? proto.insert_select_with_profiles()
+                                                                               : context->getSettingsRef().insert_select_with_profiles;
+    String output_affected_row_count_symbol
+        = proto.has_output_affected_row_count_symbol() ? proto.output_affected_row_count_symbol() : "inserted_rows";
+    auto step = std::make_shared<TableWriteStep>(base_input_stream, target, insert_select_with_profiles, output_affected_row_count_symbol);
     step->setStepDescription(step_description);
     return step;
 }

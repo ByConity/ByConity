@@ -143,6 +143,40 @@ Block CloudMergeTreeBlockOutputStream::getHeader() const
 
 void CloudMergeTreeBlockOutputStream::writePrefix()
 {
+    /// Check the number of parts in the table and block writing if needed
+    const auto settings = storage.getSettings();
+    if (settings->max_parts_in_total > 0 || settings->parts_to_throw_insert > 0)
+    {
+        auto now = time(nullptr);
+        if (now - last_check_parts_time > static_cast<time_t>(settings->insert_check_parts_interval))
+        {
+            auto txn = context->getCurrentTransaction();
+            if (dynamic_pointer_cast<CnchServerTransaction>(txn))
+            {
+                storage.cnchDelayInsertOrThrowIfNeeded();
+            }
+            else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn))
+            {
+                auto server_client = worker_txn->tryGetServerClient();
+                /// server_client is not available in txn for some cases, e.g INSERT INTO xxx SELECT xxx
+                if (!server_client)
+                {
+                    if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
+                        server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
+                }
+                if (!server_client)
+                    return;
+                /// XXX: optimize this rpc call
+                server_client->checkDelayInsertOrThrowIfNeeded(storage.getCnchStorageUUID());
+            }
+        }
+
+        /// Mostly, parts number increases normally and won't reach the threshold,
+        /// so we don't need to check during each insert.
+        /// This may be effective for realtime ingestion.
+        last_check_parts_time = now;
+    }
+
     auto max_threads = context->getSettingsRef().max_threads_for_cnch_dump;
     LOG_DEBUG(log, "dump with {} threads", max_threads);
     cnch_writer.initialize(max_threads);
@@ -205,6 +239,9 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     auto part_log = context->getGlobalContext()->getPartLog(storage.getDatabaseName());
     auto merge_tree_settings = storage.getSettings();
     auto settings = context->getSettingsRef();
+    UInt64 allowed_max_parts = merge_tree_settings->max_partitions_per_insert_block.changed
+                                ? merge_tree_settings->max_partitions_per_insert_block
+                                : settings.max_partitions_per_insert_block;
 
     BlocksWithPartition part_blocks;
 
@@ -220,12 +257,12 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         FilterInfo filter_info = dedupWithUniqueKey(block);
         part_blocks = writer.splitBlockIntoParts(
             filter_info.num_filtered ? CnchDedupHelper::filterBlock(block, filter_info) : block,
-            settings.max_partitions_per_insert_block,
+            allowed_max_parts,
             metadata_snapshot,
             context);
     }
     else
-        part_blocks = writer.splitBlockIntoParts(block, settings.max_partitions_per_insert_block, metadata_snapshot, context);
+        part_blocks = writer.splitBlockIntoParts(block, allowed_max_parts, metadata_snapshot, context);
 
     std::mutex parts_mutex;
     IMutableMergeTreeDataPartsVector parts;
@@ -283,7 +320,7 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         }
 
         auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
-            block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
+            block_with_partition, allowed_max_parts, metadata_snapshot, context);
         LOG_TRACE(storage.getLogger(), "Size of blocks is {} after split by bucket", bucketed_part_blocks.size());
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)
@@ -582,6 +619,7 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
         return FilterInfo{};
 
     /// TODO: remove invalid update rows with version
+    /// TODO: optimize partial update to normal upsert if simplify_update_columns are all equal to "" and not filtered
     if (dedup_parameters.enable_partial_update)
     {
         CnchDedupHelper::simplifyFunctionColumns(storage, metadata_snapshot, const_cast<Block &>(block));

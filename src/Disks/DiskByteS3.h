@@ -34,6 +34,7 @@ namespace ErrorCodes
 }
 
 class DiskByteS3Reservation;
+class DiskByteS3DirectoryIterator;
 
 class DiskByteS3: public IDisk
 {

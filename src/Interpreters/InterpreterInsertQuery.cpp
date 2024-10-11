@@ -21,7 +21,8 @@
 
 #include <filesystem>
 #include <Interpreters/InterpreterInsertQuery.h>
-
+#include <CloudServices/CnchServerResource.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <Access/AccessFlags.h>
 #include <CloudServices/CnchServerResource.h>
 #include <Columns/ColumnNullable.h>
@@ -77,10 +78,7 @@
 #include <Common/LocalFilePathMatcher.h>
 #include <Common/S3FilePathMatcher.h>
 #include <Common/checkStackSize.h>
-#include "Interpreters/Context_fwd.h"
-#include <Databases/DatabasesCommon.h>
-#include <CloudServices/CnchWorkerResource.h>
-#include <CloudServices/CnchCreateQueryHelper.h>
+#include <Interpreters/Context_fwd.h>
 
 
 namespace DB
@@ -629,7 +627,9 @@ BlockIO InterpreterInsertQuery::execute()
                 auto stream = std::move(out_streams.back());
                 out_streams.pop_back();
 
-                return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+                auto res_stream = std::make_shared<ProcessorToOutputStream>(std::move(stream), "inserted_rows");
+                res_stream->setProgressCallback(this->getContext()->getProgressCallback());
+                return res_stream;
             });
         }
         else

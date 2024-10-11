@@ -200,6 +200,12 @@ public:
         const String & storage_def_,
         size_t flush_interval_milliseconds_);
 
+    /// destructor is necessary to stop flush thread before deleting member variable `saving_thread`
+    ~SystemLog() override
+    {
+        shutdown();
+    }
+
     /** Append a record into log.
       * Writing to table will be done asynchronously and in case of failure, record could be lost.
       */

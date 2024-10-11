@@ -182,8 +182,7 @@ public:
 
     std::vector<EntryPtr> insertGroup(ContextMutablePtr query_context, std::vector<size_t> & segment_ids, bool force = false);
 
-    void insertProcessList(
-        EntryPtr plan_segment_process_entry, const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
+    void insertProcessList(EntryPtr plan_segment_process_entry, size_t segment_id, ContextMutablePtr query_context, bool force = false);
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 

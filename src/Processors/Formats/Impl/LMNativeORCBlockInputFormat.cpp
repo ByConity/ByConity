@@ -186,6 +186,12 @@ size_t LMNativeORCBlockInputFormat::getNumberOfRowGroups()
     return orc_file_reader->getNumberOfStripes();
 }
 
+size_t LMNativeORCBlockInputFormat::getRowCount()
+{
+    initializeFileReaderIfNeeded();
+    return orc_file_reader->getNumberOfRows();
+}
+
 void LMNativeORCBlockInputFormat::resetRowGroupReader(size_t row_group_idx)
 {
     scanners[row_group_idx].reset();

@@ -905,7 +905,7 @@ PlanNodePtr ColumnPruningVisitor::visitDistinctNode(DistinctNode & node, ColumnP
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);
 
     auto distinct_step = std::make_shared<DistinctStep>(
-        child->getStep()->getOutputStream(), step->getSetSizeLimits(), step->getLimitHint(), columns, step->preDistinct());
+        child->getStep()->getOutputStream(), step->getSetSizeLimits(), step->getLimitHint(), columns, step->preDistinct(), step->canToAgg());
 
     PlanNodes children{child};
     auto distinct_node = DistinctNode::createPlanNode(context->nextNodeId(), std::move(distinct_step), children, node.getStatistics());
@@ -1327,7 +1327,7 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
 
     const auto & step = *distinct_node->getStep();
 
-    if (step.getLimitHint() == 0)
+    if (step.getLimitHint() == 0 && step.canToAgg())
     {
         NameSet name_set{step.getColumns().begin(), step.getColumns().end()};
         NamesAndTypes arbitrary_names;
@@ -1529,6 +1529,20 @@ String ColumnPruningVisitor::selectColumnWithMinSize(NamesAndTypesList source_co
             {
                 source_columns.remove(column);
             }
+
+            // tmp fix for 40113_lowcard_nullable_subcolumn
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & columns_desc = metadata_snapshot->getColumns();
+            source_columns.erase(
+                std::remove_if(
+                    source_columns.begin(),
+                    source_columns.end(),
+                    [&](const auto & type_and_name) {
+                        auto column_opt = columns_desc.tryGetColumnOrSubcolumn(GetColumnsOptions::Ordinary, type_and_name.name);
+                        return column_opt && column_opt->isSubcolumn()
+                            && !!(dynamic_cast<const DataTypeLowCardinality *>(column_opt->getTypeInStorage().get()));
+                    }),
+                source_columns.end());
         }
         /// If we have no information about columns sizes, choose a column of minimum size of its data type.
         return ExpressionActions::getSmallestColumn(source_columns);

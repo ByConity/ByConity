@@ -111,7 +111,7 @@ StorageMaterializedPostgreSQL::StorageMaterializedPostgreSQL(StoragePtr nested_s
     , nested_context(makeNestedTableContext(context_->getGlobalContext()))
     , nested_table_id(nested_storage_->getStorageID())
 {
-    setInMemoryMetadata(nested_storage_->getInMemoryMetadata());
+    setInMemoryMetadata(nested_storage_->getInMemoryMetadataCopy());
 }
 
 
@@ -203,7 +203,7 @@ std::shared_ptr<Context> StorageMaterializedPostgreSQL::makeNestedTableContext(C
 StoragePtr StorageMaterializedPostgreSQL::prepare()
 {
     auto nested_table = getNested();
-    setInMemoryMetadata(nested_table->getInMemoryMetadata());
+    setInMemoryMetadata(nested_table->getInMemoryMetadataCopy());
     has_nested.store(true);
     return nested_table;
 }

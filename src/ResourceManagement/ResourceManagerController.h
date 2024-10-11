@@ -43,7 +43,6 @@ class VirtualWarehouseManager;
 class WorkerGroupManager;
 class ResourceTracker;
 class ElectionController;
-class WorkerGroupResourceCoordinator;
 class IWorkerGroup;
 using WorkerGroupPtr = std::shared_ptr<IWorkerGroup>;
 struct ResourceCoordinateDecision;
@@ -65,7 +64,6 @@ public:
     auto & getVirtualWarehouseManager() { return *vw_manager; }
     auto & getWorkerGroupManager() { return *group_manager; }
     auto & getElectionController() { return *election_controller; }
-    auto & getWorkerGroupResourceCoordinator() { return *wg_resource_coordinator; }
 
     void registerWorkerNode(const WorkerNodeResourceData & data); // RPC
     void removeWorkerNode(const std::string & worker_id, const std::string & vw_name, const std::string & group_id);
@@ -83,16 +81,12 @@ public:
         std::lock_guard<bthread::Mutex> * vw_lock = nullptr,
         std::lock_guard<bthread::Mutex> * wg_lock = nullptr);
 
-    CoordinateDecisions swapCoordinateDecisions();
-
-
 private:
     LoggerPtr log{nullptr};
 
     std::unique_ptr<ResourceTracker> resource_tracker;
     std::unique_ptr<VirtualWarehouseManager> vw_manager;
     std::unique_ptr<WorkerGroupManager> group_manager;
-    std::unique_ptr<WorkerGroupResourceCoordinator> wg_resource_coordinator;
     std::unique_ptr<ElectionController> election_controller;
 };
 

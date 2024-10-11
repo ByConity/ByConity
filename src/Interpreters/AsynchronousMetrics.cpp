@@ -38,6 +38,7 @@
 #include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/PrimaryIndexCache.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
@@ -722,11 +723,10 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         }
     }
 
+    if (auto gin_store_reader_factory = getContext()->getGINStoreReaderFactory())
     {
-        if (auto gin_store_cache = getContext()->getGinIndexStoreFactory())
-        {
-            new_values["GinStoreCacheWeight"] = gin_store_cache->cacheWeight();
-        }
+        new_values["GINReaderFactoryCacheBytes"] = gin_store_reader_factory->residentMemory();
+        new_values["GINReaderFactorySSTBlockCacheBytes"] = gin_store_reader_factory->sstBlockCacheSize();
     }
 
 #if USE_EMBEDDED_COMPILER

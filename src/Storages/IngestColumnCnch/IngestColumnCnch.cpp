@@ -231,7 +231,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     if (!num_of_workers)
         throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
 
-    auto ordered_key_names = getOrderedKeys(command.key_names, target_table.getInMemoryMetadata());
+    auto ordered_key_names = getOrderedKeys(command.key_names, *target_table.getInMemoryMetadataPtr());
     auto ingest_column_names = command.column_names;
 
     if (context->getSettingsRef().optimize_ingest_with_bucket

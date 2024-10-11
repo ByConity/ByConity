@@ -75,6 +75,7 @@
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanPrinter.h>
 
 #include "AsyncQueryManager.h"
 #include "Core/Protocol.h"
@@ -445,12 +446,21 @@ void TCPHandler::runImpl()
                                     }
 
                                     if (auto pipline_executor = executor.getPipelineExecutor())
+                                    {
                                         GraphvizPrinter::printPipeline(
                                             pipline_executor->getProcessors(),
                                             pipline_executor->getExecutingGraph(),
                                             context,
                                             0,
                                             "coordinator");
+                                        if (context->getSettingsRef().log_explain_analyze_type != LogExplainAnalyzeType::NONE)
+                                        {
+                                            auto segment_profile = PlanSegmentProfile::getFromProcessors(pipline_executor->getProcessors(), context);
+                                            const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
+                                            scheduler->updateSegmentProfile(segment_profile);
+                                        }
+                                    }
+
                                 }
                             }
                             else if (io.in) /// `INSERT INFILE` in worker side
@@ -492,9 +502,9 @@ void TCPHandler::runImpl()
                 if (!state.plan_segment)
                 {
                     state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
-                    
-                    if (OutfileTarget::checkOutfileWithTcpOnServer(query_context))
-                    {   
+
+                    if (query_context->isAlreadyOutfile())
+                    {
                         sendEndOfStream();
                         return; // all data already outfile in executequery()
                     }
@@ -910,8 +920,16 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         }
 
         if (auto pipline_executor = executor.getPipelineExecutor())
+        {
             GraphvizPrinter::printPipeline(
                 pipline_executor->getProcessors(), pipline_executor->getExecutingGraph(), query_context, 0, "coordinator");
+            if (query_context->getSettingsRef().log_explain_analyze_type != LogExplainAnalyzeType::NONE)
+            {
+                auto segment_profile = PlanSegmentProfile::getFromProcessors(pipline_executor->getProcessors(), query_context);
+                const SegmentSchedulerPtr & scheduler = query_context->getSegmentScheduler();
+                scheduler->updateSegmentProfile(segment_profile);
+            }
+        }
 
         /** If data has run out, we will send the profiling data and total values to
           * the last zero block to be able to use

@@ -79,6 +79,5 @@ private:
 
     friend class ResourceManagerController;
     friend class WorkerGroupManager;
-    friend class WorkerGroupResourceCoordinator;
 };
 }

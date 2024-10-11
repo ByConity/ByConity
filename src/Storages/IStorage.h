@@ -226,7 +226,7 @@ public:
     /// NOTE: this function has significantly higher overhead than getInMemoryMetadataPtr()
     /// due to the need to copy StorageInMemoryMetadata.
     /// Prefer use getInMemoryMetadataPtr() if only read access is needed.
-    StorageInMemoryMetadata getInMemoryMetadata() const { return *metadata.get(); }
+    StorageInMemoryMetadata getInMemoryMetadataCopy() const { return *metadata.get(); }
 
     /// Get immutable version (snapshot) of storage metadata. Metadata object is
     /// multiversion, so it can be concurrently changed, but returned copy can be

@@ -187,7 +187,7 @@ Pipe IStorage::alterPartition(
 void IStorage::alter(const AlterCommands & params, ContextPtr context, TableLockHolder &)
 {
     auto table_id = getStorageID();
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
     params.apply(new_metadata, context);
     DatabaseCatalog::instance().getDatabase(table_id.database_name, context)->alterTable(context, table_id, new_metadata);
     setInMemoryMetadata(new_metadata);
@@ -240,7 +240,8 @@ Names IStorage::getAllRegisteredNames() const
 {
     Names result;
     auto getter = [](const auto & column) { return column.name; };
-    const NamesAndTypesList & available_columns = getInMemoryMetadata().getColumns().getAllPhysical();
+    auto storage_metadata = getInMemoryMetadataPtr();
+    const NamesAndTypesList & available_columns = storage_metadata->getColumns().getAllPhysical();
     std::transform(available_columns.begin(), available_columns.end(), std::back_inserter(result), getter);
     return result;
 }
@@ -325,7 +326,7 @@ UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_c
 
     if (auto ts = getColumnsCommitTimeInternal(commit_time.toUInt64(), part_columns); ts)
         return ts;
-    
+
     for (auto it = previous_versions_part_columns.crbegin(); it != previous_versions_part_columns.crend(); it++)
     {
         if (auto ts = getColumnsCommitTimeInternal(it->first, it->second); ts)

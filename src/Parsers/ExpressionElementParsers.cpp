@@ -33,7 +33,6 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Parsers/DumpASTNode.h>
-#include "Common/Logger.h"
 #include <Common/typeid_cast.h>
 #include <Common/BinStringDecodeHelper.h>
 

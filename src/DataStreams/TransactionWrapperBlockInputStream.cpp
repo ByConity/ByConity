@@ -1,4 +1,5 @@
 #include <DataStreams/TransactionWrapperBlockInputStream.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -11,7 +12,8 @@ TransactionWrapperBlockInputStream::TransactionWrapperBlockInputStream(
 
 Block TransactionWrapperBlockInputStream::readImpl()
 {
-    return children.back()->read();
+    auto block = children.back()->read();
+    return block;
 }
 
 void TransactionWrapperBlockInputStream::readSuffixImpl()

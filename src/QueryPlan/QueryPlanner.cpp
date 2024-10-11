@@ -325,12 +325,13 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns, node);
 
+    auto total_affected_row_count_symbol = context->getSymbolAllocator()->newSymbol("inserted_rows");
     auto insert_node = select_plan.getRoot()->addStep(
         context->nextNodeId(),
-        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target, insert_select_with_profiles),
+        std::make_shared<TableWriteStep>(
+            select_plan.getRoot()->getCurrentDataStream(), target, insert_select_with_profiles, total_affected_row_count_symbol),
         {select_plan.getRoot()});
 
-    auto total_affected_row_count_symbol = context->getSymbolAllocator()->newSymbol("rows");
     // plan = PlanNodeBase::createPlanNode(
     //     context.nextNodeId(),
     //     std::make_shared<TableFinishStep>(plan->getCurrentDataStream(), target, total_affected_row_count_symbol),
@@ -338,7 +339,8 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto return_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node, insert_select_with_profiles),
+        std::make_shared<TableFinishStep>(
+            insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node, insert_select_with_profiles),
         {insert_node});
 
     PRINT_PLAN(return_node, plan_insert);
@@ -1627,7 +1629,8 @@ void QueryPlannerVisitor::planDistinct(PlanBuilder & builder, ASTSelectQuery & s
         extractDistinctSizeLimits(),
         limit_for_distinct,
         builder.translateToSymbols(select_expressions),
-        false);
+        false,
+        true);
 
     builder.addStep(std::move(distinct_step));
     PRINT_PLAN(builder.plan, plan_distinct);
@@ -2300,8 +2303,10 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
                                               .sub_column_symbols.at(field_sub_col_id.second);
                     sub_col_types.push_back(sub_plan_types[select_id].at(sub_col_symbol));
                 }
-                sub_column_type_coercions.emplace_back(
-                    getLeastSupertype(sub_col_types, context->getSettingsRef().allow_extended_type_conversion));
+                sub_column_type_coercions.emplace_back(getCommonType(
+                    sub_col_types,
+                    context->getSettingsRef().enable_implicit_arg_type_convert,
+                    context->getSettingsRef().allow_extended_type_conversion));
             }
         }
     }
@@ -2436,7 +2441,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             distinct_columns.push_back(set_operation_node->getCurrentDataStream().header.getByPosition(i).name);
 
         auto distinct_step = std::make_shared<DistinctStep>(
-            set_operation_node->getCurrentDataStream(), extractDistinctSizeLimits(), 0, distinct_columns, false);
+            set_operation_node->getCurrentDataStream(), extractDistinctSizeLimits(), 0, distinct_columns, false, true);
 
         auto distinct_node = set_operation_node->addStep(context->nextNodeId(), std::move(distinct_step));
 

@@ -141,7 +141,7 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
     else if (key.starts_with("TP_"))
         std::cout << formatDataModel<DB::Protos::PartitionMeta>(metadata) << std::endl;
-    else if (key.starts_with("PT_"))
+    else if (key.starts_with("PT_") || key.starts_with("STG_PT_") || key.starts_with("DP_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
     else if (key.starts_with("DLB_") || key.starts_with("DDLB_"))
         std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
@@ -351,7 +351,7 @@ private:
         {
             MetaCommand cmd = MetaCommand::parse(command);
             std::string full_key = name_space.empty() ? cmd.key : Catalog::escapeString(name_space) + '_' + cmd.key;
-            size_t key_offset = name_space.empty() ? 0 : name_space.size() + 1;
+            size_t key_offset = name_space.empty() ? 0 : Catalog::escapeString(name_space).size() + 1;
             switch (cmd.type)
             {
                 case MetaCommandType::HELP:

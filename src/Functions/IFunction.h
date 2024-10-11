@@ -201,6 +201,11 @@ public:
       */
     virtual bool isSuitableForConstantFolding() const { return true; }
 
+    /** Some functions are not suitable for constant folding in optimizer. Reasons can be found in
+        those functions that overrides this method.
+      */
+    virtual bool isSuitableForConstantFoldingInOptimizer() const { return isSuitableForConstantFolding(); }
+
     /** If function isSuitableForConstantFolding then, this method will be called during query analyzis
       * if some arguments are constants. For example logical functions (AndFunction, OrFunction) can
       * return they result based on some constant arguments.
@@ -484,6 +489,7 @@ public:
 
     /// Properties from IFunctionBase (see IFunction.h)
     virtual bool isSuitableForConstantFolding() const { return true; }
+    virtual bool isSuitableForConstantFoldingInOptimizer() const { return isSuitableForConstantFolding(); }
     virtual ColumnPtr getConstantResultForNonConstArguments(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/) const { return nullptr; }
     virtual bool isInjective(const ColumnsWithTypeAndName & /*sample_columns*/) const { return false; }
     virtual bool isDeterministic() const { return true; }

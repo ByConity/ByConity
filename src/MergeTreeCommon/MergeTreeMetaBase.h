@@ -96,6 +96,10 @@ public:
         const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr,
         StorageLocation locaiton = StorageLocation::MAIN) const;
 
+    /// Check the number of parts and block writing if needed
+    std::pair<Int64, Int64> getCnchPartsInfo() const;
+    void cnchDelayInsertOrThrowIfNeeded() const;
+
     /// Parameters for various modes.
     struct MergingParams
     {

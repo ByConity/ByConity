@@ -155,7 +155,7 @@ struct UndoResource
     /// Part        | name           | relative_path  | null           |
     /// DeleteBitmap| name           | relative_path  | null           |
 
-    /// Becareful with the order of the `args`, don't change it unless you know what you are doing
+    /// Be careful with the order of the `args`, don't change it unless you know what you are doing
     template <typename... Args>
     UndoResource(TxnTimestamp txn_id_, UndoResourceType type_, Args&&... args) : txn_id(txn_id_.toUInt64())
     {

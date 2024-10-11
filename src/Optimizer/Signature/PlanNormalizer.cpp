@@ -14,76 +14,74 @@
 
 namespace DB
 {
-
-namespace
+StepAndOutputOrder NormalizeVisitor::visitCTERefNodeImpl(PlanNodeBase & node, PlanNormalizer::NormalSteps & normal_steps)
 {
-// NormalizeVisitor is actually a ConstVisitor, which normalizes each step in the tree in post-order
-class NormalizeVisitor : public PlanNodeVisitor<StepAndOutputOrder, PlanNormalizer::NormalSteps>
+    auto node_ptr = node.shared_from_this();
+    if (auto it = normal_steps.find(node_ptr); it != normal_steps.end())
+        return it->second;
+
+    std::vector<StepAndOutputOrder> cte_root_result{};
+    CTEId cte_id = static_pointer_cast<CTERefStep>(node.getStep())->getId();
+    cte_root_result.emplace_back(VisitorUtil::accept(cte_info.getCTEs().at(cte_id), *this, normal_steps));
+    StepAndOutputOrder step_result = step_normalizer.normalize(node.getStep(), std::move(cte_root_result));
+    normal_steps.emplace(node_ptr, step_result);
+    return step_result;
+}
+
+StepAndOutputOrder NormalizeVisitor::visitPlanNodeImpl(PlanNodeBase & node, PlanNormalizer::NormalSteps & normal_steps)
 {
-public:
-    static StepAndOutputOrder
-    normalize(PlanNodePtr node, const CTEInfo & _cte_info, ContextPtr _context, PlanNormalizer::NormalSteps & normal_steps)
-    {
-        NormalizeVisitor visitor(_cte_info, _context);
-        return VisitorUtil::accept(node, visitor, normal_steps);
-    }
+    auto node_ptr = node.shared_from_this();
+    if (auto it = normal_steps.find(node_ptr); it != normal_steps.end())
+        return it->second;
 
-protected:
-    StepAndOutputOrder visitPlanNode(PlanNodeBase & node, PlanNormalizer::NormalSteps & normal_steps) override { return visitPlanNodeImpl(node, normal_steps); }
-    StepAndOutputOrder visitCTERefNode(CTERefNode & node, PlanNormalizer::NormalSteps & normal_steps) override { return visitCTERefNodeImpl(node, normal_steps); }
-    StepAndOutputOrder visitPlanNodeImpl(PlanNodeBase & node, PlanNormalizer::NormalSteps & normal_steps)
-    {
-        auto node_ptr = node.shared_from_this();
-        if (auto it = normal_steps.find(node_ptr); it != normal_steps.end())
-            return it->second;
+    std::vector<StepAndOutputOrder> children_results{};
+    for (const auto & child : node.getChildren())
+        children_results.emplace_back(VisitorUtil::accept(child, *this, normal_steps));
+    StepAndOutputOrder step_result = step_normalizer.normalize(node.getStep(), std::move(children_results));
+    normal_steps.emplace(node_ptr, step_result);
+    return step_result;
+}
 
-        std::vector<StepAndOutputOrder> children_results{};
-        for (const auto & child : node.getChildren())
-            children_results.emplace_back(VisitorUtil::accept(child, *this, normal_steps));
-        StepAndOutputOrder step_result = step_normalizer.normalize(node.getStep(), std::move(children_results));
-        normal_steps.emplace(node_ptr, step_result);
-        return step_result;
-    }
-    StepAndOutputOrder visitCTERefNodeImpl(PlanNodeBase & node, PlanNormalizer::NormalSteps & normal_steps)
-    {
-        auto node_ptr = node.shared_from_this();
-        if (auto it = normal_steps.find(node_ptr); it != normal_steps.end())
-            return it->second;
+StepAndOutputOrder NormalizeNodeVisitor::normalize(
+    ContextPtr _context,
+    QueryPlan::Node * node,
+    std::unordered_map<QueryPlan::Node *, StepAndOutputOrder> & results,
+    PlanNormalizerOptions options)
+{
+    NormalizeNodeVisitor visitor(_context, options);
+    return VisitorUtil::accept(node, visitor, results);
+}
 
-        std::vector<StepAndOutputOrder> cte_root_result{};
-        CTEId cte_id = static_pointer_cast<CTERefStep>(node.getStep())->getId();
-        cte_root_result.emplace_back(VisitorUtil::accept(cte_info.getCTEs().at(cte_id), *this, normal_steps));
-        StepAndOutputOrder step_result = step_normalizer.normalize(node.getStep(), std::move(cte_root_result));
-        normal_steps.emplace(node_ptr, step_result);
-        return step_result;
-    }
+StepAndOutputOrder
+NormalizeNodeVisitor::visitNode(QueryPlan::Node * node, std::unordered_map<QueryPlan::Node *, StepAndOutputOrder> & results)
+{
+    if (auto iter = results.find(node); iter != results.end())
+        return iter->second;
+    std::vector<StepAndOutputOrder> children_results{};
+    for (auto * child : node->children)
+        children_results.emplace_back(VisitorUtil::accept(child, *this, results));
+    StepAndOutputOrder step_result = step_normalizer.normalize(node->step, std::move(children_results));
+    results.emplace(node, step_result);
+    return step_result;
+}
 
-private:
-    const CTEInfo & cte_info;
-    StepNormalizer step_normalizer;
-    explicit NormalizeVisitor(const CTEInfo & _cte_info, ContextPtr _context): cte_info(_cte_info), step_normalizer(_context)
-    {
-    }
-};
-} // anonymous namespace
-
-StepAndOutputOrder PlanNormalizer::computeNormalStepImpl(PlanNodePtr node)
+StepAndOutputOrder PlanNormalizer::computeNormalStepImpl(PlanNodePtr node, PlanNormalizerOptions options)
 {
     if (auto it = normal_steps.find(node); it != normal_steps.end())
         return it->second;
 
-    return NormalizeVisitor::normalize(node, cte_info, context, normal_steps);
+    return NormalizeVisitor::normalize(node, cte_info, context, normal_steps, options);
 }
 
-PlanNodePtr PlanNormalizer::buildNormalPlanImpl(PlanNodePtr node)
+PlanNodePtr PlanNormalizer::buildNormalPlanImpl(PlanNodePtr node, PlanNormalizerOptions options)
 {
     if (!node)
         return nullptr;
 
     PlanNodes new_children;
     for (const auto & child : node->getChildren())
-        new_children.emplace_back(buildNormalPlanImpl(child));
-    QueryPlanStepPtr normal_step = computeNormalStepImpl(node).normal_step;
+        new_children.emplace_back(buildNormalPlanImpl(child, options));
+    QueryPlanStepPtr normal_step = computeNormalStepImpl(node, options).normal_step;
     return PlanNodeBase::createPlanNode(node->getId(), normal_step, std::move(new_children));
 }
 

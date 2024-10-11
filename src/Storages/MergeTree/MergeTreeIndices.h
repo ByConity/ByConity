@@ -11,7 +11,7 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include <Interpreters/ExpressionActions.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
 
 constexpr auto INDEX_FILE_PREFIX = "skp_idx_";
 
@@ -84,7 +84,7 @@ struct IMergeTreeIndex
 
     virtual MergeTreeIndexAggregatorPtr createIndexAggregator() const = 0;
 
-    virtual MergeTreeIndexAggregatorPtr createIndexAggregatorForPart([[maybe_unused]] const GinIndexStorePtr & store) const
+    virtual MergeTreeIndexAggregatorPtr createIndexAggregatorForPart([[maybe_unused]] GINStoreWriter * writer) const
     {
         return createIndexAggregator();
     }

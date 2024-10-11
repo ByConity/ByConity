@@ -93,7 +93,7 @@ private:
     LoggerPtr log;
     mutable std::mutex last_exception_mutex;
     String last_exception;
-    UInt64 rdkafka_exception_times{0};
+    UInt64 need_delay_exception_times{0};
 
     StorageID cnch_storage_id{StorageID::createEmpty()};
     bool cloud_table_has_unique_key{false};

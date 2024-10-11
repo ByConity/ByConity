@@ -33,7 +33,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Disks/DiskByteS3.h>
 #include <Disks/DiskType.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/PartitionCommands.h>
 #include <Parsers/ParserPartition.h>
@@ -63,6 +62,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT_VERSION;
     extern const int BAD_ARGUMENTS;
     extern const int DIRECTORY_ALREADY_EXISTS;
+    extern const int UNKNOWN_DISK;
 }
 
 IMergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector& parts)
@@ -206,221 +206,11 @@ String AttachFilter::toString() const
     __builtin_unreachable();
 }
 
-void AttachContext::writeRenameRecord(const DiskPtr & disk, const String & from, const String & to)
-{
-    LOG_TRACE(logger, fmt::format("Write rename record, disk path {}, relative path {} -> {}", disk->getPath(), from, to));
-
-    std::lock_guard<std::mutex> lock(mu);
-
-    auto & res = resources[disk->getName()];
-    res.disk = disk;
-    res.rename_map[from] = to;
-}
-
-void AttachContext::writeCopyPartRecord(const DiskPtr & disk, const String & part_name)
-{
-    LOG_TRACE(logger, "Write copy part record, disk path {}, part name {}", disk->getPath(), part_name);
-
-    std::lock_guard<std::mutex> lock(mu);
-
-    auto & res = resources[disk->getName()];
-    res.disk = disk;
-    res.copy_part.emplace_back(part_name);
-}
-
-void AttachContext::writeCopyBitmapRecord(const DiskPtr & disk, const String & bitmap_name, const String & to_path)
-{
-    LOG_TRACE(logger, "Write copy bitmap record, disk path {}, bitmap name {}, to_path {}", disk->getPath(), bitmap_name, to_path);
-
-    std::lock_guard<std::mutex> lock(mu);
-
-    auto & res = resources[disk->getName()];
-    res.disk = disk;
-    res.copy_bitmap[bitmap_name] = to_path;
-}
-
-void AttachContext::writeDetachedPartRecord(const DiskPtr & disk, const String & part_path)
-{
-    LOG_TRACE(logger, "Write detached part record, disk path {}, relative part path {}", disk->getPath(), part_path);
-
-    std::lock_guard<std::mutex> lock(mu);
-
-    auto & res = detached_parts_to_delete[disk->getName()];
-    res.disk = disk;
-    // here we reuse copy_part to record part path in detached directory
-    res.copy_part.emplace_back(part_path);
-}
-
-void AttachContext::writeMetaFilesNameRecord(const DB::DiskPtr & disk, const DB::String & meta_file_name)
-{
-    LOG_TRACE(
-        logger,
-        fmt::format(
-            "Write meta files name to delete record for attaching unique table parts, in disk {}, relative file path {}",
-            disk->getPath(),
-            meta_file_name));
-
-    std::lock_guard<std::mutex> lock(mu);
-
-    auto & res = meta_files_to_delete[disk->getName()];
-    res.disk = disk;
-    res.rename_map[meta_file_name] = "";
-}
-
-void AttachContext::writeRenameMapToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id)
-{
-    UndoResources undo_buffers;
-    for (const auto & [disk_name, resource] : resources)
-    {
-        for (const auto & [from, to] : resource.rename_map)
-        {
-            undo_buffers.emplace_back(txn_id, UndoResourceType::FileSystem,
-                from, to);
-            undo_buffers.back().setDiskName(disk_name);
-        }
-    }
-    catalog.writeUndoBuffer(storage_id, txn_id, undo_buffers);
-}
-
-// Generate undo buffers of UndoResourceType::Part and UndoResourceType::DeleteBitmap
-void AttachContext::writeCopyRecordToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id)
-{
-    UndoResources undo_buffers;
-    for (const auto & [disk_name, resource] : resources)
-    {
-        for (const auto & part_name : resource.copy_part)
-        {
-            undo_buffers.emplace_back(txn_id, UndoResourceType::Part, part_name, fs::path(part_name) / "");
-            undo_buffers.back().setDiskName(disk_name);
-        }
-
-        for (const auto & [bitmap_name, to_path] : resource.copy_bitmap)
-        {
-            undo_buffers.emplace_back(txn_id, UndoResourceType::DeleteBitmap, bitmap_name, to_path);
-            undo_buffers.back().setDiskName(disk_name);
-        }
-    }
-    catalog.writeUndoBuffer(storage_id, txn_id, undo_buffers);
-}
-
-void AttachContext::commit(bool has_exception)
-{
-    if (new_txn != nullptr)
-    {
-        query_ctx.getCnchTransactionCoordinator().finishTransaction(new_txn);
-    }
-
-    /// If we're not in the interactive transaction session, at this point it's safe
-    /// to remove the directory lock
-    if (!src_directory.empty() && !isQueryInInteractiveSession(query_ctx.shared_from_this()) && !query_ctx.getSettingsRef().force_clean_transaction_by_dm)
-        query_ctx.getCnchCatalog()->clearFilesysLocks({src_directory}, std::nullopt);
-
-    // Remove parts in detached directory
-    // TBD: if having exception for attach partition, we leave parts in detached directory unchanged, in case they will be used in future. As exception does
-    // not mean the transaction really failes, this is a false-positive operation which may result in parts remaining in detached directory. We don't think
-    // this is a key issue, as attach parts from its own detached directory by using copy is a low-frequent command and it is relatively easier to clear remaining
-    // parts under detached directory.
-    if (!detached_parts_to_delete.empty() && !has_exception)
-    {
-        size_t total_records = 0;
-        for (const auto & [_, resource] : detached_parts_to_delete)
-            total_records += resource.copy_part.size();
-        LOG_INFO(logger, "Ready to remove {} parts in detached directory", total_records);
-
-        ThreadPool & pool = getWorkerPool(total_records);
-        for (const auto & [_, resource] : detached_parts_to_delete)
-        {
-            for (const auto & part_path : resource.copy_part)
-            {
-                pool.scheduleOrThrowOnError([&disk = resource.disk, &path = part_path, logger = logger](){
-                    try
-                    {
-                        disk->removeRecursive(path);
-                    }
-                    catch (...)
-                    {
-                        LOG_WARNING(logger, "Failed to remove {}, exception is {}", path, getCurrentExceptionMessage(false));
-                    }
-                });
-            }
-        }
-        pool.wait();
-    }
-
-    // Remove .meta and .bitmap in detached directory. It is same as removing data parts as described above
-    if (!meta_files_to_delete.empty() && !has_exception)
-    {
-        size_t total_records = 0;
-        for (const auto & [_, meta_name_records] : meta_files_to_delete)
-            total_records += meta_name_records.rename_map.size();
-        ThreadPool & pool = getWorkerPool(total_records);
-        for (const auto & [_, meta_name_records] : meta_files_to_delete)
-        {
-            for (const auto & [file_path, __] : meta_name_records.rename_map)
-                pool.scheduleOrThrowOnError([&disk = meta_name_records.disk, path = file_path]() { disk->removeFileIfExists(path); });
-        }
-        pool.wait();
-    }
-}
-
-void AttachContext::rollback()
-{
-    if (new_txn != nullptr)
-    {
-        query_ctx.getCnchTransactionCoordinator().finishTransaction(new_txn);
-    }
-
-    size_t total_records = 0;
-    for (const auto& [_, resource] : resources)
-    {
-        total_records += resource.rename_map.size();
-    }
-
-    ThreadPool& pool = getWorkerPool(total_records);
-    for (const auto& [_, resource] : resources)
-    {
-        for (const auto& entry : resource.rename_map)
-        {
-            pool.scheduleOrThrowOnError([&disk = resource.disk, from=entry.first, to=entry.second]() {
-                if (disk->exists(to))
-                {
-                    disk->moveDirectory(to, from);
-                }
-            });
-        }
-    }
-    pool.wait();
-}
-
-ThreadPool& AttachContext::getWorkerPool(int job_nums)
-{
-    bool need_create_thread_pool = worker_pool == nullptr || worker_pool->finished();
-    if (!need_create_thread_pool)
-    {
-        // Already have a thread pool
-        if ((job_nums - static_cast<int>(worker_pool->getMaxThreads())) \
-            > expand_thread_pool_threshold)
-        {
-            worker_pool->wait();
-            worker_pool = nullptr;
-
-            need_create_thread_pool = true;
-        }
-    }
-
-    if (need_create_thread_pool)
-    {
-        worker_pool = std::make_unique<ThreadPool>(
-            std::max(1, std::min(max_worker_threads, job_nums)));
-    }
-    return *worker_pool;
-}
-
 void CnchAttachProcessor::checkOperationValid() const
 {
     if (is_unique_tbl && command.replace)
         throw Exception("Replace partition is not supported for unique table", ErrorCodes::NOT_IMPLEMENTED);
-    
+
     if (is_unique_tbl && !command.attach_from_detached && !command.from_table.empty())
         throw Exception("Attach partition from is not supported for unique table", ErrorCodes::NOT_IMPLEMENTED);
 
@@ -440,6 +230,8 @@ void CnchAttachProcessor::exec()
 
     AttachContext attach_ctx(*query_ctx, 8,
         query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
+    attach_ctx.determineOperationType(command, enable_copy_for_partition_operation);
+
     NameSet staged_part_names;
     NameSet partitions_filter;
     std::vector<ASTPtr> attached_partitions;
@@ -452,7 +244,7 @@ void CnchAttachProcessor::exec()
         // position, then calculate parts chain and return all visible parts
         std::pair<AttachFilter, PartsFromSources> collect_res = collectParts(attach_ctx);
         filter = collect_res.first;
-        PartsFromSources& parts_from_sources = collect_res.second;
+        PartsFromSources & parts_from_sources = collect_res.second;
 
         // Assign new part name and rename it to target location
         PartsWithHistory prepared_parts = prepareParts(parts_from_sources, attach_ctx);
@@ -575,7 +367,6 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
         if (command.attach_from_detached)
         {
             auto partition_id = from_cnch_table->getPartitionIDFromQuery(command.partition, query_ctx);
-
             filter = AttachFilter::createPartitionFilter(partition_id);
             chained_parts_from_sources = collectPartsFromTableDetached(*from_cnch_table, filter, attach_ctx);
         }
@@ -763,7 +554,6 @@ CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilte
         case DiskType::Type::ByteHDFS:
         {
             auto [src_path, disk] = findBestDiskForHDFSPath(path);
-
             int drill_down_level = query_ctx->getSettingsRef().cnch_part_attach_drill_down;
             std::vector<CollectSource> sources = discoverCollectSources(target_tbl, disk, src_path, drill_down_level);
 
@@ -771,9 +561,16 @@ CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilte
         }
         case DiskType::Type::ByteS3:
         {
+            Poco::URI uri(path);
+            if (isS3URIScheme(uri.getScheme()))
+                return collectPartsFromS3Path(target_tbl, path, filter, attach_ctx);
             // This is to handle parts generated from part writer. In this way, unique table will not generate bitmap. See more detail in doc: Unique Table Batch Loading Doc
             // Read info from task meta file
-            return collectPartsFromS3TaskMeta(target_tbl, path, filter, attach_ctx);
+            else
+            {
+                attach_ctx.operation_type = AttachContext::OperationType::MOVE_FROM_TASK;
+                return collectPartsFromS3TaskMeta(target_tbl, path, filter, attach_ctx);
+            }
         }
         default:
             throw Exception(
@@ -906,8 +703,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
         {
             load_pool.scheduleOrThrowOnError([this, part]() {
                 injectFailure(AttachFailurePoint::LOAD_PART);
-
-                part->loadFromFileSystem(true);
+                part->loadFromFileSystem();
             });
         }
     }
@@ -917,10 +713,81 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
     for (MutableMergeTreeDataPartsCNCHVector& parts : parts_from_sources)
     {
         auto const_parts = fromCNCHPartsVec(parts);
-        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false));
+        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false, CnchPartsHelper::getLoggingOption(*query_ctx)));
     }
 
     return parts_from_sources;
+}
+
+CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Path(
+    StorageCnchMergeTree & target_table, const String & path, const AttachFilter & filter, AttachContext & attach_ctx)
+{
+    S3::URI s3_uri(path);
+    DiskPtr disk = target_table.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(0)->getDefaultDisk();
+    std::shared_ptr<DiskByteS3> table_disk = std::dynamic_pointer_cast<DiskByteS3>(disk);
+    if (table_disk == nullptr)
+    {
+        throw Exception("Failed to cast table's default disk to ByteS3 when attach", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    std::shared_ptr<DiskByteS3> source_disk;
+    String dir_path;
+    // Check given path is under disk of target table
+    if (s3_uri.bucket == table_disk->getS3Bucket())
+    {
+        source_disk = table_disk;
+        dir_path = relativePathTo(table_disk->getPath(), s3_uri.key);
+    }
+    else
+        throw Exception(
+            ErrorCodes::UNKNOWN_DISK, "Given bucket {} is not same as of target table {}", s3_uri.bucket, table_disk->getS3Bucket());
+
+    if (!source_disk->exists(dir_path))
+        throw Exception(fmt::format("Path {} doesn't exist", dir_path), ErrorCodes::BAD_ARGUMENTS);
+
+    MutableMergeTreeDataPartsCNCHVector founded_parts;
+    auto volume = std::make_shared<SingleDiskVolume>("single_disk_vol", source_disk);
+    for (auto iter = source_disk->iterateDirectory(dir_path); iter->isValid(); iter->next())
+    {
+        String file_path = iter->name();
+        String part_name = fs::path(file_path).parent_path().filename();
+        MergeTreePartInfo part_info;
+        if (MergeTreePartInfo::tryParsePartName(part_name, &part_info, target_table.format_version))
+        {
+            if (filter.filter(part_info))
+            {
+                founded_parts.emplace_back(std::make_shared<MergeTreeDataPartCNCH>(
+                    target_table, part_name, volume, relativePathTo(table_disk->getPath(), fs::path(file_path).parent_path())));
+                // load delete bitmap for unique table
+                if (is_unique_tbl)
+                {
+                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                    part_delete_file_relative_paths[iter->name()] = relativePathTo(
+                        target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
+                        fs::path(dir_path) / DeleteBitmapMeta::delete_files_dir);
+                }
+            }
+        }
+    }
+
+    // Parallel load parts
+    auto & load_pool = attach_ctx.getWorkerPool(founded_parts.size());
+    for (const MutableMergeTreeDataPartCNCHPtr & part : founded_parts)
+    {
+        load_pool.scheduleOrThrowOnError([this, part]() {
+            injectFailure(AttachFailurePoint::LOAD_PART);
+            part->loadFromFileSystem();
+        });
+    }
+    load_pool.wait();
+
+    IMergeTreeDataPartsVector drop_ranges;
+    IMergeTreeDataPartsVector all_parts = fromCNCHPartsVec(founded_parts);
+    IMergeTreeDataPartsVector visible_parts = CnchPartsHelper::calcVisibleParts(
+        all_parts, false, false, &drop_ranges, nullptr,
+        CnchPartsHelper::getLoggingOption(*query_ctx));
+
+    return {toCNCHPartsVec(visible_parts)};
 }
 
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3TaskMeta(
@@ -977,7 +844,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
     {
         worker_pool.scheduleOrThrowOnError([this, part]() {
             injectFailure(AttachFailurePoint::LOAD_PART);
-            part->loadFromFileSystem(false);
+            part->loadFromFileSystem();
         });
     }
     worker_pool.wait();
@@ -988,10 +855,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
         all_parts, false, false, &drop_ranges, nullptr,
         CnchPartsHelper::getLoggingOption(*query_ctx));
 
-    PartsFromSources parts_from_sources(1);
-    parts_from_sources.back() = toCNCHPartsVec(visible_parts);
-
-    return parts_from_sources;
+    return {toCNCHPartsVec(visible_parts)};
 }
 
 void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts,
@@ -1001,6 +865,7 @@ void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prep
 
     TxnTimestamp commit_time;
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+    cnch_writer.setFromAttach();
 
     std::set<String> attached_partition_ids;
     ParserPartition parser;
@@ -1181,46 +1046,51 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
     auto volume = std::make_shared<SingleDiskVolume>("single_disk_vol", disk);
     for (auto iter = disk->iterateDirectory(path); iter->isValid(); iter->next())
     {
+        /// We first check whether the part matches filter, then we only issue HDFS requests for matching parts.
         String current_entry_path = std::filesystem::path(path) / iter->name();
-        if (disk->isDirectory(current_entry_path))
+        if (MergeTreePartInfo::tryParsePartName(iter->name(), &part_info, tbl.format_version))
         {
-            if (MergeTreePartInfo::tryParsePartName(iter->name(), &part_info,
-                tbl.format_version))
+            if (filter.filter(part_info))
             {
-                if (filter.filter(part_info))
+                if (!disk->isDirectory(current_entry_path))
                 {
-                    // HACK here, since part's relative path to disk is related to storage's
-                    // so, have a relative path here
-                    founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
-                        tbl, iter->name(), volume,
-                        relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
-                    // load delete bitmap for unique table
-                    if (is_unique_tbl)
-                    {
-                        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                        part_delete_file_relative_paths[iter->name()] = relativePathTo(
-                            target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
-                            std::filesystem::path(path) / DeleteBitmapMeta::delete_files_dir);
-                    }
+                    LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} is a file, skip",
+                        disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+                    continue;
                 }
-            }
-            else
-            {
-                LOG_TRACE(logger, fmt::format("Failed to parse part name from {}, "
-                    "drill down with limit {}", std::string(std::filesystem::path(disk->getPath()) / current_entry_path),
-                    max_drill_down_level - 1));
 
-                String dir_name = iter->name() + '/';
-                path += dir_name;
-                collectPartsFromUnit(tbl, disk, path, max_drill_down_level - 1,
-                    filter, founded_parts);
-                path.resize(path.size() - dir_name.size());
+                // HACK here, since part's relative path to disk is related to storage's
+                // so, have a relative path here
+                founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
+                    tbl, iter->name(), volume,
+                    relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
+                // load delete bitmap for unique table
+                if (is_unique_tbl)
+                {
+                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                    part_delete_file_relative_paths[iter->name()] = relativePathTo(
+                        target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
+                        std::filesystem::path(path) / DeleteBitmapMeta::delete_files_dir);
+                }
             }
         }
         else
         {
-            LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} "
-                "is a file, skip", disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+            if (!disk->isDirectory(current_entry_path))
+            {
+                LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} is a file, skip",
+                    disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+                continue;
+            }
+
+            LOG_TRACE(logger, fmt::format("Failed to parse part name from {}, drill down with limit {}",
+                std::string(std::filesystem::path(disk->getPath()) / current_entry_path), max_drill_down_level - 1));
+
+            String dir_name = iter->name() + '/';
+            path += dir_name;
+            collectPartsFromUnit(tbl, disk, path, max_drill_down_level - 1,
+                filter, founded_parts);
+            path.resize(path.size() - dir_name.size());
         }
     }
 }
@@ -1243,7 +1113,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromActiv
                 ++total_parts_num;
             }
         }
-        
+
         verifyPartsNum(total_parts_num);
     };
 
@@ -1297,13 +1167,13 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
 
         if (root_path.depth() > target_path.depth())
         {
-            return std::make_pair<UInt32, String>(0, "");
+            return std::pair<UInt32, String>(0, "");
         }
         for (int i = 0, limit = root_path.depth(); i < limit; ++i)
         {
             if (root_path[i] != target_path[i])
             {
-                return std::make_pair<UInt32, String>(0, "");
+                return std::pair<UInt32, String>(0, "");
             }
         }
         std::filesystem::path rel_path;
@@ -1311,8 +1181,7 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
         {
             rel_path /= target_path[i];
         }
-        return std::make_pair<UInt32, String>(target_path.depth() - root_path.depth(),
-            String(rel_path));
+        return std::pair<UInt32, String>(target_path.depth() - root_path.depth(), String(rel_path));
     };
 
     DiskPtr best_disk = nullptr;
@@ -1347,8 +1216,8 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
 }
 
 // Return flatten data parts
-CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
-    const PartsFromSources& parts_from_sources, AttachContext& attach_ctx)
+CnchAttachProcessor::PartsWithHistory
+CnchAttachProcessor::prepareParts(const PartsFromSources & parts_from_sources, AttachContext & attach_ctx)
 {
     // Old part and corresponding new part info
     std::vector<std::vector<std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>>> parts_and_infos_from_sources;
@@ -1422,10 +1291,11 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
     parts_with_history.second.resize(total_parts_count);
 
     /// remote_disk is only used for copy
-    auto remote_disk = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-    DiskType::Type remote_disk_type = remote_disk->getType();
+    auto target_disk = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+    DiskType::Type target_disk_type = target_disk->getType();
 
-    switch (remote_disk_type)
+    TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
+    switch (target_disk_type)
     {
         case DiskType::Type::ByteHDFS:
         {
@@ -1441,233 +1311,66 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             // Write rename record to kv first
             for (auto & parts_and_infos : parts_and_infos_from_sources)
             {
-                for (auto & part_and_info : parts_and_infos)
+                for (auto & [part, part_info] : parts_and_infos)
                 {
-                    IMergeTreeDataPartPtr part = part_and_info.first;
-                    MergeTreePartInfo part_info = part_and_info.second;
                     String part_name = part_info.getPartNameWithHintMutation();
                     String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
                     String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
-                    /// choose copy or rename(move)
-                    if (enable_copy_for_partition_operation)
-                    {
-                        attach_ctx.writeCopyPartRecord(remote_disk, part_name);
-                        // copy partition from its own detached directory, delete parts in detached directory after
-                        // txn is successfully finished.
-                        if (command.from_table.empty() && command.from_zookeeper_path.empty())
-                        {
-                            attach_ctx.writeDetachedPartRecord(part->volume->getDefaultDisk(), part->getFullRelativePath());
-                        }
-                    }
-                    else
-                        attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(), target_path);
+                    DiskPtr from_disk = part->volume->getDefaultDisk();
+
+                    AttachContext::UndoRecord part_undo_record(from_disk, target_disk, part_name, part->getFullRelativePath(), target_path);
+                    attach_ctx.writeUndoRecord(part_undo_record);
+
                     if (is_unique_tbl)
                     {
                         loadUniqueDeleteMeta(part, part_info);
 
-                        DataModelDeleteBitmapPtr attach_meta;
+                        DataModelDeleteBitmapPtr delete_bitmap_model;
                         String part_delete_file_relative_path;
                         {
                             std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                            attach_meta = attach_metas[part->name];
+                            delete_bitmap_model = attach_metas[part->name];
                             part_delete_file_relative_path = part_delete_file_relative_paths[part->name];
                         }
-                        if (attach_meta)
+                        if (delete_bitmap_model)
                         {
                             String bitmap_rel_path = std::filesystem::path(tbl_rel_path) / part_delete_file_relative_path;
                             String bitmap_target_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".meta");
-                            attach_ctx.writeMetaFilesNameRecord(part->volume->getDefaultDisk(), bitmap_target_path);
-                            String to_path
-                                = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
+                            // handle meta file separately since it has different file name with bitmap
+                            AttachContext::UndoRecord bitmap_meta_undo_record(from_disk, bitmap_target_path);
+                            attach_ctx.writeMetaFilesNameRecord(bitmap_meta_undo_record);
+
+                            String to_path = std::filesystem::path(tbl_rel_path)
+                                / DeleteBitmapMeta::deleteBitmapFileRelativePath(*delete_bitmap_model);
+
                             String from_path = to_path;
-                            if (attach_meta->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
-                            {
-                                // Write delete bitmap rename record
+                            if (delete_bitmap_model->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
                                 from_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".bitmap");
 
-                                // record copy delete bitmap
-                                if (enable_copy_for_partition_operation)
-                                {
-                                    attach_ctx.writeCopyBitmapRecord(remote_disk, DB::dataModelName(*attach_meta), DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta));
-
-                                    // delete bitmaps in table's own detached directory after txn is successfully finished
-                                    if (command.from_table.empty() && command.from_zookeeper_path.empty())
-                                    {
-                                        // here we reuse writeMetaFilesNameRecord as .bitmap indeed equals to .meta
-                                        attach_ctx.writeMetaFilesNameRecord(part->volume->getDefaultDisk(), from_path);
-                                    }
-                                }
-                            }
-                            /// It's necessary to write rename record no matter if it has bitmap file, because we need to write undo buffer to KV.
-                            if (!enable_copy_for_partition_operation)
-                                attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), from_path, to_path);
+                            AttachContext::UndoRecord bitmap_undo_record(
+                                from_disk, target_disk, delete_bitmap_model, from_path, to_path, true);
+                            attach_ctx.writeUndoRecord(bitmap_undo_record);
                         }
                     }
                 }
             }
 
-            if (enable_copy_for_partition_operation)
-                attach_ctx.writeCopyRecordToKV(
-                    *(query_ctx->getCnchCatalog()),
-                    target_tbl.getCnchStorageID(),
-                    query_ctx->getCurrentTransaction()->getTransactionID());
-            else 
-                attach_ctx.writeRenameMapToKV(
-                    *(query_ctx->getCnchCatalog()),
-                    target_tbl.getCnchStorageID(),
-                    query_ctx->getCurrentTransaction()->getTransactionID());
+            attach_ctx.submitUndoRecordToKV(
+                *(query_ctx->getCnchCatalog()), target_tbl.getCnchStorageID(), query_ctx->getCurrentTransaction()->getTransactionID());
+
+            attach_ctx.executeOperation();
 
             auto table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
             bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             size_t offset = 0;
-            auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
             for (auto & parts_and_infos : parts_and_infos_from_sources)
             {
-                for (auto & part_and_info : parts_and_infos)
+                for (auto & [part, part_info] : parts_and_infos)
                 {
-                    worker_pool.scheduleOrThrowOnError(
-                        [&parts_with_history, table_def_hash, is_user_defined_cluster_by_expression, offset, part = part_and_info.first, part_info = part_and_info.second, &remote_disk, this]() {
-                            String part_name = part_info.getPartNameWithHintMutation();
-                            String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
-                            String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
-                            const auto & disk = part->volume->getDisk();
-                            if (enable_copy_for_partition_operation)
-                            {
-                                // do copy, create part dir fisrt, and then copy data file
-                                remote_disk->createDirectories(target_path);
-                                String target_data_path = fs::path(target_path) / "data";
-                                String source_data_path = fs::path(part->getFullRelativePath()) / "data";
-                                std::vector<std::pair<std::string, std::string>> files_to_copy;
-                                files_to_copy.emplace_back(source_data_path, target_data_path);
-                                disk->copyFiles(files_to_copy, remote_disk);
-                            }
-                            else
-                                disk->moveDirectory(part->getFullRelativePath(), target_path);
-                            DataModelDeleteBitmapPtr attach_meta;
-                            if (is_unique_tbl)
-                            {
-                                String bitmap_rel_path;
-                                {
-                                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                                    attach_meta = attach_metas[part->name];
-                                    bitmap_rel_path = part_delete_file_relative_paths[part->name];
-                                }
-                                if (attach_meta && attach_meta->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
-                                {
-                                    // Move delete files
-                                    String dir_rel_path = std::filesystem::path(tbl_rel_path)
-                                        / DeleteBitmapMeta::deleteBitmapDirRelativePath(part_info.partition_id);
-                                    String from_path = std::filesystem::path(tbl_rel_path) / bitmap_rel_path / (part->name + ".bitmap");
-                                    String to_path = std::filesystem::path(tbl_rel_path)
-                                        / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
-                                    
-                                    if (enable_copy_for_partition_operation)
-                                    {
-                                        if (!remote_disk->exists(dir_rel_path))
-                                            remote_disk->createDirectories(dir_rel_path);
-
-                                        // do bitmap copy
-                                        std::vector<std::pair<std::string, std::string>> files_to_copy;
-                                        files_to_copy.emplace_back(from_path, to_path);
-                                        disk->copyFiles(files_to_copy, remote_disk);
-                                    }
-                                    else
-                                    {
-                                        if (!disk->exists(dir_rel_path))
-                                            disk->createDirectories(dir_rel_path);
-
-                                        disk->moveFile(from_path, to_path);
-                                    }
-                                }
-                            }
-
-                            Protos::DataModelPart part_model;
-                            fillPartModel(target_tbl, *part, part_model, true);
-                            // Assign new part info
-                            auto part_info_model = part_model.mutable_part_info();
-                            part_info_model->set_partition_id(part_info.partition_id);
-                            part_info_model->set_min_block(part_info.min_block);
-                            part_info_model->set_max_block(part_info.max_block);
-                            part_info_model->set_level(part_info.level);
-                            part_info_model->set_mutation(part_info.mutation);
-                            part_info_model->set_hint_mutation(part_info.hint_mutation);
-
-                            // Discard part's commit time & end time
-                            part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
-                            part_model.clear_end_time();
-                            parts_with_history.first[offset] = part;
-                            parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
-                            if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)
-                                parts_with_history.second[offset]->table_definition_hash = table_def_hash;
-
-                            if (is_unique_tbl && attach_meta)
-                            {
-                                std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                                attach_metas[parts_with_history.second[offset]->name] = std::move(attach_meta);
-                            }
-
-                            injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
-                        });
-                    ++offset;
-                }
-            }
-            worker_pool.wait();
-            break;
-        }
-        case DiskType::Type::ByteS3:
-        {
-            UndoResources undo_resources;
-            TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
-
-            size_t offset = 0;
-            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
-            bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
-            String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
-            // For S3, only attach/replace partition from src_table needs copy
-            // Not use from_storage_uuid.empty() as from_storage_uuid may point to the dest table itself.
-            bool need_copy = enable_copy_for_partition_operation && !command.from_table.empty();
-
-            std::unordered_map<String, LocalDeleteBitmapPtr> new_bitmaps;
-            for (auto & parts_and_infos : parts_and_infos_from_sources)
-            {
-                for (std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>& part_and_info : parts_and_infos)
-                {
-                    const IMergeTreeDataPartPtr& part = part_and_info.first;
-                    const MergeTreePartInfo& part_info = part_and_info.second;
-                    String part_name = part->info.getPartName();
-                    UUID part_id;
-
-                    if (!from_storage_uuid.empty())
-                    {
-                        if (need_copy)
-                        {
-                            part_id = CnchDataWriter::newPartID(part_info, txn_id.toUInt64());
-                            String relative_path = UUIDHelpers::UUIDToString(part_id);
-                            LOG_DEBUG(logger, "Generate a new part_id {}", relative_path);
-                            undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_info.getPartNameWithHintMutation(), fs::path(relative_path) / "");
-                            undo_resources.back().setDiskName(remote_disk->getName());
-                        }
-                        else
-                        {
-                            // Write part's origin meta into undo buffer, so when we rollback
-                            // we can revert changes like part's column commit time
-                            Protos::DataModelPart origin_part_model;
-                            fillPartModel(*from_storage, *part, origin_part_model);
-                            undo_resources.emplace_back(txn_id, UndoResourceType::S3AttachPart,
-                                from_storage_uuid, part->info.getPartNameWithHintMutation(), part->info.getPartName(),
-                                origin_part_model.SerializeAsString(), part_info.getPartName());
-                        }
-                    }
-                    else
-                    {
-                        undo_resources.emplace_back(txn_id, UndoResourceType::S3VolatilePart,
-                            part->info.getPartNameWithHintMutation());
-                    }
-
                     Protos::DataModelPart part_model;
-                    fillPartModel(target_tbl, *part, part_model, true);
+                    fillPartModel(target_tbl, *part, part_model, true, txn_id);
                     // Assign new part info
-                    auto part_info_model = part_model.mutable_part_info();
+                    auto * part_info_model = part_model.mutable_part_info();
                     part_info_model->set_partition_id(part_info.partition_id);
                     part_info_model->set_min_block(part_info.min_block);
                     part_info_model->set_max_block(part_info.max_block);
@@ -1677,7 +1380,85 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
 
                     // Discard part's commit time & end time
                     part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
-                    if (need_copy)
+                    part_model.clear_end_time();
+                    parts_with_history.first[offset] = part;
+                    parts_with_history.second[offset]
+                        = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
+                    if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash
+                        || is_user_defined_cluster_by_expression)
+                        parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+
+                    if (is_unique_tbl)
+                    {
+                        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                        DataModelDeleteBitmapPtr delete_bitmap_model = attach_metas[part->name];
+                        if (delete_bitmap_model)
+                            attach_metas[parts_with_history.second[offset]->name] = std::move(delete_bitmap_model);
+                    }
+
+                    injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
+                    ++offset;
+                }
+            }
+            break;
+        }
+        case DiskType::Type::ByteS3:
+        {
+            UndoResources undo_resources;
+
+            size_t offset = 0;
+            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
+            bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
+            String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
+
+            std::unordered_map<String, LocalDeleteBitmapPtr> new_bitmaps;
+            for (auto & parts_and_infos : parts_and_infos_from_sources)
+            {
+                for (auto & [part, part_info] : parts_and_infos)
+                {
+                    String part_name = part->info.getPartName();
+                    UUID part_id;
+
+                    if (attach_ctx.needCopyForS3())
+                    {
+                        // Copy part from source storage to target storage
+                        part_id = CnchDataWriter::newPartID(part_info, txn_id.toUInt64());
+                        String relative_path = UUIDHelpers::UUIDToString(part_id);
+                        LOG_DEBUG(logger, "Generate a new part_id {}", relative_path);
+                        undo_resources.emplace_back(
+                            txn_id, UndoResourceType::Part, part_info.getPartNameWithHintMutation(), fs::path(relative_path) / "");
+                        undo_resources.back().setDiskName(target_disk->getName());
+                    }
+                    else
+                    {
+                        if (attach_ctx.operation_type != AttachContext::OperationType::MOVE_FROM_TASK)
+                        {
+                            // Write part's origin meta into undo buffer, so when we rollback
+                            // we can revert changes like part's column commit time
+                            Protos::DataModelPart origin_part_model;
+                            fillPartModel(*from_storage, *part, origin_part_model, false, txn_id);
+                            undo_resources.emplace_back(txn_id, UndoResourceType::S3AttachPart,
+                                from_storage_uuid, part->info.getPartNameWithHintMutation(), part->info.getPartName(),
+                                origin_part_model.SerializeAsString(), part_info.getPartName());
+                        }
+                        else
+                            undo_resources.emplace_back(txn_id, UndoResourceType::S3VolatilePart, part->info.getPartNameWithHintMutation());
+                    }
+
+                    Protos::DataModelPart part_model;
+                    fillPartModel(target_tbl, *part, part_model, true, txn_id);
+                    // Assign new part info
+                    auto * part_info_model = part_model.mutable_part_info();
+                    part_info_model->set_partition_id(part_info.partition_id);
+                    part_info_model->set_min_block(part_info.min_block);
+                    part_info_model->set_max_block(part_info.max_block);
+                    part_info_model->set_level(part_info.level);
+                    part_info_model->set_mutation(part_info.mutation);
+                    part_info_model->set_hint_mutation(part_info.hint_mutation);
+
+                    // Discard part's commit time & end time
+                    part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                    if (attach_ctx.needCopyForS3())
                         RPCHelpers::fillUUID(part_id, *(part_model.mutable_part_id()));
                     part_model.clear_end_time();
                     parts_with_history.first[offset] = part;
@@ -1686,27 +1467,28 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                         parts_with_history.second[offset]->table_definition_hash = table_def_hash;
 
                     // Rewrite delete bitmap file
-                    if (is_unique_tbl && !from_storage_uuid.empty()) /// attach part from path will not have bitmap
+                    // TODO: Support attach delete bitmap from s3 path
+                    if (is_unique_tbl && !from_storage_uuid.empty())
                     {
-                        DataModelDeleteBitmapPtr attach_meta;
+                        DataModelDeleteBitmapPtr delete_bitmap_model;
                         {
                             std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                            attach_meta = attach_metas[part->name];
+                            delete_bitmap_model = attach_metas[part->name];
                         }
-                        if (attach_meta)
+                        if (delete_bitmap_model)
                         {
                             /// Due to S3 don't support move file, and delete bitmap file is small.
                             /// For convenience, we generate a new bitmap file here.
                             DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
-                            deserializeDeleteBitmapInfo(part->storage, attach_meta, bitmap);
+                            deserializeDeleteBitmapInfo(part->storage, delete_bitmap_model, bitmap);
                             auto new_delete_bitmap = LocalDeleteBitmap::createBase(part_info, bitmap, txn_id, part->bucket_number);
-                            auto & new_bitmap_model = new_delete_bitmap->getModel();
+                            const auto & new_bitmap_model = new_delete_bitmap->getModel();
                             UndoResource ub(
                                 txn_id,
                                 UndoResourceType::S3AttachDeleteBitmap,
                                 from_storage_uuid,
-                                dataModelName(*attach_meta),
-                                attach_meta->SerializeAsString(),
+                                dataModelName(*delete_bitmap_model),
+                                delete_bitmap_model->SerializeAsString(),
                                 dataModelName(*new_bitmap_model),
                                 DeleteBitmapMeta::deleteBitmapFileRelativePath(*new_bitmap_model));
                             ub.setDiskName(part->volume->getDisk()->getName());
@@ -1722,19 +1504,19 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             /// Write undo buffer first
             query_ctx->getCnchCatalog()->writeUndoBuffer(target_tbl.getCnchStorageID(), txn_id, undo_resources);
 
-            if (need_copy)
+            if (attach_ctx.needCopyForS3())
             {
                 auto & worker_pool = attach_ctx.getWorkerPool(offset);
                 for (size_t i = 0; i < offset; i++)
                 {
                     worker_pool.scheduleOrThrowOnError(
-                        [&part = parts_with_history.first[i], &cnch_part = parts_with_history.second[i], &remote_disk]() {
-                            String src_part_rel_path = fs::path(UUIDHelpers::UUIDToString(part->uuid)) / "data";
+                        [&part = parts_with_history.first[i], &cnch_part = parts_with_history.second[i], &target_disk]() {
+                            String src_part_rel_path = fs::path(part->getFullRelativePath()) / "data";
                             String desc_part_rel_path = fs::path(UUIDHelpers::UUIDToString(cnch_part->uuid)) / "data";
                             const auto & disk = part->volume->getDisk();
                             std::vector<std::pair<std::string, std::string>> files_to_copy;
                             files_to_copy.emplace_back(src_part_rel_path, desc_part_rel_path);
-                            disk->copyFiles(files_to_copy, remote_disk);
+                            disk->copyFiles(files_to_copy, target_disk);
                         });
                 }
                 worker_pool.wait();
@@ -1753,8 +1535,9 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             break;
         }
         default:
-            throw Exception(fmt::format("Unsupported remote volume type {} when attach",
-                DiskType::toString(remote_disk_type)), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                fmt::format("Unsupported remote volume type {} when attach", DiskType::toString(target_disk_type)),
+                ErrorCodes::BAD_ARGUMENTS);
     }
     return parts_with_history;
 }
@@ -1940,6 +1723,7 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_
     if (command.from_table.empty() && !command.from_zookeeper_path.empty())
     {
         CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+        cnch_writer.setFromAttach();
         if (is_unique_tbl)
         {
             cnch_writer.commitPreparedCnchParts(DumpedData{
@@ -1959,6 +1743,7 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_
     }
 
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Attach);
+    cnch_writer.setFromAttach();
     std::unique_ptr<S3AttachPartsInfo> s3_parts_info;
 
     if (!command.from_table.empty())

@@ -5,6 +5,7 @@
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Common/HostWithPorts.h>
 
@@ -30,4 +31,12 @@ void sendPlanSegmentsToAddress(
     std::shared_ptr<DAGGraph> dag_graph_ptr,
     const WorkerId & worker_id);
 
+using SendPlanSegmentToAddressFunc = std::function<void(
+    const AddressInfo & address_info,
+    PlanSegment * plan_segment_ptr,
+    PlanSegmentExecutionInfo & execution_info,
+    ContextPtr query_context,
+    std::shared_ptr<DAGGraph> dag_graph_ptr,
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr,
+    const WorkerId & worker_id)>;
 } // namespace DB

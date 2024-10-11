@@ -185,8 +185,28 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         }
         else
         {
+            const String & dst_table_uuid = uuid();
+            LOG_TRACE(log, "Deal with dst_table {}, dst_path {}, src_path {}", dst_table_uuid, dst_path, src_path);
+            if (dst_path.ends_with(dst_table_uuid) || dst_path.ends_with(dst_table_uuid + "/"))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "dst_path {} should NEVER end with table_uuid. It is a dangerous path.", dst_path);
+
+            fs::path p(src_path);
+            String parent_path;
+            /// For path like xxx/yyy/ (part path), getting parent_path xxx/ needs call path.parent_path().parent_path().
+            /// For path like xxx/yyy (delete bitmap path), getting parent_path xxx/ needs call path.parent_path()
+            if (src_path.ends_with('/'))
+                parent_path = p.parent_path().parent_path();
+            else
+                parent_path = p.parent_path();
+
+            if (!disk->exists(parent_path))
+            {
+                LOG_WARNING(log, "src_path of {} does not exist, skip moving data and just remove dst_path of {}", parent_path, dst_path);
+                disk->removeRecursive(dst_path);
+            }
             /// move dst to src
-            disk->moveDirectory(dst_path, src_path);
+            else
+                disk->moveDirectory(dst_path, src_path);
         }
     }
     else if (type() == UndoResourceType::KVFSLockKey)

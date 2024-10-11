@@ -50,6 +50,7 @@ protected:
     void resetRowGroupReader(size_t row_group_idx) override;
 
     std::optional<PendingChunk> readBatch(size_t row_group_idx) override;
+    size_t getRowCount() override;
 
     std::unique_ptr<orc::Reader> orc_file_reader = nullptr; // used for reading orc file meta.
     ScanParams scan_params;

@@ -265,7 +265,7 @@ QueryPlanStepPtr createDistinctStep()
     DataStream stream = createDataStream();
     SizeLimits limits = createSizeLimits();
     Names columns;
-    return std::make_unique<DistinctStep>(stream, limits, 0, columns, false);
+    return std::make_unique<DistinctStep>(stream, limits, 0, columns, false, true);
 }
 
 QueryPlanStepPtr createUnionStep()

@@ -1,8 +1,10 @@
 #pragma once 
 
 #include <cstddef>
-#include <Storages/MergeTree/GinIndexStore.h>
 #include <roaring.hh>
+#include <Common/FST.h>
+#include <Storages/MergeTree/GINStoreReader.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
 
 namespace DB
 {
@@ -42,7 +44,7 @@ public:
 
     /// Add term (located at 'data' with length 'len') and its row ID to the postings list builder
     /// for building inverted index for the given store.
-    void add(const char * data, size_t len, UInt32 rowID, GinIndexStorePtr & store) const;
+    static void add(const char * data, size_t len, UInt32 rowID, GINStoreWriter & writer);
 
     /// Accumulate (segmentID, RowIDStart, RowIDEnd) for building skipping index
     void addRowRangeToGinFilter(UInt32 segmentID, UInt32 rowIDStart, UInt32 rowIDEnd);

@@ -20,6 +20,7 @@
  */
 
 #include <Compression/CompressionFactory.h>
+#include <Core/SettingsEnums.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -51,6 +52,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
 #include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
+#include <Poco/String.h>
 #include <Common/typeid_cast.h>
 #include <Common/randomSeed.h>
 
@@ -202,7 +204,24 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         if (ast_col_decl.default_expression)
         {
             command.default_kind = columnDefaultKindFromString(ast_col_decl.default_specifier);
-            command.default_expression = ast_col_decl.default_expression;
+
+            /// In MYSQL dialect, you can specify CURRENT_TIMESTAMP as default value, and it do the same thing as now64().
+            /// Need to replace it with function now64() to avoid follow steps treat CURRENT_TIMESTAMP as an identifier (a column name).
+            bool replace_current_timestamp = false;
+            if (context && context->getSettingsRef().dialect_type == DialectType::MYSQL)
+            {
+                if (auto * identifier = ast_col_decl.default_expression->as<ASTIdentifier>())
+                {
+                    if (Poco::toUpper(identifier->name()) == "CURRENT_TIMESTAMP")
+                    {
+                        command.default_expression = makeASTFunction("now64");
+                        replace_current_timestamp = true;
+                    }
+                }
+            }
+
+            if (!replace_current_timestamp)
+                command.default_expression = ast_col_decl.default_expression;
         }
 
         if (ast_col_decl.comment)

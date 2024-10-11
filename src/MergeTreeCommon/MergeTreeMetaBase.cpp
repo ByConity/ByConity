@@ -72,13 +72,17 @@
 #include <Optimizer/SelectQueryInfoHelper.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
+#include <Storages/PartCacheManager.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <CloudServices/CnchPartsHelper.h>
+
+#include <common/scope_guard_safe.h>
 
 
 namespace ProfileEvents
 {
     extern const Event CatalogTime;
+    extern const Event RejectedInserts;
 }
 
 namespace
@@ -95,6 +99,7 @@ namespace ErrorCodes
     extern const int INVALID_PARTITION_VALUE;
     extern const int UNKNOWN_PART_TYPE;
     extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
+    extern const int TOO_MANY_PARTS;
     extern const int NOT_ENOUGH_SPACE;
     extern const int DIRECTORY_ALREADY_EXISTS;
     extern const int ILLEGAL_COLUMN;
@@ -947,6 +952,74 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(const String
     }
 
     return createPart(name, type, part_info, volume, relative_path, parent_part, location);
+}
+
+/// TODO: what is the performance of get parts info from part cache manager
+std::pair<Int64, Int64> MergeTreeMetaBase::getCnchPartsInfo() const
+{
+    try
+    {
+        auto part_cache_manager = getContext()->getPartCacheManager();
+        if (part_cache_manager)
+            return part_cache_manager->getTotalAndMaxPartsNumber(*this);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__FUNCTION__, "Failed to get parts info from part cache manager");
+    }
+
+    /// Just return {0, 0} to skip this time check
+    return {0, 0};
+}
+
+void MergeTreeMetaBase::cnchDelayInsertOrThrowIfNeeded() const
+{
+    Stopwatch stop_watch;
+    SCOPE_EXIT_SAFE({
+        if (stop_watch.elapsedMilliseconds() > 500)
+            LOG_INFO(log, "Delay insert check took {} ms", stop_watch.elapsedMilliseconds());
+    });
+
+    const auto settings = getSettings();
+    const Int64 allowed_max_parts_in_total = settings->max_parts_in_total;
+    const Int64 allowed_parts_to_throw_insert = settings->parts_to_throw_insert;
+
+    /// Return instantly to avoid getPartsInfo if no parts check set
+    if (allowed_max_parts_in_total == 0 && allowed_parts_to_throw_insert == 0)
+        return;
+
+    auto host_ports = getContext()->getCnchTopologyMaster()->getTargetServer(
+                                                            UUIDHelpers::UUIDToString(getCnchStorageUUID()),
+                                                             getServerVwName(), true);
+    if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(getContext()->getRPCPort())))
+    {
+        auto server_client = getContext()->getCnchServerClient(host_ports);
+        if (server_client)
+            server_client->checkDelayInsertOrThrowIfNeeded(getStorageUUID());
+        else
+            LOG_WARNING(log, "Failed to get target server {} while checking delay insert", host_ports.getRPCAddress());
+
+        return;
+    }
+
+    auto [parts_count_in_total, parts_count_in_partition] = getCnchPartsInfo();
+    if (allowed_max_parts_in_total > 0 && parts_count_in_total >= allowed_max_parts_in_total)
+    {
+        ProfileEvents::increment(ProfileEvents::RejectedInserts);
+        throw Exception(ErrorCodes::TOO_MANY_PARTS,
+                "Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. "
+                + "This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting "
+                + "in <merge_tree> element in config.xml or with per-table setting.");
+    }
+
+    if (allowed_parts_to_throw_insert > 0 && parts_count_in_partition >= allowed_parts_to_throw_insert)
+    {
+        ProfileEvents::increment(ProfileEvents::RejectedInserts);
+        throw Exception(
+            ErrorCodes::TOO_MANY_PARTS,
+            "Too many parts (" + toString(parts_count_in_partition) + ") in partition. Merges are processing "
+            + "significantly slower than inserts. The threshold can be modified with 'parts_to_throw_insert' setting.");
+    }
 }
 
 MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts(const DataPartStates & affordable_states) const

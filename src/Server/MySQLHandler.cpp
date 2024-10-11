@@ -293,7 +293,8 @@ void MySQLHandler::run()
             connection_context->applySettingsChanges(setting_changes);
 
             connection_context->setCurrentQueryId(fmt::format("mysql:{}", connection_id));
-
+            auto & client_info = connection_context->getClientInfo();
+            client_info.initial_query_id = client_info.current_query_id;
         }
         catch (const Exception & exc)
         {
@@ -565,6 +566,8 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         query_context->setSetting("max_execution_time", 18000);
         /// required by quickbi, otherwise it would fail to get table info
         query_context->setSetting("allow_mysql_having_name_resolution", 1);
+        /// to collect the affected rows for update/delete/insert
+        query_context->setSetting("insert_select_with_profiles", 1);
         CurrentThread::QueryScope query_scope{query_context};
 
         std::atomic<size_t> affected_rows {0};
@@ -573,7 +576,6 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         {
             if (prev)
                 prev(progress);
-
             affected_rows += progress.written_rows;
         });
 
@@ -590,8 +592,9 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
 
         executeQuery(should_replace ? replacement : payload, *out, false, query_context, set_result_details, format_settings);
 
-        if (!with_output)
+        if (!with_output) {
             packet_endpoint->sendPacket(OKPacket(0x00, client_capabilities, affected_rows, 0, 0), true);
+        }
     }
 }
 

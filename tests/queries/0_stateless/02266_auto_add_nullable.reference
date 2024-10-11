@@ -1,0 +1,29 @@
+val0	Nullable(Int8)	DEFAULT	NULL			
+val1	Nullable(Int8)	DEFAULT	NULL			
+val2	Nullable(UInt8)	DEFAULT	NULL			
+val3	Nullable(String)	DEFAULT	NULL			
+val4	LowCardinality(Nullable(Int8))	DEFAULT	NULL			
+val5	LowCardinality(Nullable(Int8))	DEFAULT	NULL			
+val6	Nullable(Array(Int8))	DEFAULT	NULL			
+id	Int64					
+name	String					
+title	String					
+token	String					
+created_at	DateTime					
+updated_at	DateTime					
+version	Int32	DEFAULT	0			
+content	String					
+landing_page_width	Int32					
+landing_page_height	Int32					
+landing_page_size	Float64					
+landing_page_group_id	Int32	DEFAULT	0			
+advertiser_account_group_id	Int64					
+delete_status	Int32	DEFAULT	0			
+landing_page_type	Int32	DEFAULT	0			
+wechat_customer_service_group_id	Nullable(Int64)	DEFAULT	NULL			
+wechat_official_account_id	Nullable(Int64)	DEFAULT	NULL			
+landing_page_wechat_customer_city_code_id	Nullable(Int64)	DEFAULT	NULL			
+wechat_group_chat_group_id	Nullable(Int64)	DEFAULT	NULL			
+landing_page_wechat_group_chat_city_code_id	Nullable(Int64)	DEFAULT	NULL			
+qr_code_url	Nullable(String)	DEFAULT	NULL			
+review	Nullable(Int64)	DEFAULT	NULL			

@@ -59,8 +59,6 @@ public:
 
     virtual void loadDataParts(FileDataPartsCNCHVector & file_parts);
 
-    virtual void tryUpdateFSClient(const ContextPtr & /*context*/) { }
-
     FileClientPtr client;
     Strings file_list;
 

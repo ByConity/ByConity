@@ -104,6 +104,8 @@ private:
 
     std::optional<PendingChunk> readBatch(size_t row_group_idx) override;
 
+    size_t getRowCount() override;
+
     void prefetchRowGroup(size_t row_group_idx) override;
 
     // Data layout in the file:

@@ -31,7 +31,8 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Disks/IDisk.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
 #include <Poco/JSON/Object.h>
 
 namespace DB
@@ -329,7 +330,8 @@ protected:
     /// In other cases, this parameter can not reflect the correct merge status.
     bool is_merge = false;
 
-    GinIndexStoreFactory::GinIndexStores gin_index_stores;
+    /// GINStoreWriters indexed by stream name
+    std::unordered_map<String, std::unique_ptr<GINStoreWriter>> gin_store_writers;
 
     struct ColumnCompressionSetting
     {

@@ -410,6 +410,12 @@ public:
         Protos::GetDedupImplVersionResp * response,
         google::protobuf::Closure * done) override;
 
+    void checkDelayInsertOrThrowIfNeeded(
+        google::protobuf::RpcController * cntl,
+        const Protos::checkDelayInsertOrThrowIfNeededReq * request,
+        Protos::checkDelayInsertOrThrowIfNeededResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

@@ -19,6 +19,7 @@
 #include <Analyzers/TypeAnalyzer.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/EqualityInference.h>
@@ -39,6 +40,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
 #include <QueryPlan/ArrayJoinStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
@@ -631,6 +633,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         ProjectionPlanner left_planner(left_source_expression_node, context);
         ProjectionPlanner right_planner(right_source_expression_node, context);
         const bool allow_extended_type_conversion = context->getSettingsRef().allow_extended_type_conversion;
+        const bool enable_implicit_arg_type_convert = context->getSettingsRef().enable_implicit_arg_type_convert;
         bool need_project = false;
 
         for (const auto & clause : join_clauses)
@@ -642,7 +645,19 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
 
             if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
             {
-                auto common_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_type_conversion);
+                DataTypePtr common_type;
+                try
+                {
+                    common_type
+                        = getCommonType(DataTypes{left_type, right_type}, enable_implicit_arg_type_convert, allow_extended_type_conversion);
+                }
+                catch (DB::Exception & ex)
+                {
+                    throw Exception(
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName()
+                            + " at right. " + "Can't get supertype: " + ex.message(),
+                        ErrorCodes::TYPE_MISMATCH);
+                }
                 left_key = left_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(left_key), common_type)).first;
                 right_key = right_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(right_key), common_type)).first;
                 need_project = true;

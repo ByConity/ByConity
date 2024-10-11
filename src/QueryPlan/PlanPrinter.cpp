@@ -21,7 +21,8 @@
 #include <Core/Names.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Interpreters/profile/PlanSegmentProfile.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PredicateConst.h>
@@ -84,11 +85,11 @@ namespace
     }
 }
 
-String PlanPrinter::textPlanNode(PlanNodeBase & node)
+String PlanPrinter::textPlanNode(PlanNodeBase & node, ContextPtr context)
 {
     PlanCostMap costs;
     StepProfiles profiles;
-    TextPrinter printer{costs};
+    TextPrinter printer{costs, context};
     bool has_children = node.getChildren().empty();
     return printer.printLogicalPlan(node, TextPrinterIntent{0, has_children}, profiles);
 }
@@ -199,7 +200,7 @@ String PlanPrinter::jsonLogicalPlan(
 }
 
 String PlanPrinter::getPlanSegmentHeaderText(
-    PlanSegmentDescriptionPtr & segment_desc, bool print_profile, const std::unordered_map<size_t, PlanSegmentProfiles> & segment_profile)
+    const PlanSegmentDescriptionPtr & segment_desc, bool print_profile, const std::unordered_map<size_t, PlanSegmentProfiles> & segment_profile)
 {
     auto f = [](ExchangeMode mode) {
         switch (mode)
@@ -373,18 +374,53 @@ String PlanPrinter::textPipelineProfile(
 {
     std::ostringstream os;
 
-    auto cmp = [](const PlanSegmentDescriptionPtr & s1, const PlanSegmentDescriptionPtr & s2) { return s1->segment_id < s2->segment_id; };
-    std::sort(segment_descs.begin(), segment_descs.end(), cmp);
-
-    for (auto & segment_ptr : segment_descs)
+    if (!segment_descs.empty())
     {
-        size_t segment_id = segment_ptr->segment_id;
-        if (settings.segment_id != UINT64_MAX && segment_id != settings.segment_id)
-            continue;
-        os << getPlanSegmentHeaderText(segment_ptr, settings.segment_profile, segment_profile);
-        if (!worker_grouped_profiles.contains(segment_id) || worker_grouped_profiles.at(segment_id).empty())
-            continue;
+        auto cmp = [](const PlanSegmentDescriptionPtr & s1, const PlanSegmentDescriptionPtr & s2) { return s1->segment_id < s2->segment_id; };
+        std::sort(segment_descs.begin(), segment_descs.end(), cmp);
 
+        for (auto & segment_ptr : segment_descs)
+        {
+            size_t segment_id = segment_ptr->segment_id;
+            if (settings.segment_id != UINT64_MAX && segment_id != settings.segment_id)
+                continue;
+            os << getPlanSegmentHeaderText(segment_ptr, settings.segment_profile, segment_profile);
+            if (!worker_grouped_profiles.contains(segment_id) || worker_grouped_profiles.at(segment_id).empty())
+                continue;
+
+            for (auto & [address, profile] : worker_grouped_profiles.at(segment_id))
+            {
+                if (!profile)
+                    continue;
+                TextPrinterIntent print{3, false};
+                os << print.print() << address << "\n";
+                TextPrinter printer{{}, nullptr, true, {}, settings};
+                bool has_children = !profile->children.empty();
+                auto output = printer.printPipelineProfile(profile, TextPrinterIntent{3, has_children});
+                os << output;
+            }
+            os << "\n";
+        }
+        return os.str();
+    }
+
+    size_t max_segment_id = 0;
+    for (const auto & [segment_id, segment_profiles] : segment_profile)
+        max_segment_id = std::max(segment_id, max_segment_id);
+    for (size_t segment_id = 0; segment_id <= max_segment_id; ++segment_id)
+    {
+        if (!segment_profile.contains(segment_id))
+            continue;
+        auto segment_profiles = segment_profile.at(segment_id);
+        os << "Segment[" << segment_id << "]\n";
+        if (segment_id != 0)
+        {
+            for (const auto & profile : segment_profiles)
+                os << profile->worker_address << " ReadRows: " << profile->read_rows << " QueryDurationTime: " << profile->query_duration_ms
+                   << "ms."
+                   << " TotalCpuTime: " << profile->total_cpu_ms << "ms."
+                   << " IOWaitTime: " << profile->io_wait_ms << "ms.\n";
+        }
         for (auto & [address, profile] : worker_grouped_profiles.at(segment_id))
         {
             if (!profile)
@@ -398,8 +434,41 @@ String PlanPrinter::textPipelineProfile(
         }
         os << "\n";
     }
-
     return os.str();
+}
+
+String PlanPrinter::textQueryPipelineProfiles(ContextMutablePtr query_context)
+{
+    auto scheduler = query_context->getSegmentScheduler();
+    UInt64 time_out = query_context->getSettingsRef().operator_profile_receive_timeout;
+    auto time_start = std::chrono::system_clock::now();
+    while (!scheduler->alreadyReceivedAllSegmentStatus(query_context->getCurrentQueryId()))
+    {
+        auto now = std::chrono::system_clock::now();
+        UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - time_start).count();
+        if (elapsed >= time_out)
+            break;
+    }
+    SegIdAndAddrToPipelineProfile worker_grouped_profiles;
+    auto profiles_map = scheduler->getSegmentsProfile(query_context->getCurrentQueryId());
+    for (auto & [segment_id, segment_profiles] : profiles_map)
+    {
+        for (auto & segment_profile : segment_profiles)
+        {
+            if (segment_profile->profiles.empty())
+                continue;
+            auto profile
+                = GroupedProcessorProfile::getGroupedProfileFromMetrics(segment_profile->profiles, segment_profile->profile_root_id);
+            if (profile->processor_name == "output_root" && !profile->children.empty())
+                profile = profile->children[0];
+            worker_grouped_profiles[segment_profile->segment_id][segment_profile->worker_address] = std::move(profile);
+        }
+    }
+    QueryPlanSettings settings;
+    PlanSegmentDescriptions plan_segment_descriptions;
+    if (query_context->getSettingsRef().log_explain_analyze_type == LogExplainAnalyzeType::AGGREGATED_QUERY_PIPELINE)
+        worker_grouped_profiles = GroupedProcessorProfile::aggregatePipelineProfileBetweenWorkers(worker_grouped_profiles);
+    return PlanPrinter::textPipelineProfile(plan_segment_descriptions, worker_grouped_profiles, settings, profiles_map);
 }
 
 String PlanPrinter::jsonPipelineProfile(PlanSegmentDescriptions & segment_descs, SegIdAndAddrToPipelineProfile & worker_grouped_profiles)

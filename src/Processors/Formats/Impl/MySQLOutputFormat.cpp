@@ -31,6 +31,9 @@ MySQLOutputFormat::MySQLOutputFormat(WriteBuffer & out_, const Block & header_, 
     const auto & header = getPort(PortKind::Main).getHeader();
     data_types = header.getDataTypes();
 
+    if (!header)
+        LOG_DEBUG(getLogger("MySQLOutputFormat"), "The output header is empty, which would prevent sending data to the client");
+
     serializations.reserve(data_types.size());
     for (const auto & type : data_types)
         serializations.emplace_back(type->getDefaultSerialization());
@@ -66,6 +69,8 @@ void MySQLOutputFormat::doWritePrefix()
 
 void MySQLOutputFormat::consume(Chunk chunk)
 {
+    if (data_types.empty())
+        return;
     if (!use_binary_result_set)
     {
         for (size_t row = 0; row < chunk.getNumRows(); ++row)

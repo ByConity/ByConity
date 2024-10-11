@@ -439,8 +439,8 @@ OutputFormatPtr FormatFactory::getOutputFormat(
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
 
-    /// If we're handling MySQL protocol connection right now then MySQLWire is only allowed output format.
-    if (format_settings.mysql_wire.sequence_id && (name != "MySQLWire"))
+    /// If we're handling MySQL protocol connection right now then MySQLWire or Null is only allowed output format.
+    if (format_settings.mysql_wire.sequence_id && (name != "MySQLWire" && name != "Null"))
         throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "MySQL protocol does not support custom output formats");
 
     /** TODO: Materialization is needed, because formats can use the functions `IDataType`,

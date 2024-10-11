@@ -12,7 +12,7 @@ class MPPScheduler : public Scheduler
 
 public:
     MPPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_, bool batch_schedule_)
-        : Scheduler(query_id_, query_context_, dag_graph_ptr_, batch_schedule_)
+        : Scheduler(query_id_, query_context_, ClusterNodes(query_context_), dag_graph_ptr_, batch_schedule_)
     {
     }
 

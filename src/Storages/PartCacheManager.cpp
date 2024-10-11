@@ -458,6 +458,33 @@ bool PartCacheManager::getPartsInfoMetrics(
     return table_partition_metrics.getPartsInfoMetrics(i_storage, partitions, require_partition_info);
 }
 
+std::pair<Int64, Int64> PartCacheManager::getTotalAndMaxPartsNumber(const IStorage & storage)
+{
+    Int64 total_parts{0};
+    Int64 max_parts_in_partition{0};
+
+    TableMetaEntryPtr table_entry = getTableMeta(storage.getStorageUUID());
+    if (table_entry)
+    {
+        auto & table_partitions = table_entry->partitions;
+        for (auto it = table_partitions.begin(); it != table_partitions.end(); it++)
+        {
+            PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(*it);
+            const auto & partition_data = partition_ptr->partition_info_ptr->metrics_ptr->read();
+            bool is_validate = partition_data.validateMetrics();
+            if (!is_validate)
+            {
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Parts info in PartCacheManager is not available now");
+            }
+
+            total_parts += partition_data.total_parts_number;
+            max_parts_in_partition = std::max(max_parts_in_partition, partition_data.total_parts_number);
+        }
+    }
+
+    return {total_parts, max_parts_in_partition};
+}
+
 Catalog::PartitionMap PartCacheManager::updatePartitionGCTime(const StoragePtr table, const Strings & partitions, UInt32 ts)
 {
     TableMetaEntryPtr meta_ptr = getTableMeta(table->getStorageUUID());

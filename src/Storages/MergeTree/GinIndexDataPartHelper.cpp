@@ -1,9 +1,11 @@
-#include <filesystem>
 #include <Storages/MergeTree/GinIndexDataPartHelper.h>
+#include <filesystem>
+#include <Core/SettingsEnums.h>
+#include <IO/ReadSettings.h>
 #include <IO/RemappingReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
-#include "Core/SettingsEnums.h"
+#include <Storages/IndexFile/RemappingEnv.h>
 
 namespace ProfileEvents
 {
@@ -34,9 +36,13 @@ GinDataLocalPartHelper::GinDataLocalPartHelper(const DiskPtr& disk_,
         disk(disk_), relative_path(relative_path_) {}
 
 std::unique_ptr<SeekableReadBuffer> GinDataLocalPartHelper::readFile(
-    const String& file_name)
+    const String& file_name, size_t buf_size)
 {
-    return disk->readFile(std::filesystem::path(relative_path) / file_name);
+    return disk->readFile(std::filesystem::path(relative_path) / file_name,
+        ReadSettings {
+            .local_fs_buffer_size = buf_size,
+            .remote_fs_buffer_size = buf_size
+        });
 }
 
 std::unique_ptr<WriteBufferFromFileBase> GinDataLocalPartHelper::writeFile(const String& file_name,
@@ -78,7 +84,7 @@ GinDataCNCHPartHelper::GinDataCNCHPartHelper(const IMergeTreeDataPartPtr& part_,
 }
 
 std::unique_ptr<SeekableReadBuffer> GinDataCNCHPartHelper::readFile(
-    const String& file_name)
+    const String& file_name, size_t buf_size)
 {
     auto file_iter = part_checksums->files.find(file_name);
     if (file_iter == part_checksums->files.end())
@@ -89,6 +95,10 @@ std::unique_ptr<SeekableReadBuffer> GinDataCNCHPartHelper::readFile(
 
     size_t offset = file_iter->second.file_offset;
     size_t size = file_iter->second.file_size;
+    ReadSettings read_settings {
+        .local_fs_buffer_size = buf_size,
+        .remote_fs_buffer_size = buf_size
+    };
 
     if (cache != nullptr)
     {
@@ -103,7 +113,7 @@ std::unique_ptr<SeekableReadBuffer> GinDataCNCHPartHelper::readFile(
             LOG_TRACE(log, "GIN index cache hit, part: {}, path: {}", part_rel_path, cache_path);
             ProfileEvents::increment(ProfileEvents::GinIndexCacheHit);
 
-            return cache_disk->readFile(cache_path);
+            return cache_disk->readFile(cache_path, read_settings);
         }
         else if (mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
@@ -122,7 +132,7 @@ std::unique_ptr<SeekableReadBuffer> GinDataCNCHPartHelper::readFile(
     ProfileEvents::increment(ProfileEvents::GinIndexCacheMiss);
 
     std::unique_ptr<ReadBufferFromFileBase> part_reader =
-        disk->readFile(part_rel_path + "/data");
+        disk->readFile(part_rel_path + "/data", read_settings);
 
     return std::make_unique<RemappingReadBuffer>(std::move(part_reader),
         offset, size);

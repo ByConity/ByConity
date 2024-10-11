@@ -656,6 +656,8 @@ public:
         return delete_bitmap_metas.front()->commit_time();
     }
 
+    UInt64 getModificationTime() const;
+
     /// Return null if the part doesn't have delete bitmap.
     /// Otherwise load the bitmap on demand and return.
     virtual ImmutableDeleteBitmapPtr getDeleteBitmap([[maybe_unused]] bool allow_null = false) const

@@ -83,6 +83,7 @@ TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captu
                 SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
                 limit_for_distinct,
                 output_block.getNames(),
+                true,
                 true);
             return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(distinct_step), PlanNodes{node_new});
         }
@@ -298,6 +299,7 @@ TransformResult ImplementIntersectRule::transformImpl(PlanNodePtr node, const Ca
                 SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
                 limit_for_distinct,
                 output_block.getNames(),
+                true,
                 true);
             return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(distinct_step), PlanNodes{node_new});
         }

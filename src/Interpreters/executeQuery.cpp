@@ -64,6 +64,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
@@ -153,7 +154,7 @@
 #include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Protos/cnch_common.pb.h>
-#include <Optimizer/OptimizerMetrics.h>
+#include <QueryPlan/PlanPrinter.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 #include  <map>
@@ -925,7 +926,28 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     getLogger("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
                 context->setSetting("enable_auto_query_forwarding", Field(0));
-                executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
+
+                // If `outfile_in_server_with_tcp` is set to true, we need change it to false to make sure the query forward to host server.
+                // When need to write to the outfile, reset the setting in the query so that remote server able to write the outfile.
+                if (context->getSettingsRef().outfile_in_server_with_tcp)
+                {
+                    context->applySettingChange({"outfile_in_server_with_tcp", false});
+                    auto ast_with_output = dynamic_cast<ASTQueryWithOutput *>(ast.get());
+                    if (ast_with_output && ast_with_output->out_file)
+                    {
+                        auto cloned = ast_with_output->clone();
+                        auto cloned_ast_with_output = dynamic_cast<ASTQueryWithOutput *>(cloned.get());
+                        if (!cloned_ast_with_output->settings_ast)
+                            cloned_ast_with_output->settings_ast = std::make_shared<ASTSetQuery>();
+                        auto settings_ast = dynamic_cast<ASTSetQuery *>(cloned_ast_with_output->settings_ast.get());
+                        settings_ast->changes.insertSetting("outfile_in_server_with_tcp", Field(1));
+                        executeQueryByProxy(context, host_ports, cloned, res, in_interactive_txn, serializeAST(*cloned));
+                    }
+                    else
+                        executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
+                }
+                else
+                    executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
                 LOG_DEBUG(getLogger("executeQuery"), "Query forwarded to remote server done");
                 return std::make_tuple(ast, std::move(res));
             }
@@ -1473,6 +1495,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.query_plan = context->getQueryContext()->getQueryPlan();
                 }
 
+                if (res.coordinator && settings.log_normalized_query_plan_hash)
+                    elem.normalized_query_plan_hash = res.coordinator->getNormalizedQueryPlanHash();
+
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
 
                 if (settings.log_query_settings)
@@ -1710,6 +1735,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
                             logQuery(context, elem);
 
+                        if (context->getSettingsRef().log_explain_analyze_type != LogExplainAnalyzeType::NONE)
+                        {
+                            auto explain_result_string = PlanPrinter::textQueryPipelineProfiles(context);
+                            LOG_INFO(getLogger("executeQuery"), "Explain Analyze Result:\n{}", explain_result_string);
+                        }
                         if (log_processors_profiles)
                         {
                             auto processors_profile_log = context->getProcessorsProfileLog();
@@ -1947,6 +1977,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         throw;
     }
     streams.onFinish();
+    context->setAlreadyOutfile(true);
 }
 
 BlockIO
@@ -2125,6 +2156,13 @@ void executeQuery(
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
 
+            /// for delete/update/insert from mysql, do not return data rows -- Null format
+            auto ast_type = ast->getType();
+            String old_format_name = format_name;
+            if (context->getSettingsRef().insert_select_with_profiles && format_name == "MySQLWire"
+                    && (ast_type == ASTType::ASTInsertQuery || ast_type == ASTType::ASTUpdateQuery || ast_type == ASTType::ASTDeleteQuery || ast->as<ASTUpdateQuery>()))
+                format_name = "Null";
+
             OutfileTargetPtr outfile_target;
             BlockOutputStreamPtr out;
             if (ast_query_with_output && ast_query_with_output->out_file)
@@ -2153,7 +2191,9 @@ void executeQuery(
             };
             streams.in->setProgressCallback(std::move(progress_callback));
 
-            if (set_result_details)
+            /// for update/delete/insert from mysql, do not call set_result_details
+            /// so that the affected_rows can be passed to mysql client by MySqlHandler
+            if (set_result_details && (format_name != "Null" || old_format_name != "MySQLWire"))
                 set_result_details(
                     context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 
@@ -2170,6 +2210,13 @@ void executeQuery(
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
+            auto ast_type = ast->getType();
+
+            /// for delete/update/insert from mysql, do not return data rows -- Null format
+            String old_format_name = format_name;
+            if (context->getSettingsRef().insert_select_with_profiles && format_name == "MySQLWire"
+                    && (ast_type == ASTType::ASTInsertQuery || ast_type == ASTType::ASTUpdateQuery || ast_type == ASTType::ASTDeleteQuery || ast->as<ASTUpdateQuery>()))
+                format_name = "Null";
 
             OutfileTargetPtr outfile_target;
             std::shared_ptr<WriteBuffer> out_buf;
@@ -2210,7 +2257,9 @@ void executeQuery(
                 };
                 pipeline.setProgressCallback(std::move(progress_callback));
 
-                if (set_result_details)
+                /// for update/delete/insert from mysql, do not call set_result_details
+                /// so that the affected_rows can be passed to mysql client by MySqlHandler
+                if (set_result_details && (format_name != "Null" || old_format_name != "MySQLWire"))
                     set_result_details(
                         context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 

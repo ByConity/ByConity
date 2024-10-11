@@ -49,7 +49,7 @@ struct ScheduleEvent
     ScheduleEvent & operator=(const ScheduleEvent &) = default;
     virtual ~ScheduleEvent() = default;
 
-    virtual ScheduleEventType getType()
+    virtual ScheduleEventType getType() const
     {
         return ScheduleEventType::Unknown;
     }
@@ -60,7 +60,7 @@ struct AbortEvent : ScheduleEvent
     explicit AbortEvent(const String & error_msg_, int code_ = ErrorCodes::LOGICAL_ERROR) : error_msg(error_msg_), code(code_)
     {
     }
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::Abort;
     }
@@ -78,7 +78,7 @@ struct ScheduleBatchTaskEvent : ScheduleEvent
     ScheduleBatchTaskEvent & operator=(const ScheduleBatchTaskEvent &) = default;
     ~ScheduleBatchTaskEvent() override = default;
 
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::ScheduleBatchTask;
     }
@@ -94,7 +94,7 @@ struct TriggerDispatchEvent : ScheduleEvent
     {
     }
 
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::TriggerDispatch;
     }
@@ -109,7 +109,7 @@ struct WorkerRestartedEvent : ScheduleEvent
     {
     }
 
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::WorkerRestarted;
     }
@@ -125,7 +125,7 @@ struct SegmentInstanceFinishedEvent : ScheduleEvent
     {
     }
 
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::SegmentInstanceFinished;
     }
@@ -141,7 +141,7 @@ struct ResendResourceEvent : ScheduleEvent
     {
     }
 
-    ScheduleEventType getType() override
+    ScheduleEventType getType() const override
     {
         return ScheduleEventType::ResendResource;
     }

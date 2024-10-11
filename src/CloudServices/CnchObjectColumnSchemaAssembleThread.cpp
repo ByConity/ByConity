@@ -89,7 +89,7 @@ void CnchObjectColumnSchemaAssembleThread::runImpl()
             auto new_assembled_schema = DB::getConcreteObjectColumns(
                 schemas_ready_to_assemble.begin(),
                 schemas_ready_to_assemble.end(),
-                storage->getInMemoryMetadata().getColumns(),
+                storage->getInMemoryMetadataPtr()->getColumns(),
                 [](const auto & schema) { return schema; });
 
             // Step 3:update assembled schema and delete partial schema in meta store

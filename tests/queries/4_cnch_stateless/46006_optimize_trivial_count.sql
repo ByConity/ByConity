@@ -89,4 +89,19 @@ FROM
     WHERE x = 'xx'
 );
 
+explain stats=0, verbose=0 
+SELECT count(*)
+FROM test46006
+WHERE j <= 1
+UNION ALL
+SELECT count(*)
+FROM test46006;
+
+SELECT count(*)
+FROM test46006
+WHERE j <= 1
+UNION ALL
+SELECT count(*)
+FROM test46006;
+
 drop table if exists test46006;

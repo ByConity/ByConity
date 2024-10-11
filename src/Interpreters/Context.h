@@ -335,8 +335,8 @@ class IOUringReader;
 class NexusFS;
 using NexusFSPtr = std::shared_ptr<NexusFS>;
 
-class GinIndexStoreFactory;
-struct GinIndexStoreCacheSettings;
+class GINStoreReaderFactory;
+struct GINStoreReaderFactorySettings;
 
 class GlobalTxnCommitter;
 using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
@@ -649,6 +649,7 @@ protected:
     bool has_tenant_id_in_username = false;
     String tenant_id;
     String current_catalog;
+    bool already_outfile = false;
 };
 
 /** A set of known objects that can be used in the query.
@@ -1161,6 +1162,9 @@ public:
     void setIsExplainQuery(const bool & is_explain_query_);
     bool isExplainQuery() const;
 
+    void setAlreadyOutfile(const bool & already_outfile_) { already_outfile = already_outfile_; }
+    bool isAlreadyOutfile() const { return already_outfile; }
+
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
@@ -1576,8 +1580,8 @@ public:
     void setGinIndexFilterResultCache(size_t cache_size_in_bytes);
     GinIdxFilterResultCache* getGinIndexFilterResultCache() const;
 
-    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_);
-    std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
+    void setGINStoreReaderFactory(const GINStoreReaderFactorySettings & settings_);
+    std::shared_ptr<GINStoreReaderFactory> getGINStoreReaderFactory() const;
 
     void setPrimaryIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;

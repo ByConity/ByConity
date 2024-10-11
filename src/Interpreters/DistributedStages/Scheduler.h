@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/Logger.h>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -15,9 +14,11 @@
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/ScheduleEvent.h>
 #include <Interpreters/NodeSelector.h>
+#include <Interpreters/sendPlanSegment.h>
 #include <Parsers/queryToString.h>
 #include <butil/endpoint.h>
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/Logger.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <Common/thread_local_rng.h>
@@ -91,12 +92,16 @@ class Scheduler
     using PlanSegmentTopology = std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 public:
-    Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_, bool batch_schedule_ = false)
+    Scheduler(
+        const String & query_id_,
+        ContextPtr query_context_,
+        ClusterNodes cluster_nodes_,
+        std::shared_ptr<DAGGraph> dag_graph_ptr_,
+        bool batch_schedule_ = false)
         : query_id(query_id_)
         , query_context(query_context_)
-        , query_unique_id(query_context->getCurrentTransactionID().toUInt64())
         , dag_graph_ptr(dag_graph_ptr_)
-        , cluster_nodes(query_context_)
+        , cluster_nodes(std::move(cluster_nodes_))
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
         , local_address(getLocalAddress(*query_context))
         , batch_schedule(batch_schedule_)
@@ -118,6 +123,10 @@ public:
     virtual void onQueryFinished()
     {
     }
+    void setSendPlanSegmentToAddress(SendPlanSegmentToAddressFunc func)
+    {
+        send_plan_segment_func = func;
+    }
 
 protected:
     // Remove dependencies for all tasks who depends on given `task`, and enqueue those whose dependencies become emtpy.
@@ -126,7 +135,6 @@ protected:
 
     const String query_id;
     ContextPtr query_context;
-    size_t query_unique_id;
     std::shared_ptr<DAGGraph> dag_graph_ptr;
     std::mutex segment_bufs_mutex;
     std::unordered_map<size_t, std::shared_ptr<butil::IOBuf>> segment_bufs;
@@ -145,6 +153,7 @@ protected:
     BatchPlanSegmentHeaders batch_segment_headers;
 
     LoggerPtr log;
+    SendPlanSegmentToAddressFunc send_plan_segment_func = sendPlanSegmentToAddress;
 
     void genTopology();
     virtual void sendResources(PlanSegment * plan_segment_ptr)
@@ -176,5 +185,4 @@ protected:
 
     size_t query_expiration_ms;
 };
-
 }

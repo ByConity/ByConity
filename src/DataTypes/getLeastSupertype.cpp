@@ -757,6 +757,14 @@ DataTypePtr tryGetLeastSupertype(const TypeIndexSet & types, bool allow_extended
     return getLeastSupertype<LeastSupertypeOnError::Null>(types, allow_extended_conversion);
 }
 
+DataTypePtr getCommonType(const DataTypes & types, bool enable_implicit_arg_type_convert, bool allow_extended_conversion)
+{
+    if (enable_implicit_arg_type_convert)
+        return getLeastSupertype<LeastSupertypeOnError::String>(types, true);
+    else
+        return getLeastSupertype(types, allow_extended_conversion);
+}
+
 template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const DataTypes & types, bool allow_extended_conversion);
 template DataTypePtr getLeastSupertype<LeastSupertypeOnError::String>(const DataTypes & types, bool allow_extended_conversion);
 template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const TypeIndexSet & types, bool allow_extended_conversion);

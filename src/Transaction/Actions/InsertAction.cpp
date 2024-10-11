@@ -69,7 +69,8 @@ void InsertAction::executeV1(TxnTimestamp commit_time)
     auto catalog = global_context.getCnchCatalog();
     bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false, write_manifest);
-    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, {}, txn_id, /*error=*/ false);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, {},
+                                txn_id, /*error=*/ false, {}, 0, 0, from_attach);
 }
 
 void InsertAction::executeV2()
@@ -104,7 +105,8 @@ void InsertAction::postCommit(TxnTimestamp commit_time)
     if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         global_context.getCnchCatalog()->commitObjectPartialSchema(txn_id);
 
-    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ false);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts,
+                                txn_id, /*error=*/ false, {}, 0, 0, from_attach);
 }
 
 void InsertAction::abort()
@@ -117,7 +119,8 @@ void InsertAction::abort()
     if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         global_context.getCnchCatalog()->abortObjectPartialSchema(txn_id);
 
-    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ true);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts,
+                                 txn_id, /*error=*/ true, {}, 0, 0, from_attach);
 }
 
 UInt32 InsertAction::collectNewParts() const

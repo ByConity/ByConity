@@ -255,6 +255,15 @@ enum class CTEMode
 
 DECLARE_SETTING_ENUM(CTEMode)
 
+enum class LogExplainAnalyzeType
+{
+    NONE,
+    QUERY_PIPELINE,
+    AGGREGATED_QUERY_PIPELINE,
+};
+
+DECLARE_SETTING_ENUM(LogExplainAnalyzeType)
+
 enum class ExpandMode
 {
     EXPAND,
@@ -406,6 +415,16 @@ enum class DedupImplVersion : int8_t
 };
 
 DECLARE_SETTING_ENUM(DedupImplVersion)
+
+enum class DedupPickWorkerAlgo
+{
+    RANDOM,
+    PICK_FIRST,
+    SEQUENTIAL,
+    CONSISTENT_HASH,
+};
+
+DECLARE_SETTING_ENUM(DedupPickWorkerAlgo);
 
 enum class RefreshViewTaskStatus : int8_t
 {

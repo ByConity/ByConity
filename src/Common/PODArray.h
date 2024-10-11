@@ -26,6 +26,8 @@
 #include <cassert>
 #include <algorithm>
 #include <memory>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -330,6 +332,126 @@ public:
     ~PODArrayBase()
     {
         dealloc();
+    }
+
+    std::function<void (bool)>
+        createOutStrShm(uint64_t prefix, uint16_t idx) {
+        return [this, prefix, idx](bool success) {
+            copy_back_string(success, prefix, idx);
+        };
+    }
+
+    std::optional<std::function<void (bool)>>
+        createShm(uint64_t prefix, uint16_t idx, bool out = false) {
+        size_t size = allocated_bytes();
+        void *buf = create_mmap(prefix, idx, size);
+
+        if (out) {
+            /* output column shared memory <-> PODArray buffer mapping
+             * callback function to copy buf from shared memory to PODArray */
+            return [this, buf](bool success) {
+                copy_back(success, buf);
+            };
+            return std::bind(&PODArrayBase::copy_back,
+                             this,
+                             std::placeholders::_1, buf);
+        } else {
+            /* copy input PODArray buffer to temporarily created shared memory */
+            memcpy(buf, c_start - pad_left, size);
+
+            if (0 != munmap(buf, size)) {
+                char filename[PATH_MAX];
+
+                shm_file_fmt(filename, prefix, idx);
+                throw_error("munmap", filename, ErrorCodes::CANNOT_MUNMAP);
+            }
+
+            return std::nullopt;
+        }
+    }
+
+private:
+
+    /* format of shared memory file name */
+    static inline void shm_file_fmt(char *buf, uint64_t prefix, uint16_t idx)
+    {
+        sprintf(buf, "%lx.%x", prefix, idx);
+    }
+
+    /* format of RPC path of Unix Domain Socket */
+    static inline void rpc_uds_fmt(char *buf, const char *uds_path)
+    {
+        sprintf(buf, "unix:%s", uds_path);
+    }
+
+    static void throw_error(const char *key, const char *filename, int exp) {
+        char buf[PATH_MAX];
+
+        shm_unlink(filename);
+        snprintf(buf, PATH_MAX, "%s %s, fd %s", key, strerror(errno), filename);
+        throw DB::Exception(buf, exp);
+    }
+
+    void copy_back(bool success, void *src) {
+        copy_back_internal(success, src, allocated_bytes(), allocated_bytes());
+    }
+
+    void copy_back_string(bool success, uint64_t prefix, uint16_t idx) {
+        uint64_t mmap_size;
+        void *src;
+
+        if (!success)
+            return;
+
+        src = create_mmap(prefix, idx, 0, &mmap_size);
+        uint64_t size = *static_cast<uint64_t *>(src);
+        resize(size);
+        copy_back_internal(success, src, size, mmap_size);
+    }
+
+    void copy_back_internal(bool success, void *src, size_t sz, size_t mmap_size) {
+        char *dst = c_start - pad_left;
+
+        if (success)
+            memcpy(dst, src, sz);
+
+        munmap(src, mmap_size);
+    }
+
+    void *create_mmap(uint64_t prefix, uint16_t idx, size_t size, size_t *mmap_size = nullptr) const {
+        char filename[PATH_MAX];
+        void *buf;
+        int fd;
+
+        shm_file_fmt(filename, prefix, idx);
+
+#ifndef MFD_CLOEXEC
+#define MFD_CLOEXEC 1U
+#endif
+
+        if ((fd = shm_open(filename, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)) == -1)
+            throw_error("shm_open", filename, ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+
+        if (size == 0) {
+            struct stat sb;
+            if ((fstat(fd, &sb)) == -1)
+                throw_error("fstat", filename, ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+            size = sb.st_size;
+            *mmap_size = size;
+        }
+        else {
+            if (ftruncate(fd, size) == -1)
+                throw_error("ftruncate", filename, ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+        }
+
+        buf = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+        close(fd);
+
+        if (MAP_FAILED == buf)
+            throw_error("mmap", filename, ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+
+        return buf;
     }
 };
 
