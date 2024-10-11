@@ -602,7 +602,9 @@ Property DeriverVisitor::visitReadNothingStep(const ReadNothingStep &, DeriverCo
 
 Property DeriverVisitor::visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeriverContext &)
 {
-    return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
+    auto prop = Partitioning(Partitioning::Handle::SINGLE);
+    prop.setComponent(Partitioning::Component::COORDINATOR);
+    return Property{prop, Partitioning(Partitioning::Handle::ARBITRARY)};
 }
 
 Property DeriverVisitor::visitValuesStep(const ValuesStep &, DeriverContext &)
