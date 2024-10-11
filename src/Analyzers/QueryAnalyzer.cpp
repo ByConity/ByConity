@@ -200,7 +200,7 @@ private:
     void verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query);
     UInt64 analyzeUIntConstExpression(const ASTPtr & expression);
     void countLeadingHint(const IAST & ast);
-    void rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set);
+    void rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, ScopePtr source_scope);
     void normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr);
     void normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
 };
@@ -349,7 +349,7 @@ Void QueryAnalyzerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
     else
         source_scope = analyzeWithoutFrom(select_query);
 
-    rewriteSelectInANSIMode(select_query, query_aliases, source_scope->getNamesSet());
+    rewriteSelectInANSIMode(select_query, query_aliases, source_scope);
     analyzeWindow(select_query);
     analyzeWhere(select_query, source_scope);
     // analyze SELECT first since SELECT item may be referred in GROUP BY/ORDER BY
@@ -2127,11 +2127,24 @@ void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
     }
 }
 
-void QueryAnalyzerVisitor::rewriteSelectInANSIMode(
-    ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set)
+void QueryAnalyzerVisitor::rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, ScopePtr source_scope)
 {
     if (use_ansi_semantic)
     {
+        NameSet source_columns_set, source_columns_set_without_ambiguous;
+        for (const auto & field : source_scope->getFields())
+        {
+            const auto & name = field.name;
+            if (source_columns_set.count(name))
+                source_columns_set_without_ambiguous.erase(name);
+            else
+                source_columns_set_without_ambiguous.emplace(name);
+
+            source_columns_set.emplace(name);
+        }
+        if (context->getSettingsRef().prefer_alias_if_column_name_is_ambiguous)
+            source_columns_set = std::move(source_columns_set_without_ambiguous);
+
         QueryNormalizer::Data normalizer_prefer_source_data(
             aliases,
             source_columns_set,
