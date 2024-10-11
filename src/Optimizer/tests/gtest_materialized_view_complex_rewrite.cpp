@@ -35,6 +35,7 @@ public:
 #endif
         settings.emplace("enable_materialized_view_rewrite", "1");
         settings.emplace("enable_materialized_view_join_rewriting", "1");
+        settings.emplace("enable_materialized_view_union_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
         settings.emplace("materialized_view_consistency_check_method", "NONE");

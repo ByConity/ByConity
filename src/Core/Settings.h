@@ -1663,7 +1663,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_join_rewriting, true, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
-    M(Bool, enable_materialized_view_union_rewriting, true, "Whether enable materialized view based rewriter for query using union", 0) \
+    M(Bool, enable_materialized_view_union_rewriting, false, "Whether enable materialized view based rewriter for query using union", 0) \
+    M(Bool, enforce_materialized_view_union_rewriting, false, "Enforce enable materialized view based rewriter for query using union, used for testing", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
