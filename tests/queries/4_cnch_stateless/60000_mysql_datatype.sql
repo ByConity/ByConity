@@ -7,3 +7,6 @@ create table mysql_dt(
 );
 show create table mysql_dt;
 drop table mysql_dt;
+
+select cast(1 as unsigned integer);
+select cast(1 as signed integer);

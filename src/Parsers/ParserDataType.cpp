@@ -153,6 +153,12 @@ bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         else if (ParserKeyword("UNSIGNED").ignore(pos))
             type_name_suffix = "UNSIGNED";
     }
+    else if (type_name_upper == "UNSIGNED" ||
+             type_name_upper == "SIGNED")
+    {
+        if (ParserKeyword("INTEGER").ignore(pos))
+            type_name_suffix = "INTEGER";
+    }
 
     if (!type_name_suffix.empty())
         type_name = type_name_upper + " " + type_name_suffix;
