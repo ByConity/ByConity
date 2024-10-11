@@ -1,12 +1,14 @@
 #pragma once
 
 #include <vector>
+#include <Interpreters/DistributedStages/ResourceRequest.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/NodeSelector.h>
 #include <common/types.h>
 
 namespace DB
 {
+
 /// Indicates a plan segment.
 struct SegmentTask
 {
@@ -39,7 +41,9 @@ enum class ScheduleEventType : uint8_t
     TriggerDispatch = 3,
     WorkerRestarted = 4,
     SegmentInstanceFinished = 5,
-    ResendResource = 6
+    ResendResource = 6,
+    ResourceRequestGranted = 7,
+    SendResourceRequest = 8
 };
 
 struct ScheduleEvent
@@ -147,6 +151,38 @@ struct ResendResourceEvent : ScheduleEvent
     }
 
     const HostWithPorts host_ports;
+};
+
+struct ResourceRequestGrantedEvent : ScheduleEvent
+{
+    ResourceRequestGrantedEvent(const UInt32 segment_id_, const UInt32 parallel_index_, const UInt32 epoch_, const bool ok_)
+        : segment_id(segment_id_), parallel_index(parallel_index_), epoch(epoch_), ok(ok_)
+    {
+    }
+
+    ScheduleEventType getType() const override
+    {
+        return ScheduleEventType::ResourceRequestGranted;
+    }
+
+    const UInt32 segment_id;
+    const UInt32 parallel_index;
+    const UInt32 epoch;
+    const bool ok;
+};
+
+struct SendResourceRequestEvent : ScheduleEvent
+{
+    explicit SendResourceRequestEvent(std::list<ResourceRequest> resource_request_) : resource_request(std::move(resource_request_))
+    {
+    }
+
+    ScheduleEventType getType() const override
+    {
+        return ScheduleEventType::SendResourceRequest;
+    }
+
+    const std::list<ResourceRequest> resource_request;
 };
 
 } // namespace DB

@@ -70,10 +70,14 @@ public:
     void getWorkerGroups(const std::string & vw_name, std::vector<WorkerGroupData> & groups_data, std::optional<VirtualWarehouseSettings> & settings, std::atomic<UInt64> & last_settings_timestamp);
     bool reportResourceUsage(const WorkerNodeResourceData & data);
 
+    void sendResourceRequest(const Protos::SendResourceRequestResp & request);
+
     void registerWorker(const WorkerNodeResourceData & data);
     void removeWorker(const String & worker_id, const String & vw_name, const String & group_id);
 
     AggQueryQueueMap syncQueueDetails(VWQueryQueueMap vw_query_queue_map , std::vector<String> * deleted_vw_list);
+
+    void sendResourceRequest(const Protos::SendResourceRequestReq & request);
 
 private:
     using Stub = Protos::ResourceManagerService_Stub;

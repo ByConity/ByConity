@@ -709,4 +709,40 @@ void PlanSegmentManagerRpcService::sendPlanSegmentProfile(
     const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
     scheduler->updateSegmentProfile(profile);
 }
+
+void PlanSegmentManagerRpcService::grantResourceRequest(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::GrantResourceRequestReq * request,
+    ::DB::Protos::GrantResourceRequestResp * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+    LOG_DEBUG(
+        log,
+        "Resource request({} {}_{}_{}) granted, result: {}",
+        request->req_type(),
+        request->query_id(),
+        request->segment_id(),
+        request->parallel_index(),
+        request->ok());
+
+    try
+    {
+        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+        auto bsp_scheduler = scheduler->getBSPScheduler(request->query_id());
+        if (bsp_scheduler)
+        {
+            // todo (wangtao.vip): add not ok handling
+            // todo (wangtao.vip): use query start ms
+            bsp_scheduler->resourceRequestGranted(request->segment_id(), request->parallel_index(), request->epoch(), request->ok());
+        }
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(false);
+        cntl->SetFailed(error_msg);
+        LOG_ERROR(log, "grantResourceRequest failed: {}", error_msg);
+    }
+}
 }

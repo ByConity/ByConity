@@ -37,7 +37,7 @@ class ResourceManagerController;
 class ResourceTracker : public boost::noncopyable
 {
 public:
-    ResourceTracker(ResourceManagerController & rm_controller_);
+    explicit ResourceTracker(ResourceManagerController & rm_controller_);
     ~ResourceTracker();
 
     std::vector<WorkerNodePtr> loadWorkerNode(const String & vw_name, const std::vector<WorkerNodeCatalogData> & data);

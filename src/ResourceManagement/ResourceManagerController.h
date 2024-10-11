@@ -15,11 +15,12 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Common/HostWithPorts.h>
-#include <Common/Config/ConfigProcessor.h>
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/CommonData.h>
+#include <ResourceManagement/ResourceScheduler.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/HostWithPorts.h>
+#include <Common/Logger.h>
 
 #include <memory>
 
@@ -51,7 +52,7 @@ using CoordinateDecisions = std::vector<ResourceCoordinateDecision>;
 class ResourceManagerController : public WithContext, private boost::noncopyable
 {
 public:
-    ResourceManagerController(ContextPtr global_context_);
+    explicit ResourceManagerController(ContextPtr global_context_);
     ~ResourceManagerController();
 
     Catalog::CatalogPtr getCnchCatalog();
@@ -60,6 +61,10 @@ public:
 
     void initialize();
 
+    auto & getResourceScheduler()
+    {
+        return *resource_scheduler;
+    }
     auto & getResourceTracker() { return *resource_tracker; }
     auto & getVirtualWarehouseManager() { return *vw_manager; }
     auto & getWorkerGroupManager() { return *group_manager; }
@@ -84,6 +89,7 @@ public:
 private:
     LoggerPtr log{nullptr};
 
+    std::unique_ptr<ResourceScheduler> resource_scheduler;
     std::unique_ptr<ResourceTracker> resource_tracker;
     std::unique_ptr<VirtualWarehouseManager> vw_manager;
     std::unique_ptr<WorkerGroupManager> group_manager;

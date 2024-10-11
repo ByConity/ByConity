@@ -43,6 +43,7 @@ namespace DB::ResourceManagement
 ResourceManagerController::ResourceManagerController(ContextPtr global_context_)
     : WithContext(global_context_), log(getLogger("ResourceManagerController"))
 {
+    resource_scheduler = std::make_unique<ResourceScheduler>(*this);
     resource_tracker = std::make_unique<ResourceTracker>(*this);
     vw_manager = std::make_unique<VirtualWarehouseManager>(*this);
     group_manager = std::make_unique<WorkerGroupManager>(*this);

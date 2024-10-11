@@ -139,6 +139,12 @@ public:
         ::DB::Protos::PlanSegmentProfileResponse * /*response*/,
         ::google::protobuf::Closure * done) override;
 
+    void grantResourceRequest(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::GrantResourceRequestReq * request,
+        ::DB::Protos::GrantResourceRequestResp * response,
+        ::google::protobuf::Closure * done) override;
+
 private:
     void prepareCommonParams(
         UInt32 major_revision,

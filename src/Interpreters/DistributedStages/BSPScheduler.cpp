@@ -1,6 +1,7 @@
 #include "BSPScheduler.h"
 
 #include <atomic>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -21,6 +22,7 @@
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/TableWriteStep.h>
+#include <ResourceManagement/ResourceManagerClient.h>
 
 #include <cstddef>
 #include <string>
@@ -107,6 +109,14 @@ bool BSPScheduler::processEvent(const ScheduleEvent & event)
         }
         case ScheduleEventType::SegmentInstanceFinished: {
             handleSegmentInstanceFinishedEvent(event);
+            break;
+        }
+        case ScheduleEventType::SendResourceRequest: {
+            handleSendResourceRequestEvent(event);
+            break;
+        }
+        case ScheduleEventType::ResourceRequestGranted: {
+            handleResourceRequestGrantedEvent(event);
             break;
         }
         default:
@@ -593,13 +603,14 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
                 if (worker_node.address.getHostName().empty())
                     worker_node.address = address;
             }
+            WorkerId worker_id;
+            // todo (wangtao.vip) move this vars into scheduler.
+            if (!cluster_nodes.vw_name.empty() && !cluster_nodes.worker_group_id.empty())
+                worker_id = WorkerStatusManager::getWorkerId(cluster_nodes.vw_name, cluster_nodes.worker_group_id, worker.id);
             {
                 // TODO(wangtao.vip): this should be handled with dispatch failure.
                 std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
                 running_segment_to_workers[task_instance.segment_id].insert(address);
-                WorkerId worker_id;
-                if (!cluster_nodes.vw_name.empty() && !cluster_nodes.worker_group_id.empty())
-                    worker_id = WorkerStatusManager::getWorkerId(cluster_nodes.vw_name, cluster_nodes.worker_group_id, worker.id);
                 auto instance_id = PlanSegmentInstanceId{
                     static_cast<UInt32>(task_instance.segment_id), static_cast<UInt32>(task_instance.parallel_index)};
                 running_instances->insert(address, worker_id, instance_id);
@@ -608,7 +619,66 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
                     local_address); /// init with server addr, as we wont schedule to server
             }
 
-            dispatchOrCollectTask(dag_graph_ptr->getPlanSegmentPtr(task_instance.segment_id), task_instance);
+            if (query_context->getSettingsRef().enable_resource_aware_scheduler)
+                // todo (wangtao.vip): to be event driven. combine with retrying.
+                sendResourceRequest(task_instance, worker_id);
+            else
+                dispatchOrCollectTask(dag_graph_ptr->getPlanSegmentPtr(task_instance.segment_id), task_instance);
+        }
+    }
+}
+
+void BSPScheduler::sendResourceRequest(const SegmentTaskInstance & instance, const WorkerId & worker_id)
+{
+        // TODO(lianxuchao): predicate the resource
+        ResourceRequest req{
+            .segment_id = static_cast<UInt32>(instance.segment_id),
+            .parallel_index = static_cast<UInt32>(instance.parallel_index),
+            .worker_id = worker_id.ToString(),
+            .v_cpu = 1,
+            .epoch = 0};
+        postEvent(std::make_shared<SendResourceRequestEvent>(std::list{req}));
+}
+
+void BSPScheduler::handleSendResourceRequestEvent(const ScheduleEvent & event)
+{
+    const auto & request_event = dynamic_cast<const SendResourceRequestEvent &>(event);
+    if (auto rm_client = query_context->getResourceManagerClient(); rm_client)
+    {
+        for (const auto & request : request_event.resource_request)
+        {
+            pending_resource_requests.insert(SegmentTaskInstance{request.segment_id, request.parallel_index}, request);
+            rm_client->sendResourceRequest(fillResourceRequestToProto(request));
+        }
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Resource manager is needed in resource aware scheduler");
+    }
+}
+
+void BSPScheduler::handleResourceRequestGrantedEvent(const ScheduleEvent & event)
+{
+    const auto & grant = dynamic_cast<const ResourceRequestGrantedEvent &>(event);
+    const auto instance = SegmentTaskInstance{grant.segment_id, grant.parallel_index};
+    if (pending_resource_requests.illegal(instance, grant.epoch))
+    {
+        if (grant.ok)
+        {
+            if (pending_resource_requests.pending_requests.contains(instance))
+            {
+                pending_resource_requests.erase(instance);
+                dispatchOrCollectTask(dag_graph_ptr->getPlanSegmentPtr(grant.segment_id), instance);
+            }
+            else
+            {
+                LOG_WARNING(
+                    log, "Instance {}_{} is not in pending set, may be duplicated grant.", instance.segment_id, instance.parallel_index);
+            }
+        }
+        else
+        {
+            // todo (wangtao.vip) re-request after an interval, say 10 seconds.
         }
     }
 }
@@ -771,5 +841,27 @@ bool BSPScheduler::isTaintNode(size_t task_id, const AddressInfo & worker, Taint
         case TaintLevel::Last:
             throw Exception("Unexpected taint level", ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+Protos::SendResourceRequestReq BSPScheduler::fillResourceRequestToProto(const ResourceRequest & req)
+{
+    Protos::SendResourceRequestReq pb;
+    local_address.toProto(*pb.mutable_server_addr());
+    pb.set_req_type(::DB::Protos::ResourceRequestType::RESOURCE_REQUEST);
+    pb.set_query_id(query_id);
+    pb.set_query_start_ts(query_context->getClientInfo().initial_query_start_time_microseconds / 1000);
+    pb.set_segment_id(req.segment_id);
+    pb.set_parallel_index(req.parallel_index);
+    pb.set_worker_id(req.worker_id);
+    pb.set_request_vcpu(req.v_cpu);
+    pb.set_request_mem(req.mem);
+    pb.set_epoch(req.epoch);
+
+    return pb;
+}
+
+void BSPScheduler::resourceRequestGranted(const UInt32 segment_id, const UInt32 parallel_index, const UInt32 epoch, bool ok)
+{
+    postEvent(std::make_shared<ResourceRequestGrantedEvent>(segment_id, parallel_index, epoch, ok));
 }
 }
