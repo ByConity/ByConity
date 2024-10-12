@@ -652,15 +652,24 @@ Property DeriverVisitor::visitRemoteExchangeSourceStep(const RemoteExchangeSourc
 
 Property DeriverVisitor::visitTableScanStep(const TableScanStep & step, DeriverContext & context)
 {
-    NameToNameMap translation;
-    for (const auto & item : step.getColumnAlias())
-        translation.emplace(item.first, item.second);
+    Property prop;
 
     if (!context.getRequire().getTableLayout().empty())
-        return PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire())
-            .translate(translation);
+    {
+        prop = PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire());
+    }
+    else
+    {
+        prop = PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getRequire(), context.getContext());
 
-    return PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getRequire(), context.getContext()).translate(translation);
+    }
+
+    auto result = prop.translate(step.getColumnToAliasMap(), true);
+    if (prop.getNodePartitioning().getColumns().size() != result.getNodePartitioning().getColumns().size())
+    {
+        result.setNodePartitioning({});
+    }
+    return result;
 }
 
 Property DeriverVisitor::visitReadNothingStep(const ReadNothingStep &, DeriverContext &)

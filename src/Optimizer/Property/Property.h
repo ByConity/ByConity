@@ -149,7 +149,7 @@ public:
         this->satisfy_worker = satisfy_worker_;
     }
 
-    Partitioning translate(const std::unordered_map<String, String> & identities) const;
+    Partitioning translate(const std::unordered_map<String, String> & identities, bool discard_not_in = false) const;
     Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
     bool satisfy(const Partitioning &, const Constants & constants) const;
     bool isPartitionOn(const Partitioning &, const Constants & constants) const;
@@ -458,7 +458,7 @@ public:
         return result;
     }
 
-    Property translate(const std::unordered_map<String, String> & identities) const;
+    Property translate(const std::unordered_map<String, String> & identities, bool discard_not_in = false) const;
     Property normalize(const SymbolEquivalences & symbol_equivalences) const;
 
     bool operator==(const Property & other) const
