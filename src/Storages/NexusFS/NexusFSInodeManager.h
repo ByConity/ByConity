@@ -94,8 +94,8 @@ private:
 class InodeManager
 {
 public:
-    explicit InodeManager(const String & prefix_, const String & surfix_, const UInt32 segment_size_)
-        : prefix(prefix_), surfix(surfix_), segment_size(segment_size_), root_inode(std::make_shared<Inode>(0))
+    explicit InodeManager(const String & prefix_, const UInt32 segment_size_)
+        : prefix(prefix_), segment_size(segment_size_), root_inode(std::make_shared<Inode>(0))
     {
         num_inodes++;
     }
@@ -133,12 +133,11 @@ public:
 
 private:
     String extractValidPath(const String & path) const;
-    void resolvePath(const String & path, std::vector<String> & ressolved_dirs) const;
+    void resolvePath(const String & path, std::vector<String> & resolved_dirs) const;
 
     LoggerPtr log = getLogger("NexusFSInodeManager");
 
     const String prefix;
-    const String surfix;
     const UInt32 segment_size;
     std::atomic<UInt64> inode_id{1};
     std::shared_ptr<Inode> root_inode;

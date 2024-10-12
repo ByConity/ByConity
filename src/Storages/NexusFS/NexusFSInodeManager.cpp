@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include <google/protobuf/util/delimited_message_util.h>
+#include <Poco/String.h>
 
 #include <Protos/disk_cache.pb.h>
 #include "common/defines.h"
@@ -264,7 +265,6 @@ void InodeManager::persist(google::protobuf::io::CodedOutputStream * stream) con
 {
     Protos::NexusFSInodeManager manager;
     manager.set_prefix(prefix);
-    manager.set_surfix(surfix);
     auto * root_inode_proto = manager.mutable_root_inode();
     root_inode_proto->set_node_key("");
     root_inode->toProto(root_inode_proto);
@@ -283,14 +283,12 @@ void InodeManager::recover(
     Protos::NexusFSInodeManager manager;
     google::protobuf::util::ParseDelimitedFromCodedStream(&manager, stream, nullptr);
 
-    if (manager.prefix() != prefix || manager.surfix() != surfix)
+    if (manager.prefix() != prefix)
         throw Exception(
             ErrorCodes::INVALID_CONFIG_PARAMETER,
-            "Invalid prefix or surfix. Expected prefix: {}, surfix: {}, actual prefix: {}, surfix: {}",
+            "Invalid prefix . Expected prefix: {}, actual prefix: {}",
             prefix,
-            surfix,
-            manager.prefix(),
-            manager.surfix());
+            manager.prefix());
 
     auto recover_files_in_inode = [&](std::shared_ptr<Inode> & node, const Protos::NexusFSInode & proto_node)
     {
@@ -324,22 +322,20 @@ void InodeManager::recover(
 
 String InodeManager::extractValidPath(const String & path) const
 {
-    if (path.size() <= prefix.size() + surfix.size())
-        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} invalid, its length is smaller than prefix + surfix", path);
-    if (prefix != path.substr(0, prefix.size()))
+    if (path.size() <= prefix.size())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} invalid, its length is smaller than prefix", path);
+    if (!prefix.empty() && prefix != path.substr(0, prefix.size()))
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} has invalid prefix, required prefix should be {}", path, prefix);
-    if (surfix != path.substr(path.size() - surfix.size(), surfix.size()))
-        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} has invalid surfix, required surfix should be {}", path, surfix);
 
-    String valid_path = path.substr(prefix.size(), path.size() - prefix.size() - surfix.size());
+    String valid_path = path.substr(prefix.size());
     if (valid_path.empty())
-        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} is invalid, it consists of only prefix and suffix. ", path);
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} is invalid, it consists of only prefix. ", path);
 
     return valid_path;
 }
 
 
-void InodeManager::resolvePath(const String & path, std::vector<String> & ressolved_dirs) const
+void InodeManager::resolvePath(const String & path, std::vector<String> & resolved_dirs) const
 {
     String valid_path = extractValidPath(path);
 
@@ -350,7 +346,7 @@ void InodeManager::resolvePath(const String & path, std::vector<String> & ressol
         {
             if (!dir.empty())
             {
-                ressolved_dirs.push_back(dir);
+                resolved_dirs.push_back(dir);
                 dir.clear();
             }
         }
@@ -360,19 +356,28 @@ void InodeManager::resolvePath(const String & path, std::vector<String> & ressol
         }
     }
     if (!dir.empty())
-        ressolved_dirs.push_back(dir);
+        resolved_dirs.push_back(dir);
 
-    if (ressolved_dirs.empty())
-        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} is invalid, it consists of only prefix and suffix. ", path);
+    if (resolved_dirs.empty())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "path {} is invalid, it consists of only prefix. ", path);
 
+    // Since all of the part files are named as "data", we concat the file name and its directory name as "xxx?data",
+    // in order to avoid one hashmap lookup.
+    // We use '?' because it is not a valid character in file name.  
+    if (Poco::toLower(resolved_dirs.back()) == "data" && resolved_dirs.size() > 1)
     {
-        String str = ressolved_dirs[0];
-        for (size_t i = 1; i < ressolved_dirs.size(); i++)
-        {
-            str += "," + ressolved_dirs[i];
-        }
-        LOG_TRACE(log, "resolvePath get: {}", str);
+        resolved_dirs.pop_back();
+        resolved_dirs.back() += "?data";
     }
+
+    // {
+    //     String str = resolved_dirs[0];
+    //     for (size_t i = 1; i < resolved_dirs.size(); i++)
+    //     {
+    //         str += "," + resolved_dirs[i];
+    //     }
+    //     LOG_TRACE(log, "resolvePath get: {}", str);
+    // }
 }
 
 void InodeManager::cleanInvalidFiles()

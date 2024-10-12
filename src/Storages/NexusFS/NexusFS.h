@@ -86,7 +86,6 @@ public:
     UInt32 filemeta_gc_interval_s{300};
 
     String file_prefix;
-    String file_surfix;
 
     // Calculate the total region number.
     UInt32 getNumberRegions() const
@@ -137,7 +136,6 @@ public:
     bool supportNonCopyingRead() const { return enable_buffer; }
     bool supportPrefetch() const { return support_prefetch; }
     String getFilePrefix() const { return file_prefix; }
-    String getFileSurfix() const { return file_surfix; }
     UInt64 getNumSegments() const { return num_segments.load(); }
     UInt64 getNumInflightInserts() const { return num_inflight_inserts.load(); }
     UInt64 getNumInodes() const { return index.getNumInodes(); }
@@ -342,7 +340,6 @@ private:
     const UInt32 timeout_ms{};
 
     const String file_prefix;
-    const String file_surfix;
     NexusFSComponents::InodeManager index;
     HybridCache::RegionManager region_manager;
     HybridCache::Allocator allocator;

@@ -19,7 +19,7 @@ using namespace HybridCache;
 TEST(NexusFSInodeManager, GetAndSet)
 {
     auto get_file_and_segment_size = []() { return std::make_pair(5, 1); };
-    InodeManager index("/prefix/", "/data", 1);
+    InodeManager index("/prefix/", 1);
     auto h1 = std::make_shared<BlockHandle>(RelAddress(RegionId(1), 2), 3);
     index.insert("/prefix//AA/BB/CC/data", 0, h1, get_file_and_segment_size);
     auto h2 = index.lookup("/prefix/AA/BB//CC//data", 0);
@@ -39,23 +39,38 @@ TEST(NexusFSInodeManager, GetAndSet)
     auto h4 = std::make_shared<BlockHandle>(RelAddress(RegionId(5), 3), 4);
     index.insert("/prefix/0/data", 1, h4, get_file_and_segment_size);
     EXPECT_TRUE(index.lookup("/prefix/0/data", 1));
+
+    EXPECT_FALSE(index.lookup("/prefix/data", 2));
+    auto h5 = std::make_shared<BlockHandle>(RelAddress(RegionId(6), 3), 4);
+    index.insert("/prefix/data", 2, h5, get_file_and_segment_size);
+    EXPECT_TRUE(index.lookup("/prefix/data", 2));
+
+    EXPECT_FALSE(index.lookup("/prefix/AAA/xxx.bitmap", 2));
+    auto h6 = std::make_shared<BlockHandle>(RelAddress(RegionId(7), 3), 4);
+    index.insert("/prefix/AA/xxx.bitmap", 2, h6, get_file_and_segment_size);
+    EXPECT_TRUE(index.lookup("/prefix/AA/xxx.bitmap", 2));
+
+    EXPECT_FALSE(index.lookup("/prefix/AAA/xxx.bitmap", 3));
+    auto h7 = std::make_shared<BlockHandle>(RelAddress(RegionId(7), 3), 4);
+    index.insert("/prefix/AAA/xxx.bitmap", 3, h7, get_file_and_segment_size);
+    EXPECT_TRUE(index.lookup("/prefix/AAA/xxx.bitmap", 3));
 }
 
 TEST(NexusFSInodeManager, InvalidPath)
 {
-    InodeManager index("/prefix/", "/data", 128);
+    InodeManager index("/prefix/", 128);
     EXPECT_THROW({ index.lookup("", 0); }, Exception);
     EXPECT_THROW({ index.lookup("/prefix1/AA/BB/CC/data", 0); }, Exception);
-    EXPECT_THROW({ index.lookup("/prefix/AA/BB/CC/data2", 0); }, Exception);
-    EXPECT_THROW({ index.lookup("/prefix/data", 0); }, Exception);
-    EXPECT_THROW({ index.lookup("/prefix//data", 0); }, Exception);
-    EXPECT_THROW({ index.lookup("/prefix///data", 0); }, Exception);
+    EXPECT_THROW({ index.lookup("/prefix", 0); }, Exception);
+    EXPECT_THROW({ index.lookup("/prefix/", 0); }, Exception);
+    EXPECT_THROW({ index.lookup("/prefix//", 0); }, Exception);
+    EXPECT_THROW({ index.lookup("", 0); }, Exception);
 }
 
 TEST(NexusFSInodeManager, InvalidSegmentId)
 {
     auto get_file_and_segment_size = []() { return std::make_pair(5, 1); };
-    InodeManager index("/prefix/", "/data", 1);
+    InodeManager index("/prefix/", 1);
     EXPECT_FALSE(index.lookup("/prefix/AA/data", 1));
     auto h1 = std::make_shared<BlockHandle>(RelAddress(RegionId(1), 2), 3);
     index.insert("/prefix/AA/data", 1, h1, get_file_and_segment_size);
@@ -71,7 +86,7 @@ TEST(NexusFSInodeManager, InvalidSegmentId)
 TEST(NexusFSInodeManager, ThreadSafe)
 {
     auto get_file_and_segment_size = []() { return std::make_pair(20, 1); };
-    InodeManager index("/prefix/", "/data", 128);
+    InodeManager index("/prefix/", 128);
     const String file = "/prefix/AA/BB/CC/DD/EE/data";
     auto handle = std::make_shared<BlockHandle>(RelAddress(RegionId(1), 2), 3);
     index.insert(file, 10, handle, get_file_and_segment_size);
@@ -98,7 +113,7 @@ TEST(NexusFSInodeManager, ThreadSafe)
 TEST(NexusFSInodeManager, Recovery)
 {
     auto get_file_and_segment_size = []() { return std::make_pair(10, 1); };
-    InodeManager index("/prefix/", "/data", 1);
+    InodeManager index("/prefix/", 1);
     std::vector<std::pair<String, UInt64>> log;
     for (UInt64 i = 0; i < 16; i++)
     {
@@ -145,7 +160,7 @@ TEST(NexusFSInodeManager, Recovery)
     auto policy = std::make_unique<HybridCache::FifoPolicy>();
     RegionManager region_manager(20, 4096, 0, *device, 1, 1, {}, {}, std::move(policy), 2, 4, 10);
     std::atomic<UInt64> num_segments = 0;
-    InodeManager new_index("/prefix/", "/data", 1);
+    InodeManager new_index("/prefix/", 1);
     google::protobuf::io::ArrayInputStream raw_stream(metadata.data(), INT_MAX);
     google::protobuf::io::CodedInputStream istream(&raw_stream);
     new_index.recover(&istream, region_manager, num_segments);

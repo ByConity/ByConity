@@ -145,7 +145,6 @@ void NexusFSConfig::loadFromConfig(const Poco::Util::AbstractConfiguration & con
     bool use_memory_device = conf.getBool(config_name + ".use_memory_device", false);
     bool enable_async_io = conf.getBool(config_name + ".enable_async_io", false);
     file_prefix = conf.getString(config_name + ".file_prefix", "");
-    file_surfix = conf.getString(config_name + ".file_surfix", "");
 
     double metadata_percentage = conf.getDouble(config_name + ".metadata_percentage", 0.01);
     metadata_size = alignUp(static_cast<UInt64>(metadata_percentage * cache_size), region_size);
@@ -225,8 +224,7 @@ NexusFS::NexusFS(NexusFSConfig && config)
     , num_segments_per_source_buffer(source_buffer_size / segment_size)
     , timeout_ms(config.timeout_ms)
     , file_prefix(config.file_prefix)
-    , file_surfix(config.file_surfix)
-    , index(getFilePrefix(), getFileSurfix(), getSegmentSize())
+    , index(getFilePrefix(), getSegmentSize())
     // , num_priorities{config.num_priorities}
     // , check_expired{std::move(config.check_expired)}
     // , destructor_callback{std::move(config.destructor_callback)}
@@ -996,7 +994,6 @@ Protos::NexusFSConfig NexusFS::serializeConfig(const NexusFSConfig & config)
     serialized_config.set_region_size(config.region_size);
     serialized_config.set_segment_size(config.segment_size);
     serialized_config.set_file_prefix(config.file_prefix);
-    serialized_config.set_file_surfix(config.file_surfix);
 
     return serialized_config;
 }
@@ -1038,7 +1035,7 @@ bool NexusFS::recover()
         if (config.cache_size() != serialized_config.cache_size() || config.metadata_size() != serialized_config.metadata_size()
             || config.region_size() != serialized_config.region_size() || config.segment_size() != serialized_config.segment_size()
             || config.version() != serialized_config.version() || config.alloc_align_size() != serialized_config.alloc_align_size()
-            || config.file_prefix() != serialized_config.file_prefix() || config.file_surfix() != serialized_config.file_surfix())
+            || config.file_prefix() != serialized_config.file_prefix())
         {
             LOG_ERROR(log, "Recovery config: {}", config.DebugString());
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Recovery config does not match cache config");
