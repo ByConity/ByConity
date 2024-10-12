@@ -673,6 +673,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, C
         aggs,
         step->getGroupingSetsParams(),
         step->isFinal(),
+        step->getStagePolicy(),
         step->getGroupBySortDescription(),
         step->getGroupings(),
         step->needOverflowRow(),

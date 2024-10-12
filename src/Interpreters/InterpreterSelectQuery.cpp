@@ -2594,6 +2594,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         NameSet{},
         std::move(grouping_sets_params),
         final,
+        AggregateStagePolicy::DEFAULT,
         settings.max_block_size,
         merge_threads,
         temporary_data_merge_threads,

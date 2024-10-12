@@ -400,6 +400,7 @@ StepAndOutputOrder StepNormalizer::visitAggregatingStep(const AggregatingStep & 
         aggregates_reordered,
         GroupingSetsParamsList{}, // checked empty
         step.isFinal(),
+        step.getStagePolicy(),
         SortDescription{}, // checked empty
         GroupingDescriptions{}, // checked empty
         false,

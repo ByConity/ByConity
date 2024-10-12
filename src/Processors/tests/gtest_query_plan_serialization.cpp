@@ -147,6 +147,7 @@ QueryPlanStepPtr createAggregatingStep()
         NameSet{},
         GroupingSetsParamsList{},
         true,
+        AggregateStagePolicy::DEFAULT,
         8,
         9,
         10,

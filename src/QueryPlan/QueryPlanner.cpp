@@ -1481,6 +1481,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         aggregate_descriptions,
         select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? grouping_sets_params : GroupingSetsParamsList{},
         !select_query.group_by_with_totals, // when WITH TOTALS exists, TotalsHavingStep is to finalize aggregates
+        AggregateStagePolicy::DEFAULT,
         SortDescription{},
         grouping_operations_descs,
         needAggregateOverflowRow(select_query),

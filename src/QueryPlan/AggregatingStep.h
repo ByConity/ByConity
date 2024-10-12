@@ -69,6 +69,22 @@ public:
 
 using GroupingDescriptions = std::vector<GroupingDescription>;
 
+/// AggregateStagePolicy represents partition requirements for aggregate node
+///
+/// 1 single, means insert a gather exchange node before aggregate node,
+/// 2 perfect_shard, means the aggregate node match any partition requirement.
+/// 3 merge_perfect_shard, needs insert a gather exchange before aggregate.
+/// 4 default, in this case, use property enforcement to derive required exchange.
+enum class AggregateStagePolicy : UInt8
+{
+    SINGLE = 0,
+    PERFECT_SHARD,
+    MERGE_PERFECT_SHARD,
+    DEFAULT,
+    STATE,
+    MERGE
+};
+
 Block appendGroupingSetColumn(Block header);
 
 void computeGroupingFunctions(
@@ -88,6 +104,7 @@ public:
         const NameSet & keys_not_hashed_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
+        AggregateStagePolicy stage_policy_,
         size_t max_block_size_,
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
@@ -104,6 +121,7 @@ public:
             std::move(params_),
             std::move(grouping_sets_params_),
             final_,
+            stage_policy_,
             max_block_size_,
             merge_threads_,
             temporary_data_merge_threads_,
@@ -126,6 +144,7 @@ public:
         AggregateDescriptions aggregates_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
+        AggregateStagePolicy stage_policy_ = AggregateStagePolicy::DEFAULT,
         SortDescription group_by_sort_description_ = {},
         GroupingDescriptions groupings_ = {},
         bool overflow_row_ = false,
@@ -140,6 +159,7 @@ public:
             createParams(input_stream_.header, aggregates_, keys_, overflow_row_),
             std::move(grouping_sets_params_),
             final_,
+            stage_policy_,
             0,
             0,
             0,
@@ -163,6 +183,7 @@ public:
         Aggregator::Params params_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
+        AggregateStagePolicy stage_policy_,
         size_t max_block_size_,
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
@@ -227,6 +248,9 @@ public:
     }
     bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
+    AggregateStagePolicy getStagePolicy() const { return stage_policy; }
+    void setStagePolicy (AggregateStagePolicy policy){ stage_policy = policy; }
+
     void toProto(Protos::AggregatingStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<AggregatingStep> fromProto(const Protos::AggregatingStep & proto, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
@@ -244,6 +268,9 @@ private:
     Aggregator::Params params;
     GroupingSetsParamsList grouping_sets_params;
     bool final;
+
+    /// stage_policy field doesn't need be serialize/deserialize
+    AggregateStagePolicy stage_policy;
 
     size_t max_block_size;
     size_t merge_threads;

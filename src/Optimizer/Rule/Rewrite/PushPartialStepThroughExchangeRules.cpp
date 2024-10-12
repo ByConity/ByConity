@@ -13,19 +13,33 @@
  * limitations under the License.
  */
 
-#include <utility>
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Core/Names.h>
 #include <Core/SortDescription.h>
+#include <DataTypes/IDataType.h>
+#include <Interpreters/AggregateDescription.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PlanNodeCardinality.h>
+#include <Optimizer/ProjectionPlanner.h>
+#include <Optimizer/Property/Property.h>
+#include <Optimizer/Property/PropertyDeriver.h>
+#include <Optimizer/Property/PropertyMatcher.h>
 #include <Optimizer/Rule/Pattern.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST_fwd.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <QueryPlan/Assignment.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/Hints/PushPartialAgg.h>
+#include <QueryPlan/PlanNode.h>
+#include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolMapper.h>
@@ -70,13 +84,145 @@ static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step
 
 ConstRefPatternPtr PushPartialAggThroughExchange::getPattern() const
 {
-    static auto pattern = Patterns::aggregating().withSingle(Patterns::exchange()).result();
+    static auto pattern = Patterns::aggregating()
+        .matchingStep<AggregatingStep>([](const AggregatingStep & step) { return step.getStagePolicy() != AggregateStagePolicy::MERGE; })
+        .withSingle(Patterns::exchange()).result();
     return pattern;
+}
+
+std::set<String> splitToStateMerge(const AggregatingStep * step, PlanNodePtr exchange_child, RuleContext & context)
+{
+    if (!context.context->getSettingsRef().enable_split_countd_to_state_merge)
+        return {};
+
+    bool has_distinct = false;
+
+
+    NameSet distinct_names{"uniqexact", "countdistinct"};
+    for (const auto & agg : step->getAggregates())
+    {
+        has_distinct |= distinct_names.contains(Poco::toLower(agg.function->getName()));
+    }
+
+    std::set<String> result;
+    if (has_distinct)
+    {
+        auto actual = PropertyDeriver::deriveProperty(exchange_child, context.context, context.cte_info, true);
+        for (const auto & agg : step->getAggregates())
+        {
+            if (distinct_names.contains(Poco::toLower(agg.function->getName())))
+            {
+                Partitioning require{Partitioning::Handle::FIXED_HASH, agg.argument_names};
+                if (PropertyMatcher::matchNodePartitioning(*context.context, require, actual.getNodePartitioning()))
+                {
+                    result.insert(agg.column_name);
+                }
+            }
+        }
+    }
+    return result;
 }
 
 TransformResult split(const PlanNodePtr & node, RuleContext & context)
 {
     const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
+
+    auto match_node_prop_agg_results = splitToStateMerge(step, node->getChildren()[0]->getChildren()[0], context);
+    if (!match_node_prop_agg_results.empty())
+    {
+        std::map<String, AggregateFunctionPtr> name_function;
+        AggregateDescriptions state_aggs;
+        ASTs assignments;
+        NameToNameMap agg_result_to_state;
+        for (const auto & agg : step->getAggregates())
+        {
+            auto state_agg = agg;
+            AggregateFunctionProperties properties;
+            DataTypes types;
+            for (const auto & name : agg.argument_names)
+            {
+                types.push_back(step->getInputStreams()[0].header.getByName(name).type);
+            }
+            state_agg.function = AggregateFunctionFactory::instance().get(
+                state_agg.function->getName() + "State", types, state_agg.parameters, properties);
+            state_agg.column_name += "State";
+            state_aggs.emplace_back(state_agg);
+
+            if (match_node_prop_agg_results.contains(agg.column_name))
+            {
+                auto init_name = context.context->getSymbolAllocator()->newSymbol(state_agg.column_name);
+                assignments.emplace_back(makeASTFunction(
+                    "initializeAggregation",
+                    std::make_shared<ASTLiteral>("sumState"),
+                    makeASTFunction("finalizeAggregation", std::make_shared<ASTIdentifier>(state_agg.column_name))));
+            }
+            else
+            {
+                assignments.emplace_back(std::make_shared<ASTIdentifier>(state_agg.column_name));
+            }
+        }
+
+        auto state_agg = std::make_shared<AggregatingStep>(
+            node->getChildren()[0]->getStep()->getOutputStream(),
+            step->getKeys(),
+            step->getKeysNotHashed(),
+            state_aggs,
+            step->getGroupingSetsParams(),
+            true,
+            AggregateStagePolicy::STATE,
+            step->getGroupBySortDescription(),
+            step->getGroupings(),
+            step->needOverflowRow(),
+            false);
+
+        auto state_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), state_agg, node->getChildren());
+        ProjectionPlanner projection_planner(state_agg_node, context.context);
+        size_t index = 0;
+        for (const auto & ast : assignments)
+        {
+            auto [state_name, _] = projection_planner.addColumn(ast);
+            agg_result_to_state[step->getAggregates()[index].column_name] = state_name;
+            ++index;
+        }
+        auto state_projection_node = projection_planner.build();
+
+
+        AggregateDescriptions merge_aggs;
+        for (const auto & agg : step->getAggregates())
+        {
+            auto merge_agg = agg;
+            AggregateFunctionProperties properties;
+            merge_agg.argument_names = {agg_result_to_state[agg.column_name]};
+            DataTypes types{state_projection_node->getCurrentDataStream().header.getByName(agg_result_to_state[agg.column_name]).type};
+
+            if (match_node_prop_agg_results.contains(agg.column_name))
+            {
+                merge_agg.function = AggregateFunctionFactory::instance().get("sumMerge", types, merge_agg.parameters, properties);
+            }
+            else
+            {
+                merge_agg.function = AggregateFunctionFactory::instance().get(
+                    merge_agg.function->getName() + "Merge", types, merge_agg.parameters, properties);
+            }
+            merge_aggs.emplace_back(merge_agg);
+        }
+
+        auto merge_agg = std::make_shared<AggregatingStep>(
+            state_projection_node->getCurrentDataStream(),
+            step->getKeys(),
+            step->getKeysNotHashed(),
+            merge_aggs,
+            step->getGroupingSetsParams(),
+            true,
+            AggregateStagePolicy::MERGE,
+            step->getGroupBySortDescription(),
+            step->getGroupings(),
+            step->needOverflowRow(),
+            false);
+
+        return PlanNodeBase::createPlanNode(context.context->nextNodeId(), merge_agg, {state_projection_node});
+    }
+
     QueryPlanStepPtr partial_agg = std::make_shared<AggregatingStep>(
         node->getChildren()[0]->getStep()->getOutputStream(),
         step->getKeys(),
@@ -84,6 +230,7 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         step->getAggregates(),
         step->getGroupingSetsParams(),
         false,
+        AggregateStagePolicy::DEFAULT,
         step->getGroupBySortDescription(),
         step->getGroupings(),
         step->needOverflowRow(),
@@ -233,7 +380,7 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         }
     }
 
-    if (step->isFinal())
+    if (step->isFinal() && step->getStagePolicy() != AggregateStagePolicy::STATE)
         return split(node, context);
     else
         return pushPartial(node, context);
@@ -294,6 +441,51 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
         context.context->nextNodeId(),
         std::make_shared<UnionStep>(union_inputs, output, OutputToInputs{}, union_step->getMaxThreads(), union_step->isLocal()),
         partials);
+}
+
+ConstRefPatternPtr PushProjectionThroughExchange::getPattern() const
+{
+    static auto pattern = Patterns::project().withSingle(Patterns::exchange()).result();
+    return pattern;
+}
+
+TransformResult PushProjectionThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
+{
+    const auto * step = dynamic_cast<const ProjectionStep *>(node->getStep().get());
+    auto exchange_node = node->getChildren()[0];
+    const auto * exchange_step = dynamic_cast<const ExchangeStep *>(exchange_node->getStep().get());
+
+    if (exchange_node->getChildren().size() != 1)
+    {
+        return {};
+    }
+
+    // only push initializeAggregation projections
+    bool has_init_state = false;
+    for (const auto & assign : step->getAssignments())
+    {
+        if (const auto * func = assign.second->as<ASTFunction>())
+        {
+            has_init_state |= func->name == "initializeAggregation";
+        }
+    }
+
+    if (!has_init_state)
+    {
+        return {};
+    }
+
+    for (const auto & item : exchange_step->getOutToInputs())
+    {
+        if (item.first != item.second[0])
+        {
+            return {};
+        }
+    }
+
+    node->replaceChildren({exchange_node->getChildren()[0]});
+    exchange_node->replaceChildren({node});
+    return exchange_node;
 }
 
 ConstRefPatternPtr PushPartialSortingThroughExchange::getPattern() const

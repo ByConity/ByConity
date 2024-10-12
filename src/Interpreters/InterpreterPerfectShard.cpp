@@ -344,6 +344,7 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
         NameSet{},
         GroupingSetsParamsList{},
         true,
+        AggregateStagePolicy::DEFAULT,
         settings.max_block_size,
         merge_threads,
         temporary_data_merge_threads,

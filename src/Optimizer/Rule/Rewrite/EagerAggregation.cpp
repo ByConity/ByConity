@@ -622,6 +622,7 @@ PlanNodePtr doInsertAggregation(
                 new_global_agg_desc,
                 agg_step.getGroupingSetsParams(),
                 agg_step.isFinal(),
+                agg_step.getStagePolicy(),
                 SortDescription{agg_step.getGroupBySortDescription()},
                 agg_step.getGroupings(),
                 agg_step.needOverflowRow(),

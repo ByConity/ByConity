@@ -199,6 +199,7 @@ TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNod
         new_agg_descs,
         step.getGroupingSetsParams(),
         step.isFinal(),
+        step.getStagePolicy(),
         step.getGroupBySortDescription(),
         step.getGroupings(),
         step.needOverflowRow(),

@@ -1523,6 +1523,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
     M(Bool, enable_push_partial_topn_distinct_through_exchange, true, "Whether to enable PushPartialTopNDistinctThroughExchange rules", 0) \
+    M(Bool, enable_push_projection_through_exchange, true, "Whether to enable PushProjectionThroughExchange rules", 0) \
+    M(Bool, enable_split_countd_to_state_merge, false, "Whether to enable split count distinct to state and merge", 0) \
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
     M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
     M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
@@ -1633,6 +1635,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_injective_in_property, false, "Whether enable using injective function when property match", 0) \
+    M(Bool, enable_case_when_prop, false, "Whether enable case when prop", 0) \
     M(UInt64, max_expand_join_key_size, 3, "Whether enable using equivalences when property match", 0) \
     M(UInt64, max_expand_agg_key_size, 3, "Max allowed agg/window keys number when expand powerset when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \

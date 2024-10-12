@@ -430,6 +430,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, C
         descs_set_nullable,
         step.getGroupingSetsParams(),
         step.isFinal(),
+        step.getStagePolicy(),
         step.getGroupBySortDescription(),
         step.getGroupings(),
         step.needOverflowRow(),

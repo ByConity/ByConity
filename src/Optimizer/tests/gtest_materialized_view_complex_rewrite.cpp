@@ -39,7 +39,7 @@ public:
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
         settings.emplace("materialized_view_consistency_check_method", "NONE");
-
+        settings.emplace("enable_split_countd_to_state_merge", 0);
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 

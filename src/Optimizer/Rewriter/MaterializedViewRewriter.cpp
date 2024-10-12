@@ -1535,6 +1535,7 @@ protected:
                 rewrite_aggregates,
                 query_step.getGroupingSetsParams(),
                 query_step.isFinal(),
+                query_step.getStagePolicy(),
                 query_step.getGroupBySortDescription(),
                 query_step.getGroupings(),
                 query_step.needOverflowRow(),

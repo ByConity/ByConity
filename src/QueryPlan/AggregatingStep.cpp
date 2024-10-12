@@ -300,6 +300,7 @@ AggregatingStep::AggregatingStep(
     Aggregator::Params params_,
     GroupingSetsParamsList grouping_sets_params_,
     bool final_,
+    AggregateStagePolicy stage_policy_,
     size_t max_block_size_,
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
@@ -323,6 +324,7 @@ AggregatingStep::AggregatingStep(
     , params(std::move(params_))
     , grouping_sets_params(std::move(grouping_sets_params_))
     , final(final_)
+    , stage_policy(stage_policy_)
     , max_block_size(max_block_size_)
     , merge_threads(merge_threads_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
@@ -777,6 +779,7 @@ std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
         params.aggregates,
         grouping_sets_params,
         final,
+        stage_policy,
         group_by_sort_description,
         groupings,
         needOverflowRow(),
@@ -901,6 +904,7 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
         params,
         grouping_sets_params,
         final,
+        AggregateStagePolicy::DEFAULT,
         max_block_size,
         merge_threads,
         temporary_data_merge_threads,
