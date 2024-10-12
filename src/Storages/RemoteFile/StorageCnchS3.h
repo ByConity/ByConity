@@ -20,7 +20,7 @@ S3ClientPtr initializeS3Client(const ContextPtr & ctx, const CnchFileArguments &
 class StorageCnchS3 : public shared_ptr_helper<StorageCnchS3>, public IStorageCnchFile
 {
 public:
-    Strings readFileList(ContextPtr query_context) override;
+    FilePartInfos readFileList(ContextPtr query_context) override;
 
     void clear(ContextPtr query_context) override;
 
@@ -59,7 +59,7 @@ public:
         , s3_uri(arguments_.url, true)
     {
         if (file_list.size() == 1)
-            file_list[0] = s3_uri.key;
+            file_list[0] = FilePartInfo(s3_uri.key);
 
         S3ClientPtr client = initializeS3Client(context_, arguments_);
         s3_util = std::make_shared<S3::S3Util>(client, s3_uri.bucket);

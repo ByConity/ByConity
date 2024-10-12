@@ -43,6 +43,11 @@ namespace ProfileEvents
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int FILE_NOT_FOUND;
+}
+
 S3ClientPtr initializeS3Client(const ContextPtr & ctx, const CnchFileArguments & arguments)
 {
     S3::URI uri(arguments.url, true);
@@ -108,9 +113,9 @@ S3ClientPtr initializeS3Client(const ContextPtr & ctx, const CnchFileArguments &
             auth_settings.no_sign_request.value_or(ctx->getConfigRef().getBool("s3.no_sign_request", false))});
 }
 
-Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client> client, const S3::URI & globbed_s3_uri)
+FilePartInfos ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client> client, const S3::URI & globbed_s3_uri)
 {
-    Strings keys;
+    FilePartInfos file_infos;
 
     if (globbed_s3_uri.bucket.find_first_of("*?{") != DB::String::npos)
         throw Exception("Expression can not have wildcards inside bucket name", ErrorCodes::LOGICAL_ERROR);
@@ -119,7 +124,8 @@ Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client
     /// We don't have to list bucket, because there is no asterisks.
     if (key_prefix.size() == globbed_s3_uri.key.size())
     {
-        keys.emplace_back(globbed_s3_uri.key);
+        file_infos.emplace_back(globbed_s3_uri.key, 0);
+        return file_infos;
     }
 
     Aws::S3::Model::ListObjectsV2Request request;
@@ -148,8 +154,9 @@ Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client
         for (const auto & object : result_batch)
         {
             const String & key = object.GetKey();
+            const size_t object_size = object.GetSize();
             if (re2::RE2::FullMatch(key, *matcher) && key.back() != '/')
-                keys.emplace_back(key);
+                file_infos.emplace_back(key, object_size);
         }
         request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
         is_finished = !outcome.GetResult().GetIsTruncated();
@@ -161,8 +168,8 @@ Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client
         globbed_s3_uri.toString(),
         key_prefix,
         total_keys,
-        keys.size());
-    return keys;
+        file_infos.size());
+    return file_infos;
 }
 
 void StorageCnchS3::readByLocal(
@@ -190,10 +197,24 @@ void StorageCnchS3::readByLocal(
     return storage->read(query_plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
 }
 
-Strings StorageCnchS3::readFileList(ContextPtr)
+FilePartInfos StorageCnchS3::readFileList(ContextPtr)
 {
     if (arguments.is_glob_path)
         return ListKeysWithRegexpMatching(s3_util->getClient(), s3_uri);
+
+    // Check file exists and get file size
+    for (auto & file : file_list)
+    {
+        try
+        {
+            auto outcome = s3_util->headObject(file.name);
+            file.size = outcome.GetContentLength();
+        }
+        catch (...)
+        {
+            throw Exception(ErrorCodes::FILE_NOT_FOUND, "File {} not exist", file.name);
+        }
+    }
     return file_list;
 }
 

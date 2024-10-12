@@ -1102,26 +1102,6 @@ namespace S3
         }
     }
 
-    Aws::S3::Model::GetObjectResult S3Util::headObjectByGet(const String & key) const
-    {
-        Aws::S3::Model::GetObjectRequest req;
-        req.SetBucket(bucket);
-        req.SetKey(key);
-        req.SetRange("bytes=0-1");
-
-        ProfileEvents::increment(ProfileEvents::S3GetObject);
-        Aws::S3::Model::GetObjectOutcome outcome = client->GetObject(req);
-
-        if (outcome.IsSuccess())
-        {
-            return outcome.GetResultWithOwnership();
-        }
-        else
-        {
-            throw S3Exception(outcome.GetError());
-        }
-    }
-
     S3LazyCleaner::S3LazyCleaner(
         const S3::S3Util & s3_util_,
         const std::function<bool(const S3::S3Util &, const String &)> & filter_,

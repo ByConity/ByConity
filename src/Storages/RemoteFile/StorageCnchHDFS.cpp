@@ -36,7 +36,12 @@
 namespace DB
 {
 
-Strings listWithRegexpMatching(
+namespace ErrorCodes
+{
+    extern const int FILE_NOT_FOUND;
+}
+
+FilePartInfos listWithRegexpMatching(
     const String & path_for_ls, const HDFSFSPtr & hdfsFS, const String & for_match, std::unordered_map<String, time_t> * last_mod_times)
 {
     const size_t first_glob = for_match.find_first_of("*?{");
@@ -57,7 +62,7 @@ Strings listWithRegexpMatching(
             fmt::format("Cannot list directory {}: {}", prefix_without_globs, String(hdfsGetLastError())),
             ErrorCodes::BAD_GET); // todo(jiashuo):ACCESS_DENIED
     }
-    Strings result;
+    FilePartInfos results;
     if (!ls.file_info && ls.length > 0)
         throw Exception("file_info shouldn't be null", ErrorCodes::LOGICAL_ERROR);
     for (int i = 0; i < ls.length; ++i)
@@ -72,28 +77,28 @@ Strings listWithRegexpMatching(
         {
             if (re2::RE2::FullMatch(file_name, matcher))
             {
-                result.push_back(String(ls.file_info[i].mName));
+                results.emplace_back(String(ls.file_info[i].mName), ls.file_info[i].mSize);
                 if (last_mod_times)
-                    (*last_mod_times)[result.back()] = ls.file_info[i].mLastMod;
+                    (*last_mod_times)[results.back().name] = ls.file_info[i].mLastMod;
             }
         }
         else if (is_directory && looking_for_directory)
         {
             if (re2::RE2::FullMatch(file_name, matcher))
             {
-                Strings result_part
+                FilePartInfos result_part
                     = listWithRegexpMatching(std::filesystem::path(full_path) / "", hdfsFS, suffix_with_globs.substr(next_slash), last_mod_times);
                 /// Recursion depth is limited by pattern. '*' works only for depth = 1, for depth = 2 pattern path is '*/*'. So we do not need additional check.
-                std::move(result_part.begin(), result_part.end(), std::back_inserter(result));
+                std::move(result_part.begin(), result_part.end(), std::back_inserter(results));
             }
         }
     }
 
-    return result;
+    return results;
 }
 
 
-Strings ListFilesWithGlobs(const ContextPtr & context, const FileURI & hdfs_uri, std::unordered_map<String, time_t> * last_mod_times)
+FilePartInfos ListFilesWithGlobs(const ContextPtr & context, const FileURI & hdfs_uri, std::unordered_map<String, time_t> * last_mod_times)
 {
     Poco::URI poco_uri(hdfs_uri.host_name);
     HDFSBuilderPtr builder = context->getGlobalContext()->getHdfsConnectionParams().createBuilder(poco_uri);
@@ -101,23 +106,26 @@ Strings ListFilesWithGlobs(const ContextPtr & context, const FileURI & hdfs_uri,
     return listWithRegexpMatching("/", fs, hdfs_uri.file_path, last_mod_times);
 }
 
-Strings ListFiles(const ContextPtr & context, const Strings & uris)
+FilePartInfos ListFiles(const ContextPtr & context, FilePartInfos & uris)
 {
-    Poco::URI poco_uri(HDFSURI(uris[0]).host_name);
+    Poco::URI poco_uri(HDFSURI(uris[0].name).host_name);
     HDFSBuilderPtr builder = context->getHdfsConnectionParams().createBuilder(poco_uri);
     auto fs = createHDFSFS(builder.get());
-    Strings results;
-    for (const auto & uri : uris)
+    FilePartInfos results;
+    for (auto & uri : uris)
     {
-        auto hdfs_uri = HDFSURI(uri);
-        // hdfsExists()=0 means success
-        if (!hdfsExists(fs.get(), hdfs_uri.file_path.c_str()))
-            results.push_back(uri);
+        auto hdfs_uri = HDFSURI(uri.name);
+        hdfsFileInfo * file_info = hdfsGetPathInfo(fs.get(), hdfs_uri.file_path.c_str());
+        if (!file_info)
+            throw Exception(ErrorCodes::FILE_NOT_FOUND, "File {} not exist", uri.name);
+        uri.size = file_info->mSize;
+        results.emplace_back(uri);
+        hdfsFreeFileInfo(file_info, 1);
     }
     return results;
 }
 
-Strings StorageCnchHDFS::readFileList(ContextPtr query_context)
+FilePartInfos StorageCnchHDFS::readFileList(ContextPtr query_context)
 {
     if (arguments.is_glob_path)
         return ListFilesWithGlobs(query_context, FileURI(arguments.url), {});

@@ -569,6 +569,7 @@ size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::Repeate
         auto & part_model = *parts_model.Add();
         auto & info = *part_model.mutable_part_info();
         *info.mutable_name() = part->info.name;
+        info.set_size(part->info.size);
     }
 
     return parts.size();
@@ -578,9 +579,10 @@ FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & /*context*/, 
 {
     FileDataPartsCNCHVector res;
     res.reserve(parts_model.size());
-    for (const auto & part: parts_model)
+    for (const auto & part : parts_model)
     {
-        res.emplace_back(std::make_shared<FileDataPart>(part.part_info().name()));
+        FilePartInfo part_info(part.part_info().name(), part.part_info().size());
+        res.emplace_back(std::make_shared<FileDataPart>(part_info));
     }
     return res;
 }

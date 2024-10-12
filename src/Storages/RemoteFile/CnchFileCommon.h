@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <utility>
 #include <Core/Defines.h>
 //#include <Core/SettingsCommon.h>
@@ -24,17 +25,22 @@ namespace DB
 struct FilePartInfo
 {
 public:
-    explicit FilePartInfo(String name_) : name(std::move(name_)){}
+    explicit FilePartInfo(String name_) : name(std::move(name_)) { }
+    explicit FilePartInfo(String name_, size_t size_) : name(std::move(name_)), size(size_) { }
 
     String getBasicPartName() const { return name; }
 
     String name;
+    size_t size;
 };
+
+using FilePartInfos = std::vector<FilePartInfo>;
 
 class FileDataPart
 {
 public:
     explicit FileDataPart(const String & file_) : info(file_) { }
+    explicit FileDataPart(const FilePartInfo & file_info_) : info(file_info_) { }
 
     FilePartInfo info;
 };
@@ -43,14 +49,14 @@ class FilesIterator
 {
 public:
     explicit FilesIterator(const FileDataPartsCNCHVector & parts_) : parts(parts_), iterator(parts.begin()) { }
-    String next()
+    const FilePartInfo * next()
     {
         std::lock_guard lock(mutex);
         if (iterator == parts.end())
-            return "";
+            return nullptr;
         auto file = *iterator;
         ++iterator;
-        return file->info.name;
+        return &file->info;
     }
 
 private:

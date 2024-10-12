@@ -25,7 +25,7 @@ public:
         const ColumnsDescription & required_columns_,
         const ConstraintsDescription & constraints_,
         const FileClientPtr & client_,
-        Strings files_,
+        FilePartInfos files_,
         const ASTPtr & setting_changes_,
         const CnchFileArguments & arguments_,
         const CnchFileSettings & settings_);
@@ -60,7 +60,7 @@ public:
     virtual void loadDataParts(FileDataPartsCNCHVector & file_parts);
 
     FileClientPtr client;
-    Strings file_list;
+    FilePartInfos file_list;
 
     CnchFileArguments arguments;
     CnchFileSettings settings;
