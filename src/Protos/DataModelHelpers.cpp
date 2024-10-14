@@ -109,7 +109,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     String part_name = info->getPartName();
     UInt32 path_id = part_model.has_data_path_id() ? part_model.data_path_id() : 0;
 
-    DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id);
+    DiskPtr remote_disk = getDisk(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id, part_model.disk_name());
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
     UUID part_id = UUIDHelpers::Nil;
     switch(remote_disk->getType())
@@ -292,6 +292,8 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     // TODO support multiple namenode , mock 0 now.
     part_model.set_data_path_id(0);
 
+    part_model.set_disk_name(part.getDisk()->getName());
+
     if (part.deleted)
         part_model.set_deleted(part.deleted);
     if (part.mutation_commit_time)
@@ -409,7 +411,7 @@ void fillPartsModelForSend(
         part_model = part->part_model();
         part_model.set_commit_time(part->getCommitTime());
         part_model.set_virtual_part_size(part->getVirtualPartSize());
-
+        
         if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns() && part_model.has_columns())
             continue;
 

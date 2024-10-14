@@ -1047,6 +1047,10 @@ void MetastoreProxy::prepareAddDataParts(
             commit_time = info_ptr->mutation;
         String part_meta = it->SerializeAsString();
 
+        if (it->disk_name().empty()) {
+            throw Exception(it->ShortDebugString(), ErrorCodes::LOGICAL_ERROR);
+        }
+
         batch_write.AddPut(SinglePutRequest(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]));
         if (write_manifest)
             batch_write.AddPut(SinglePutRequest(manifestKeyForPart(name_space, table_uuid, txn_id, info_ptr->getPartName()), part_meta));
@@ -1099,6 +1103,9 @@ void MetastoreProxy::prepareAddStagedParts(
 
     for (auto it = parts.begin(); it != parts.end(); it++)
     {
+        if (it->disk_name().empty()) {
+            throw Exception(it->ShortDebugString(), ErrorCodes::LOGICAL_ERROR);
+        }
         auto info_ptr = createPartInfoFromModel(it->part_info());
         String part_meta = it->SerializeAsString();
         batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
@@ -2105,6 +2112,9 @@ void MetastoreProxy::prepareAddDeleteBitmaps(
     size_t idx {0};
     for (const auto & dlb_ptr : bitmaps)
     {
+        if (dlb_ptr->getModel()->disk_name().empty()) {
+            throw Exception(dlb_ptr->getModel()->ShortDebugString(), ErrorCodes::LOGICAL_ERROR);
+        }
         const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
         String serialized_data = model.SerializeAsString();
         if (expected_bitmaps_size == 0)
