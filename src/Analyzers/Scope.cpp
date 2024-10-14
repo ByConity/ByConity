@@ -37,12 +37,12 @@ bool FieldDescription::matchName(const String & target_name) const
 
 FieldDescription FieldDescription::withNewName(const String & new_name) const
 {
-    return {new_name, type, prefix, origin_columns, substituted_by_asterisk};
+    return {new_name, type, prefix, origin_columns, substituted_by_asterisk, can_be_array_joined};
 }
 
 FieldDescription FieldDescription::withNewPrefix(const QualifiedName & new_prefix) const
 {
-    return {name, type, new_prefix, origin_columns, substituted_by_asterisk};
+    return {name, type, new_prefix, origin_columns, substituted_by_asterisk, can_be_array_joined};
 }
 
 void FieldDescription::copyOriginInfo(const FieldDescription & source_field)

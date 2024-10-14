@@ -64,6 +64,7 @@
 #include <Access/ContextAccess.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/NestedUtils.h>
 #include <Interpreters/join_common.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Optimizer/Utils.h>
@@ -453,7 +454,8 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
                 output_type,
                 /* prefix*/ QualifiedName{},
                 std::move(origin_columns),
-                /* substituted_by_asterisk */ true);
+                /* substituted_by_asterisk */ true,
+                /* can_be_array_joined */ true);
         }
     }
 
@@ -622,9 +624,18 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
     FieldDescriptions fields;
     ASTIdentifier * origin_table_ast = &db_and_table;
 
-    auto add_field = [&](const String & name, const DataTypePtr & type, bool substitude_for_asterisk) {
+    auto add_field = [&](const String & name, const DataTypePtr & type, bool substitude_for_asterisk, bool can_be_array_joined) {
         fields.emplace_back(
-            name, type, column_prefix, storage, metadata_snapshot, origin_table_ast, name, fields.size(), substitude_for_asterisk);
+            name,
+            type,
+            column_prefix,
+            storage,
+            metadata_snapshot,
+            origin_table_ast,
+            name,
+            fields.size(),
+            substitude_for_asterisk,
+            can_be_array_joined);
     };
 
     // get columns
@@ -644,19 +655,19 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         for (const auto & column : columns_description.getOrdinary())
         {
             LOG_TRACE(logger, "analyze table {}, add ordinary field {}", full_table_name, column.name);
-            add_field(column.name, type_provider.getByName(column.name).type, true);
+            add_field(column.name, type_provider.getByName(column.name).type, true, true);
         }
 
         for (const auto & column : columns_description.getMaterialized())
         {
             LOG_TRACE(logger, "analyze table {}, add materialized field {}", full_table_name, column.name);
-            add_field(column.name, type_provider.getByName(column.name).type, false);
+            add_field(column.name, type_provider.getByName(column.name).type, false, true);
         }
 
         for (const auto & column : storage->getVirtuals())
         {
             LOG_TRACE(logger, "analyze table {}, add virtual field {}", full_table_name, column.name);
-            add_field(column.name, column.type, false);
+            add_field(column.name, column.type, false, true);
         }
 
         if (storage->supportsSubcolumns())
@@ -664,7 +675,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
             for (const auto & column : columns_description.getSubcolumnsOfAllPhysical())
             {
                 LOG_TRACE(logger, "analyze table {}, add subcolumn field {}", full_table_name, column.name);
-                add_field(column.name, type_provider.getByName(column.name).type, false);
+                add_field(column.name, type_provider.getByName(column.name).type, false, false);
             }
         }
 
@@ -673,7 +684,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
             for (const auto & column : storage_snapshot->getSubcolumnsOfObjectColumns())
             {
                 LOG_TRACE(logger, "analyze table {}, add dynamic subcolumn field {}", full_table_name, column.name);
-                add_field(column.name, type_provider.getByName(column.name).type, false);
+                add_field(column.name, type_provider.getByName(column.name).type, false, true);
             }
         }
 
@@ -710,7 +721,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
             auto col_type = ExprAnalyzer::analyze(alias_col, scope, context, analysis, options);
             auto col_name = alias_col->tryGetAlias();
             LOG_TRACE(logger, "analyze table {}, add alias field {}", full_table_name, col_name);
-            add_field(col_name, col_type, false);
+            add_field(col_name, col_type, false, true);
         }
 
         scope = createScope(fields);
@@ -761,6 +772,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & table_function
             &table_function,
             column.name,
             field_descriptions.size(),
+            true,
             true);
     }
 
@@ -1324,43 +1336,67 @@ ScopePtr QueryAnalyzerVisitor::analyzeArrayJoin(ASTArrayJoin & array_join, ASTSe
     NameSet name_set;
     for (auto & array_join_expr : array_join_expression_list->children)
     {
-        if (array_join_expr->tryGetAlias() == array_join_expr->getColumnName() && !array_join_expr->as<ASTIdentifier>())
-            throw Exception("No alias for non-trivial value in ARRAY JOIN: " + array_join_expr->tryGetAlias(), ErrorCodes::ALIAS_REQUIRED);
-
         String output_name = array_join_expr->getAliasOrColumnName();
         if (name_set.count(output_name))
             throw Exception("Duplicate alias in ARRAY JOIN: " + output_name, ErrorCodes::MULTIPLE_EXPRESSIONS_FOR_ALIAS);
 
-        auto array_join_expr_type = ExprAnalyzer::analyze(array_join_expr, source_scope, context, analysis, expr_options);
-        const auto array_type = getArrayJoinDataType(array_join_expr_type);
-        if (!array_type)
-            throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
-
-        auto col_ref = analysis.tryGetColumnReference(array_join_expr);
-        // To determine if a scope is from outer query, we should use Scope::isLocalScope.
-        // Practically, scopes belonging to FROM clause don't have parent scopes, so we can use operator== for convenience.
-        if (col_ref && source_scope != col_ref->scope)
-            throw Exception(
-                "Outer query columns cannot be used in ARRAY JOIN: " + array_join_expr->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
-
-        ArrayJoinDescription array_join_desc;
-        array_join_desc.expr = array_join_expr;
-
-        if (col_ref && array_join_expr->tryGetAlias().empty()) // ARRAY JOIN `arr`
+        // there are 3 array join scenarios:
+        //   1. join an array column, e.g. ARRAY JOIN arr AS elem
+        //   2. join an array expression, e.g. ARRAY JOIN [1, 2, 3] AS elem
+        //   3. join a nested table, this means join all columns of this nested table, e.g. SELECT flatten.foo ARRAY JOIN nested AS flatten
+        if (array_join_expr->as<ASTIdentifier>())
         {
-            output_fields[col_ref->local_index] = FieldDescription{output_fields[col_ref->local_index].name, array_type->getNestedType()};
+            // handle 1 & 3
+            String column_name = array_join_expr->getColumnName();
+            bool create_new_field = output_name != column_name;
+            bool matched = false;
+
+            for (size_t field_index = 0; field_index < source_scope->size(); ++field_index)
+            {
+                const auto & field = source_scope->at(field_index);
+                if (!field.can_be_array_joined)
+                    continue;
+
+                auto split = Nested::splitName(field.name);
+                String actual_output_name;
+                if (column_name == field.name)
+                    actual_output_name = output_name;
+                else if (column_name == split.first)
+                    actual_output_name = Nested::concatenateName(output_name, split.second);
+                else
+                    continue;
+
+                matched = true;
+
+                const auto array_type = getArrayJoinDataType(field.type);
+                if (!array_type)
+                    throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
+
+                analysis.addReadColumn(ResolvedField{source_scope, field_index}, true);
+                array_join_descs.emplace_back(ArrayJoinDescription{field_index, create_new_field});
+                if (create_new_field)
+                    output_fields.emplace_back(actual_output_name, array_type->getNestedType());
+                else
+                    output_fields[field_index] = FieldDescription{field.name, array_type->getNestedType()};
+            }
+
+            if (!matched)
+                throw Exception("Can not resolve array join column: " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
         }
-         else if (col_ref && !array_join_expr->tryGetAlias().empty() && array_join_expr->tryGetAlias() == output_fields[col_ref->local_index].name) // ARRAY JOIN `arr` as `arr`
+        else
         {
-            output_fields[col_ref->local_index] = FieldDescription{output_fields[col_ref->local_index].name, array_type->getNestedType()};
-        }
-        else // ARRAY JOIN `arr` as `arr2`
-        {
-            array_join_desc.create_new_field = true;
+            if (array_join_expr->tryGetAlias().empty())
+                throw Exception(
+                    "No alias for non-trivial value in ARRAY JOIN: " + array_join_expr->tryGetAlias(), ErrorCodes::ALIAS_REQUIRED);
+
+            auto array_join_expr_type = ExprAnalyzer::analyze(array_join_expr, source_scope, context, analysis, expr_options);
+            const auto array_type = getArrayJoinDataType(array_join_expr_type);
+            if (!array_type)
+                throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
+
+            array_join_descs.emplace_back(ArrayJoinDescription{array_join_expr, true});
             output_fields.emplace_back(output_name, array_type->getNestedType());
         }
-
-        array_join_descs.emplace_back(std::move(array_join_desc));
     }
 
     analysis.array_join_analysis[&select_query] = ArrayJoinAnalysis{(array_join.kind == ASTArrayJoin::Kind::Left), array_join_descs};

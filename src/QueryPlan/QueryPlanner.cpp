@@ -1290,13 +1290,7 @@ void QueryPlannerVisitor::planArrayJoin(ASTArrayJoin & array_join, PlanBuilder &
 {
     const auto & array_join_analysis = analysis.getArrayJoinAnalysis(select_query);
     const auto & array_join_descs = array_join_analysis.descriptions;
-    ASTs array_join_exprs;
-    array_join_exprs.reserve(array_join_descs.size());
-
-    for (const auto & desc : array_join_descs)
-        array_join_exprs.push_back(desc.expr);
-
-    auto symbols = builder.applyProjection(array_join_exprs);
+    auto symbols = builder.applyArrayJoinProjection(array_join_descs);
     auto array_join_action
         = std::make_shared<ArrayJoinAction>(NameSet{symbols.begin(), symbols.end()}, array_join_analysis.is_left_array_join, context);
     auto array_join_step = std::make_shared<ArrayJoinStep>(builder.getCurrentDataStream(), array_join_action);
@@ -1309,11 +1303,7 @@ void QueryPlannerVisitor::planArrayJoin(ASTArrayJoin & array_join, PlanBuilder &
         const auto & symbol = symbols[i];
 
         if (!desc.create_new_field)
-        {
-            auto col_ref = analysis.tryGetColumnReference(desc.expr);
-            assert(col_ref.has_value());
-            new_symbol_infos[col_ref->hierarchy_index] = FieldSymbolInfo(symbol);
-        }
+            new_symbol_infos[std::get<size_t>(desc.source)] = FieldSymbolInfo(symbol);
         else
             new_symbol_infos.emplace_back(symbol);
     }
