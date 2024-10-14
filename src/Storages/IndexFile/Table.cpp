@@ -277,7 +277,8 @@ Iterator * Table::NewIterator(const ReadOptions & options) const
 
 void Table::releaseRemoteFD() const
 {
-    rep_->file->releaseRemoteFD();
+    if (rep_ != nullptr && rep_->file)
+        rep_->file->releaseRemoteFD();
 }
 
 Status Table::Get(const ReadOptions & options, const Slice & k, std::string * value)

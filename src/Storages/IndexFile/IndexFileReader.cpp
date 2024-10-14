@@ -50,7 +50,8 @@ Status IndexFileReader::Open(const RemoteFileInfo & remote_file)
     {
         s = Table::Open(rep->options, std::move(file), remote_file.size, &rep->table_reader);
         /// directly release remote FD, as SSTable read from footer, meta, etc, then data block
-        rep->table_reader->releaseRemoteFD();
+        if (rep->table_reader)
+            rep->table_reader->releaseRemoteFD();
     }
     return s;
 }
