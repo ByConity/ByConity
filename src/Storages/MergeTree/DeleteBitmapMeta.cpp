@@ -22,6 +22,8 @@
 #include <Common/ThreadPool.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadSettings.h>
+#include <IO/ReadSettings.h>
+#include <Disks/DiskHelpers.h>
 
 namespace DB::ErrorCodes
 {
@@ -129,6 +131,8 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage, b
 
                 out->write(buf.data(), size);
                 out->finalize();
+
+                model->set_disk_name(disk->getName());
             }
             model->set_file_size(size);
             LOG_TRACE(storage.getLogger(), "Dumped delete bitmap {}", dataModelName(*model));
@@ -323,7 +327,8 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
         Roaring bitmap;
         {
             PODArray<char> buf(meta->file_size());
-            DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+            // DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+            DiskPtr disk = getDisk(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), 0, meta->disk_name());
             String rel_path = std::filesystem::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
             ReadSettings read_settings = storage.getContext()->getReadSettings();
             read_settings.adjustBufferSize(meta->file_size());

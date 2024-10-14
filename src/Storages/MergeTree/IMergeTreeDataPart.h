@@ -260,6 +260,8 @@ public:
 
     const MergeTreeMetaBase & storage;
 
+    DiskPtr getDisk() const;
+
     String name;
     MergeTreePartInfo info;
 

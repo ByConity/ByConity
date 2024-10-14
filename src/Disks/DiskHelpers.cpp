@@ -72,4 +72,18 @@ UInt32 getPartFromDisk(const VolumePtr& volume, const DiskPtr& disk)
     return std::stoul(disk_name.substr(pos + 1)); 
 }
 
+DiskPtr getDisk(const StoragePolicyPtr& storage_policy, UInt32 path_id, String disk_name)
+{
+    if (path_id == 0 && !disk_name.empty()) {
+        DiskPtr disk = storage_policy->getDiskByName(disk_name);
+        if (disk == nullptr)
+            throw Exception("Disk " + disk_name + " not found in " + storage_policy->getName(),
+                ErrorCodes::INVALID_CONFIG_PARAMETER);
+        return disk;
+    }
+
+    return getDiskForPathId(storage_policy, path_id);
+}
+
+
 }

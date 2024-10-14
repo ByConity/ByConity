@@ -26,6 +26,7 @@
 #include <Interpreters/Context.h>
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
+#include <common/logger_useful.h>
 
 #include <set>
 
@@ -198,8 +199,11 @@ DiskPtr StoragePolicy::getAnyDisk() const
 
     if (volumes[0]->getDisks().empty())
         throw Exception("Volume " + backQuote(name) + "." + backQuote(volumes[0]->getName()) + " has no disks. It's a bug.", ErrorCodes::LOGICAL_ERROR);
-
-    return volumes[0]->getDisks()[0];
+    
+    static std::atomic<uint64_t> index = 0;
+    auto& disks = volumes[0]->getDisks();
+    auto disk_size = disks.size();
+    return disks[index++ % disk_size];
 }
 
 

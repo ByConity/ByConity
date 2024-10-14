@@ -1934,6 +1934,11 @@ bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
     return type->isByteMap() && versions->enable_compact_map_data;
 }
 
+DiskPtr IMergeTreeDataPart::getDisk() const
+{
+    return volume->getDisk();
+}
+
 void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const
 {
     assertOnDisk();
