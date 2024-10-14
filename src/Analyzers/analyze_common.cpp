@@ -28,6 +28,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int UNEXPECTED_EXPRESSION;
 }
 
 ASTPtr joinCondition(const ASTTableJoin & join)
@@ -151,6 +152,38 @@ std::vector<ASTPtr> extractReferencesToScope(ContextPtr context, Analysis & anal
     };
 
     return extractExpressions(context, analysis, root, include_subquery, filter);
+}
+
+void expandOrderByAll(ASTSelectQuery * select_query)
+{
+    auto * all_elem = select_query->orderBy()->children[0]->as<ASTOrderByElement>();
+    if (!all_elem)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Select analyze for not order by asts.");
+
+    auto order_expression_list = std::make_shared<ASTExpressionList>();
+
+    for (const auto & expr : select_query->select()->children)
+    {
+        if (auto * identifier = expr->as<ASTIdentifier>(); identifier != nullptr)
+            if (Poco::toUpper(identifier->name()) == "ALL" || Poco::toUpper(identifier->alias) == "ALL")
+                throw Exception(ErrorCodes::UNEXPECTED_EXPRESSION,
+                                "Cannot use ORDER BY ALL to sort a column with name 'all', please disable setting `enable_order_by_all` and try again");
+
+        if (auto * function = expr->as<ASTFunction>(); function != nullptr)
+            if (Poco::toUpper(function->alias) == "ALL")
+                throw Exception(ErrorCodes::UNEXPECTED_EXPRESSION,
+                                "Cannot use ORDER BY ALL to sort a column with name 'all', please disable setting `enable_order_by_all` and try again");
+
+        auto elem = std::make_shared<ASTOrderByElement>();
+        elem->direction = all_elem->direction;
+        elem->nulls_direction = all_elem->nulls_direction;
+        elem->nulls_direction_was_explicitly_specified = all_elem->nulls_direction_was_explicitly_specified;
+        elem->children.push_back(expr);
+        order_expression_list->children.push_back(elem);
+    }
+
+    select_query->setExpression(ASTSelectQuery::Expression::ORDER_BY, order_expression_list);
+    select_query->order_by_all = false;
 }
 
 }

@@ -235,12 +235,31 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         window()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
     }
 
-    if (orderBy())
+    if (!order_by_all && orderBy())
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY" << (s.hilite ? hilite_none : "");
         s.one_line
             ? orderBy()->formatImpl(s, state, frame)
             : orderBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+    }
+
+    if (order_by_all)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY " << (s.hilite ? hilite_none : "");
+
+        auto * elem = orderBy()->children[0]->as<ASTOrderByElement>();
+        elem->children.front()->formatImpl(s, state, frame);
+        s.ostr << (s.hilite ? hilite_keyword : "")
+               << (elem->direction == -1 ? " DESC" : " ASC")
+               << (s.hilite ? hilite_none : "");
+
+        if (elem->nulls_direction_was_explicitly_specified)
+        {
+            s.ostr << (s.hilite ? hilite_keyword : "")
+                   << " NULLS "
+                   << (elem->nulls_direction == elem->direction ? "LAST" : "FIRST")
+                   << (s.hilite ? hilite_none : "");
+        }
     }
 
     if (limitByLength())

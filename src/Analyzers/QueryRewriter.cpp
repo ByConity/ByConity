@@ -16,6 +16,7 @@
 #include <Analyzers/QueryRewriter.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Analyzers/analyze_common.h>
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
@@ -512,6 +513,8 @@ namespace
                 graphviz_index);
         }
 
+        if (settings.enable_order_by_all && select_query.order_by_all)
+            expandOrderByAll(&select_query);
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
         if (select_query.having()
             && (!select_query.group_by_with_cube && !select_query.group_by_with_rollup && !select_query.group_by_with_grouping_sets
@@ -611,6 +614,81 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
     //     auto & explain = query->as<ASTExplainQuery &>();
     //     explain.getExplainedQuery() = explain.getExplainedQuery();
     // }
+
+    if (const auto * select_with_union_query = query->as<ASTSelectWithUnionQuery>())
+    {
+        auto settings = context->getSettingsRef();
+        bool settings_sorting_limit_offset_needed = false;
+        size_t num_children = select_with_union_query->list_of_selects->children.size();
+        if (settings.limit > 0 || settings.offset > 0 || settings.final_order_by_all_direction != 0)
+            settings_sorting_limit_offset_needed = true;
+
+        if (num_children == 1 && settings_sorting_limit_offset_needed)
+        {
+            const ASTPtr first_select_ast = select_with_union_query->list_of_selects->children.at(0);
+            ASTSelectQuery * select_query = dynamic_cast<ASTSelectQuery *>(first_select_ast.get());
+            if (!select_query)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid type in list_of_selects: {}", first_select_ast->getID());
+
+            if (!select_query->withFill() && !select_query->limit_with_ties)
+            {
+                if (settings.final_order_by_all_direction != 0)
+                {
+                    int direction = context->getSettingsRef().final_order_by_all_direction > 0 ? 1 : -1;
+                    auto order_expression_list = std::make_shared<ASTExpressionList>();
+                    for (const auto & expr : select_query->select()->children)
+                    {
+                        auto elem = std::make_shared<ASTOrderByElement>();
+                        elem->direction = direction;
+                        elem->nulls_direction = 1;
+                        elem->children.push_back(expr);
+                        order_expression_list->children.push_back(elem);
+                    }
+                    select_query->setExpression(ASTSelectQuery::Expression::ORDER_BY, order_expression_list);
+                    select_query->order_by_all = false;
+                }
+
+                UInt64 limit_length = 0;
+                UInt64 limit_offset = 0;
+
+                const ASTPtr limit_offset_ast = select_query->limitOffset();
+                if (limit_offset_ast)
+                {
+                    limit_offset = limit_offset_ast->as<ASTLiteral &>().value.safeGet<UInt64>();
+                    UInt64 new_limit_offset = settings.offset + limit_offset;
+                    limit_offset_ast->as<ASTLiteral &>().value = Field(new_limit_offset);
+                }
+                else if (settings.offset)
+                {
+                    ASTPtr new_limit_offset_ast = std::make_shared<ASTLiteral>(Field(UInt64(settings.offset)));
+                    select_query->setExpression(ASTSelectQuery::Expression::LIMIT_OFFSET, std::move(new_limit_offset_ast));
+                }
+
+                const ASTPtr limit_length_ast = select_query->limitLength();
+                if (limit_length_ast)
+                {
+                    limit_length = limit_length_ast->as<ASTLiteral &>().value.safeGet<UInt64>();
+
+                    UInt64 new_limit_length = 0;
+                    if (settings.offset == 0)
+                        new_limit_length = std::min(limit_length, UInt64(settings.limit));
+                    else if (settings.offset < limit_length)
+                        new_limit_length =  settings.limit ? std::min(UInt64(settings.limit), limit_length - settings.offset) : (limit_length - settings.offset);
+
+                    limit_length_ast->as<ASTLiteral &>().value = Field(new_limit_length);
+                }
+                else if (settings.limit)
+                {
+                    ASTPtr new_limit_length_ast = std::make_shared<ASTLiteral>(Field(UInt64(settings.limit)));
+                    select_query->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, std::move(new_limit_length_ast));
+                }
+
+                context->setSetting("offset", Field(0));
+                context->setSetting("limit", Field(0));
+                context->setSetting("final_order_by_all_direction", Field(0));
+            }
+        }
+    }
 
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-done");
 

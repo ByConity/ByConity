@@ -42,6 +42,7 @@
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Common/typeid_cast.h>
+#include <QueryPlan/SortingStep.h>
 
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/executeQuery.h>
@@ -55,6 +56,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int UNION_ALL_RESULT_STRUCTURES_MISMATCH;
+    extern const int SETTING_CONSTRAINT_VIOLATION;
 }
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
@@ -65,8 +67,8 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
     bool require_full_header = ast->hasNonDefaultUnionMode();
 
     const Settings & settings = context->getSettingsRef();
-    if (options.subquery_depth == 0 && (settings.limit > 0 || settings.offset > 0))
-        settings_limit_offset_needed = true;
+    if (options.subquery_depth == 0 && (settings.limit > 0 || settings.offset > 0 || settings.final_order_by_all_direction != 0))
+        settings_sorting_limit_offset_needed = true;
 
     size_t num_children = ast->list_of_selects->children.size();
     if (!num_children)
@@ -109,7 +111,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         }
     }
 
-    if (num_children == 1 && settings_limit_offset_needed)
+    if (num_children == 1 && settings_sorting_limit_offset_needed)
     {
         const ASTPtr first_select_ast = ast->list_of_selects->children.at(0);
         ASTSelectQuery * select_query = dynamic_cast<ASTSelectQuery *>(first_select_ast.get());
@@ -118,6 +120,22 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
 
         if (!select_query->withFill() && !select_query->limit_with_ties)
         {
+            if (settings.final_order_by_all_direction != 0)
+            {
+                if (!settings.enable_order_by_all)
+                    throw Exception(ErrorCodes::SETTING_CONSTRAINT_VIOLATION, "Please set enable_order_by_all = 1 when using final_order_by_all_direction function.");
+                int direction = context->getSettingsRef().final_order_by_all_direction > 0 ? 1 : -1;
+                auto order_expression_list = std::make_shared<ASTExpressionList>();
+                auto elem = std::make_shared<ASTOrderByElement>();
+                auto all_identifier = std::make_shared<ASTIdentifier>("ALL");
+                elem->direction = direction;
+                elem->nulls_direction = 1;
+                elem->children.push_back(all_identifier);
+                order_expression_list->children.push_back(elem);
+                select_query->setExpression(ASTSelectQuery::Expression::ORDER_BY, order_expression_list);
+                select_query->order_by_all = true;
+            }
+
             UInt64 limit_length = 0;
             UInt64 limit_offset = 0;
 
@@ -153,7 +171,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
                 select_query->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, std::move(new_limit_length_ast));
             }
 
-            settings_limit_offset_done = true;
+            settings_sorting_limit_offset_done = true;
         }
     }
 
@@ -343,8 +361,21 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
         }
     }
 
-    if (settings_limit_offset_needed && !settings_limit_offset_done)
+    if (settings_sorting_limit_offset_needed && !settings_sorting_limit_offset_done)
     {
+        if (settings.final_order_by_all_direction != 0)
+        {
+            int direction = context->getSettingsRef().final_order_by_all_direction > 0 ? 1 : -1;
+            // build sort description
+            SortDescription sort_description;
+            for (const auto & item : query_plan.getCurrentDataStream().getNames())
+                sort_description.emplace_back(item, direction, 1);
+            auto limit = context->getSettingsRef().limit + context->getSettingsRef().offset;
+            auto sorting_step = std::make_shared<SortingStep>(query_plan.getCurrentDataStream(), sort_description, limit, SortingStep::Stage::FULL, SortDescription{});
+            sorting_step->setStepDescription("ORDER BY ALL for SETTINGS");
+            query_plan.addStep(std::move(sorting_step));
+        }
+
         if (settings.limit > 0)
         {
             auto limit = std::make_unique<LimitStep>(query_plan.getCurrentDataStream(), settings.limit, settings.offset);

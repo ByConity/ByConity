@@ -1715,6 +1715,8 @@ void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & 
             .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED)
             .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
 
+        if (context->getSettingsRef().enable_order_by_all && select_query.order_by_all)  
+            expandOrderByAll(&select_query);
         for (auto order_item : select_query.orderBy()->children)
         {
             auto & order_elem = order_item->as<ASTOrderByElement &>();

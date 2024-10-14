@@ -111,6 +111,12 @@ ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr c
         }
     }
 
+    if (settings.final_order_by_all_direction != 0)
+    {
+        new_settings.final_order_by_all_direction = 0;
+        new_settings.final_order_by_all_direction.changed = false;
+    }
+
     if (settings.offset)
     {
         new_settings.offset = 0;

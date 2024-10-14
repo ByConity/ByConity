@@ -75,8 +75,8 @@ protected:
     SelectQueryOptions options;
 
     size_t max_streams = 1;
-    bool settings_limit_offset_needed = false;
-    bool settings_limit_offset_done = false;
+    bool settings_sorting_limit_offset_needed = false;
+    bool settings_sorting_limit_offset_done = false;
 
     bool uses_view_source = false;
 

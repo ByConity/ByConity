@@ -216,6 +216,7 @@ private:
 
 namespace
 {
+    void planFinalResult(RelationPlan & plan, ContextMutablePtr context);
     PlanNodePtr planOutfile(PlanNodePtr output_root, Analysis & analysis, ContextMutablePtr context)
     {
         auto & outfile_info = analysis.getOutfileInfo();
@@ -234,11 +235,11 @@ namespace
         return output_root;
     }
 
-    PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
+    PlanNodePtr planOutput(RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
     {
         const auto & output_desc = analysis.getOutputDescription(*query);
         const auto & field_symbol_infos = plan.getFieldSymbolInfos();
-        const auto old_root = plan.getRoot();
+        auto old_root = plan.getRoot();
 
         Assignments assignments;
         NameToType input_types = old_root->getOutputNamesToTypes();
@@ -275,6 +276,19 @@ namespace
             output_types[output_name] = input_types[input_column];
         }
 
+        if (context->getSettingsRef().final_order_by_all_direction || context->getSettingsRef().limit || context->getSettingsRef().offset)
+        {
+            // Ensure the order of output columns
+            if (context->getSettingsRef().final_order_by_all_direction != 0)
+            {
+                auto output_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, false);
+                old_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
+            }
+            planFinalResult(plan, context);
+            old_root = plan.getRoot();
+            PRINT_PLAN(old_root, setting_sorting_limit_offset);
+        }
+
         auto output_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
         auto output_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
 
@@ -290,6 +304,38 @@ namespace
             auto extremes_step = std::make_shared<ExtremesStep>(plan.getRoot()->getCurrentDataStream());
             auto extremes = plan.getRoot()->addStep(context->nextNodeId(), std::move(extremes_step));
             plan.withNewRoot(extremes);
+        }
+    }
+
+    void planFinalResult(RelationPlan & plan, ContextMutablePtr context)
+    {
+        if (context->getSettingsRef().final_order_by_all_direction != 0)
+        {
+            int direction = context->getSettingsRef().final_order_by_all_direction > 0 ? 1 : -1;
+            // build sort description
+            SortDescription sort_description;
+            for (const auto & item : plan.getRoot()->getOutputNames())
+                sort_description.emplace_back(item, direction, 1);
+            auto limit = context->getSettingsRef().limit + context->getSettingsRef().offset;
+            auto sorting_step = std::make_shared<SortingStep>(plan.getRoot()->getCurrentDataStream(), sort_description, limit, SortingStep::Stage::FULL, SortDescription{});
+            auto sorting_root = plan.getRoot()->addStep(context->nextNodeId(), std::move(sorting_step));
+            plan.withNewRoot(sorting_root);
+        }
+
+        if (context->getSettingsRef().limit > 0)
+        {
+            UInt64 limit_length = context->getSettingsRef().limit;
+            UInt64 limit_offset = context->getSettingsRef().offset > 0 ? context->getSettingsRef().offset : 0;
+            auto limit_step = std::make_shared<LimitStep>(plan.getRoot()->getCurrentDataStream(), limit_length, limit_offset);
+            auto limit_root = plan.getRoot()->addStep(context->nextNodeId(), std::move(limit_step));
+            plan.withNewRoot(limit_root);
+        }
+        else if (context->getSettingsRef().offset > 0)
+        {
+            UInt64 offset = context->getSettingsRef().offset ;
+            auto offset_step = std::make_unique<OffsetStep>(plan.getRoot()->getCurrentDataStream(), offset);
+            auto offset_root = plan.getRoot()->addStep(context->nextNodeId(), std::move(offset_step));
+            plan.withNewRoot(offset_root);
         }
     }
 }
