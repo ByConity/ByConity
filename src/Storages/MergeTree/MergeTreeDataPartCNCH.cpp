@@ -1011,14 +1011,14 @@ IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
     if (!uki_index_part)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique key index part {} is nullptr", name);
 
-    String data_path = uki_index_part->getFullPath() + "/data";
+    String data_path = fs::path(uki_index_part->getFullPath()) / "data";
     off_t offset = 0;
     size_t size = 0;
     getUniqueKeyIndexFilePosAndSize(uki_index_part, offset, size);
 
     IndexFile::RemoteFileInfo file;
     file.disk = volume->getDisk();
-    file.rel_path = uki_index_part->getFullRelativePath() + "/data";
+    file.rel_path = fs::path(uki_index_part->getFullRelativePath()) / "data";
     file.start_offset = offset;
     file.size = size;
     file.cache_key = toString(storage.getStorageUUID()) + "_" + info.getBlockName();

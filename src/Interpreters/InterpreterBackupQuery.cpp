@@ -199,7 +199,9 @@ void InterpreterBackupQuery::check()
     if (std::filesystem::path(backup_info.backup_dir).is_absolute())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Given backup directory is an absolute path, it should be relative to disk.");
 
-    if (backup_query.kind == ASTBackupQuery::BACKUP && !backup_disk->isDirectoryEmpty(backup_info.backup_dir))
+    if (backup_query.kind == ASTBackupQuery::BACKUP && !backup_disk->exists(backup_info.backup_dir))
+        backup_disk->createDirectories(backup_info.backup_dir);
+    else if (backup_query.kind == ASTBackupQuery::BACKUP && !backup_disk->isDirectoryEmpty(backup_info.backup_dir))
         throw Exception(ErrorCodes::BACKUP_ALREADY_EXISTS, "Backup path has to be empty.");
 }
 

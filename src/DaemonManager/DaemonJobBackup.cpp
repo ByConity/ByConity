@@ -6,6 +6,7 @@
 #include <DaemonManager/DaemonJob.h>
 #include <DaemonManager/DaemonJobBackup.h>
 #include <DaemonManager/registerDaemons.h>
+#include <Interpreters/Context_fwd.h>
 #include <Common/Stopwatch.h>
 
 namespace DB
@@ -33,6 +34,35 @@ static std::optional<String> getCurrentServerTask(std::unordered_map<CnchServerC
         current_server_task = server_tasks[server_client];
 
     return current_server_task;
+}
+
+// find a random server to schedule the backup task
+void DaemonJobBackup::randomScheduleTask(
+    std::unordered_map<CnchServerClientPtr, String> & server_tasks, BackupTaskModel & backup_task_model)
+{
+    String backup_id = backup_task_model->id();
+    auto client_list = getContext()->getCnchServerClientPool().getAll();
+    for (auto & client : client_list)
+    {
+        if (!client)
+            continue;
+        std::optional<String> current_server_task = getCurrentServerTask(server_tasks, client);
+        // It means current server is alive and not running any backup task, submit task to this server
+        if (current_server_task && current_server_task->empty())
+        {
+            server_tasks[client] = backup_id;
+            String new_address = client->getRPCAddress();
+            String expected_value = backup_task_model->SerializeAsString();
+            backup_task_model->set_status(static_cast<UInt64>(BackupStatus::RESCHEDULING));
+            backup_task_model->set_server_address(new_address);
+            catalog->updateBackupJobCAS(backup_task_model, expected_value);
+            LOG_INFO(log, "Schedule backup task {} to server {}", backup_id, client->getHostWithPortsID());
+            client->submitBackupTask(backup_id, backup_task_model->serialized_ast());
+            return;
+        }
+    }
+    // No server is available now, wait for next schedule
+    LOG_WARNING(log, "Backup task {} schedule failed because no server is available.", backup_id);
 }
 
 bool DaemonJobBackup::executeImpl()
@@ -63,8 +93,11 @@ bool DaemonJobBackup::executeImpl()
                         else
                         {
                             std::optional<String> current_server_task = getCurrentServerTask(server_tasks, server_client);
-                            // It means current server is not running any backup task, submit it to server
-                            if (current_server_task && current_server_task->empty())
+                            // If current server has lost connect, find a random server to schedule the backup task
+                            if (!current_server_task)
+                                randomScheduleTask(server_tasks, backup_task_model);
+                            // It means current server is alive and not running any backup task, submit it to server
+                            else if (current_server_task && current_server_task->empty())
                             {
                                 // Avoid keeping status ACCEPTED and being scheduled multi times
                                 server_tasks[server_client] = backup_id;
@@ -106,33 +139,8 @@ bool DaemonJobBackup::executeImpl()
                                 retry_connect_tasks.erase(backup_id);
 
                                 if (backup_task_model->enable_auto_recover())
-                                {
                                     // find a random server to reschedule the backup task
-                                    auto client_list = getContext()->getCnchServerClientPool().getAll();
-                                    for (auto & client : client_list)
-                                    {
-                                        if (!client)
-                                            continue;
-                                        std::optional<String> current_server_task = getCurrentServerTask(server_tasks, client);
-                                        // It means current server is not running any backup task, submit task to this server
-                                        if (current_server_task && current_server_task->empty())
-                                        {
-                                            server_tasks[server_client] = backup_id;
-                                            String new_address = client->getRPCAddress();
-                                            String expected_value = backup_task_model->SerializeAsString();
-                                            backup_task_model->set_status(static_cast<UInt64>(BackupStatus::RESCHEDULING));
-                                            backup_task_model->set_server_address(new_address);
-                                            catalog->updateBackupJobCAS(backup_task_model, expected_value);
-                                            LOG_INFO(
-                                                log, "Reschedule backup task {} to server {}", backup_id, client->getHostWithPortsID());
-                                            client->submitBackupTask(backup_id, backup_task_model->serialized_ast());
-                                            continue;
-                                        }
-                                    }
-
-                                    // No server is available now, wait for next schedule
-                                    LOG_WARNING(log, "Backup task {} reschedule failed because no server is available.", backup_id);
-                                }
+                                    randomScheduleTask(server_tasks, backup_task_model);
                                 else
                                 {
                                     BackupTaskPtr backup_task = std::make_shared<BackupTask>(backup_task_model);

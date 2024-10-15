@@ -59,9 +59,7 @@ namespace
                 DatabaseAndTableName table_name;
                 if (parseDatabaseAndTableName(pos, expected, table_name.first, table_name.second))
                 {
-                    if (!table_name.first.empty() && database_name)
-                        return database_name == table_name.first;
-                    else if (table_name.first.empty())
+                    if (table_name.first.empty())
                     {
                         if (database_name)
                             table_name.first = *database_name;
@@ -109,6 +107,8 @@ namespace
                 ASTPtr ast;
                 if (!ParserIdentifier{}.parse(pos, ast, expected))
                     return false;
+                // handle multi-tenant
+                tryRewriteCnchDatabaseName(ast, pos.getContext());
                 element.database_name = getIdentifierName(ast);
                 element.new_database_name = element.database_name;
 
@@ -117,6 +117,8 @@ namespace
                     ast = nullptr;
                     if (!ParserIdentifier{}.parse(pos, ast, expected))
                         return false;
+                    // handle multi-tenant
+                    tryRewriteCnchDatabaseName(ast, pos.getContext());
                     element.new_database_name = getIdentifierName(ast);
                 }
 

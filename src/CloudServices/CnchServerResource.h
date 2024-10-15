@@ -74,7 +74,7 @@ struct SendLock
 
 struct TableDefinitionResource
 {
-    /// if cacheable == 0, it's the rewrited table definition for worker;
+    /// if cacheable == 0, it's the rewritten table definition for worker;
     /// otherwise, it's the original definition for cnch table
     String definition;
     String local_table_name;

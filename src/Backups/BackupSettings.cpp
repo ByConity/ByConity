@@ -18,6 +18,7 @@ namespace ErrorCodes
 
 /// List of backup settings except base_backup_name and cluster_host_ids.
 #define LIST_OF_BACKUP_SETTINGS(M) \
+    M(String, id) \
     M(String, compression_method) \
     M(Bool, async) \
     M(String, virtual_warehouse) \

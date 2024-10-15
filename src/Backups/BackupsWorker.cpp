@@ -46,6 +46,7 @@ namespace ErrorCodes
     extern const int BACKUP_JOB_CREATE_FAILED;
     extern const int BACKUP_JOB_NOT_EXIST;
     extern const int BACKUP_STATUS_ERROR;
+    extern const int BACKUP_JOB_ALREADY_EXIST;
 }
 
 BackupsWorker::BackupsWorker(const ASTPtr & backup_or_restore_query_, ContextMutablePtr context_)
@@ -58,7 +59,16 @@ BackupResult BackupsWorker::start()
 {
     const ASTBackupQuery & backup_query = backup_or_restore_query->as<const ASTBackupQuery &>();
     // 1. Generate back up uuid
-    backup_id = UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
+    backup_settings = BackupSettings::fromBackupQuery(backup_query, context);
+    if (backup_settings.id.empty())
+        backup_id = UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
+    else
+    {
+        BackupTaskModel task_model = context->getCnchCatalog()->tryGetBackupJob(backup_settings.id);
+        if (task_model)
+            throw Exception(ErrorCodes::BACKUP_JOB_ALREADY_EXIST, "Backup job with id {} already exists", backup_settings.id);
+        backup_id = backup_settings.id;
+    }
 
     if (backup_query.kind == ASTBackupQuery::Kind::BACKUP)
         return startMakingBackup();
@@ -69,8 +79,6 @@ BackupResult BackupsWorker::start()
 BackupResult BackupsWorker::startMakingBackup()
 {
     const ASTBackupQuery & backup_query = backup_or_restore_query->as<const ASTBackupQuery &>();
-    backup_settings = BackupSettings::fromBackupQuery(backup_query, context);
-
     // 1. create snapshots in case backup table is dropped
     BackupSnapshotMaker::makeSnapshots(backup_query, backup_id, context);
 
@@ -107,9 +115,6 @@ BackupResult BackupsWorker::startMakingBackup()
 
 BackupResult BackupsWorker::startRestoring()
 {
-    const ASTBackupQuery & restore_query = backup_or_restore_query->as<const ASTBackupQuery &>();
-    backup_settings = BackupSettings::fromBackupQuery(restore_query, context);
-
     // 1. create backup job
     auto server_address = context->getHostWithPorts().getRPCAddress();
     context->getCnchCatalog()->createBackupJob(
@@ -195,9 +200,8 @@ void BackupsWorker::doBackup(const String & backup_id, ASTPtr backup_query_ptr, 
     if (!checkBackupTaskStatus(backup_id, status, backup_settings, local_context))
         return;
 
-    // reentrant
     if (!local_context->trySetRunningBackupTask(backup_id))
-        return;
+        throw Exception(ErrorCodes::BACKUP_JOB_ALREADY_EXIST, "There is already running task in server.");
     LoggerPtr logger = getLogger("BackupsWorker");
     auto backup_info = BackupDiskInfo::fromAST(*backup_query.backup_disk);
     DiskPtr backup_disk = local_context->getDisk(backup_info.disk_name);
@@ -238,7 +242,7 @@ void BackupsWorker::doBackup(const String & backup_id, ASTPtr backup_query_ptr, 
         // Start from intermediate
         else
         {
-            String backup_entry_file = backup_info.backup_dir + "/" + getBackupEntryFilePathInBackup();
+            String backup_entry_file = fs::path(backup_info.backup_dir) / getBackupEntryFilePathInBackup();
             BackupEntriesWriter backup_writer(backup_query, backup_task, local_context);
             backup_writer.write(backup_entry_file);
         }
@@ -368,7 +372,7 @@ void BackupsWorker::restoreTable(
     // Rename database and table in backup DDL
     auto new_create_query
         = typeid_cast<std::shared_ptr<ASTCreateQuery>>(renameInCreateQuery(create_table_query, renaming_config, local_context));
-  // uuid will be used to search backup data path
+    // uuid will be used to search backup data path
     String table_uuid = UUIDHelpers::UUIDToString(new_create_query->uuid);
     // Reset uuid to generate a new one
     new_create_query->uuid = UUIDHelpers::generateV4();

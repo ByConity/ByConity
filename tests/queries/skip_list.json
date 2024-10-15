@@ -639,6 +639,7 @@
         "00828_test_bitmap_format_parquet",
         "02681_partial_part_columns",
         "02460_regex_infile_hdfs",
+        "03100_backup_restore",
         "46018_size_virtual_column_hdfs"
     ],
     
