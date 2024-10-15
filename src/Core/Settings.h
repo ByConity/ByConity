@@ -1452,6 +1452,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_column_pruning, true, "Whether to enable ColumnPruning", 0) \
     M(Bool, enable_add_projection_to_pruning, true, "Whether add projection when column pruning", 0) \
     M(Bool, enable_predicate_pushdown_rewrite, true, "Whether to enable PredicatePushdown", 0) \
+    M(Bool, enable_pushdown_filter_through_stateful, false, "Whether to enable push predicate through projection with stateful functions", 0) \
     M(Bool, enable_hints_propagator, true, "Whether to enable HintsPropagator", 0) \
     M(Bool, enable_join_algorithm_hints, true, "Whether to enable ImplementJoinAlgorithmHints", 0) \
     M(Bool, enable_join_operation_hints, true, "Whether to enable ImplementJoinOperationHints", 0) \
