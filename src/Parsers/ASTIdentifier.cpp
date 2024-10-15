@@ -139,9 +139,12 @@ const std::vector<String> & ASTIdentifier::nameParts() const
 
 void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    auto format_element = [&](const String & elem_name) {
+    auto format_element = [&](const String & elem_name, bool remove_tenant = false) {
         settings.ostr << (settings.hilite ? hilite_identifier : "");
-        settings.writeIdentifier(elem_name);
+        if (remove_tenant)
+            settings.writeIdentifier(getOriginalEntityName(elem_name));
+        else
+            settings.writeIdentifier(elem_name);
         settings.ostr << (settings.hilite ? hilite_none : "");
     };
 
@@ -161,7 +164,7 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
                 ++j;
             }
             else
-                format_element(name_parts[i]);
+                format_element(name_parts[i], i == 0 && settings.remove_tenant_id);
         }
     }
     else if (is_implicit_map_key)

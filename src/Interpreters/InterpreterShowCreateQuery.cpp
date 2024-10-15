@@ -143,7 +143,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
-    String res = create_query->formatWithHiddenSecrets(/* max_length= */ 0, /* one_line= */ false, /*no_alias*/ false, getContext()->getSettingsRef().dialect_type);
+    String res = create_query->formatWithHiddenSecrets(/* max_length= */ 0, /* one_line= */ false, /*no_alias*/ false, getContext()->getSettingsRef().dialect_type, /*remove_tenant_id*/true);
 
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);

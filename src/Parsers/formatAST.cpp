@@ -26,12 +26,13 @@
 namespace DB
 {
 
-void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line, bool always_quote_identifiers, DialectType dialect)
+void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line, bool always_quote_identifiers, DialectType dialect, bool remove_tenant_id)
 {
     IAST::FormatSettings settings(buf, one_line);
     settings.hilite = hilite;
     settings.always_quote_identifiers = always_quote_identifiers;
     settings.dialect_type = dialect;
+    settings.remove_tenant_id = remove_tenant_id;
 
     ast.format(settings);
 }

@@ -91,12 +91,13 @@ size_t IAST::checkDepthImpl(size_t max_depth, size_t level) const
     return res;
 }
 
-String IAST::formatWithHiddenSecrets(size_t max_length, bool one_line, bool no_alias, DialectType dialect) const
+String IAST::formatWithHiddenSecrets(size_t max_length, bool one_line, bool no_alias, DialectType dialect, bool remove_tenant_id) const
 {
     WriteBufferFromOwnString buf;
     FormatSettings settings{buf, one_line, no_alias};
     settings.show_secrets = false;
     settings.dialect_type = dialect;
+    settings.remove_tenant_id = remove_tenant_id;
     format(settings);
 
     return wipeSensitiveDataAndCutToLength(buf.str(), max_length);
