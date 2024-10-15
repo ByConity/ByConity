@@ -126,27 +126,35 @@ namespace
                 if (!ParserKeyword{"ON"}.ignore(pos, expected))
                     return false;
 
-                String database_name, table_name;
-                bool any_database = false, any_table = false;
-
                 /// mysql allows such statement: grant alter on TABLE mytb to 'hello'
                 ParserKeyword{"TABLE"}.ignore(pos, expected);
 
-                if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, database_name, any_database, table_name, any_table))
-                    return false;
-
-                for (auto & [access_flags, columns] : access_and_columns)
+                auto parse_database_and_table = [&]
                 {
-                    AccessRightsElement element;
-                    element.access_flags = access_flags;
-                    element.any_column = columns.empty();
-                    element.columns = std::move(columns);
-                    element.any_database = any_database;
-                    element.database = database_name;
-                    element.any_table = any_table;
-                    element.table = table_name;
-                    res_elements.emplace_back(std::move(element));
-                }
+                    String database_name, table_name;
+                    bool any_database = false, any_table = false;
+
+                    if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, database_name, any_database, table_name, any_table))
+                        return false;
+
+                    for (auto & [access_flags, columns] : access_and_columns)
+                    {
+                        AccessRightsElement element;
+                        element.access_flags = access_flags;
+                        element.any_column = columns.empty();
+                        element.columns = std::move(columns);
+                        element.any_database = any_database;
+                        element.database = database_name;
+                        element.any_table = any_table;
+                        element.table = table_name;
+                        res_elements.emplace_back(std::move(element));
+                    }
+
+                    return true;
+                };
+
+                if (!ParserList::parseUtil(pos, expected, parse_database_and_table, false))
+                    return false;
 
                 return true;
             };
