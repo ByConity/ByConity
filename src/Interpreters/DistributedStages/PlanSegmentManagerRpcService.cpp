@@ -17,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <CloudServices/QueryResourceUtils.h>
 #include <IO/Progress.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -26,10 +27,13 @@
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/NamedSession.h>
 #include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
+#include <Protos/cnch_worker_rpc.pb.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
 #include <Common/Exception.h>
+#include <Common/ThreadPool.h>
+#include <common/scope_guard_safe.h>
 #include <common/types.h>
 
 namespace DB
@@ -371,6 +375,29 @@ void PlanSegmentManagerRpcService::prepareCommonParams(
     }
 }
 
+void PlanSegmentManagerRpcService::prepareQueryResource(UInt32 query_resource_buf_size, brpc::Controller * cntl)
+{
+    /// Prepare query_resource.
+    Protos::QueryResource query_resource;
+    butil::IOBuf query_resource_buf;
+    auto query_resource_buf_size_act = cntl->request_attachment().cutn(&query_resource_buf, query_resource_buf_size);
+    if (query_resource_buf_size_act != query_resource_buf_size)
+    {
+        throw Exception(
+            "Impossible query_resource_buf_size_act: " + std::to_string(query_resource_buf_size_act)
+                + "expected: " + std::to_string(query_resource_buf_size),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    butil::IOBufAsZeroCopyInputStream wrapper(query_resource_buf);
+    bool res = query_resource.ParseFromZeroCopyStream(&wrapper);
+    if (!res)
+        throw Exception("Fail to parse Protos::QueryResource!", ErrorCodes::LOGICAL_ERROR);
+
+    // load query resource
+    loadQueryResource(query_resource, context);
+}
+
 ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
     ContextMutablePtr global_context,
     std::shared_ptr<Protos::QueryCommon> & query_common,
@@ -403,7 +430,7 @@ ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
         query_context->setSessionContext(query_context);
         query_context->setTemporaryTransaction(txn_id, primary_txn_id);
     }
-    /// execute plan semgent instance in server
+    /// execute plan segment instance in server
     else
     {
         query_context = Context::createCopy(global_context);
@@ -497,9 +524,18 @@ void PlanSegmentManagerRpcService::executePlanSegment(
         try
         {
             if (!query_context)
-                query_context = createQueryContext(global_context, query_common, remote_side_port, {segment_id, execution_info.parallel_id});
+                query_context
+                    = createQueryContext(global_context, query_common, remote_side_port, {segment_id, execution_info.parallel_id});
 
             initQueryContext(query_context, query_common, settings_changes, execution_info.execution_address);
+
+            SCOPE_EXIT_SAFE({
+                if (query_context->getSettingsRef().enable_clean_resources_by_worker)
+                {
+                    auto session = query_context->acquireNamedCnchSession(query_common->txn_id(), {}, true, true);
+                    session->eliminateCurrentPlanSegment();
+                }
+            });
 
             if (!process_plan_segment_entry)
                 process_plan_segment_entry = query_context->getPlanSegmentProcessList().insertGroup(query_context, segment_id);
@@ -533,7 +569,8 @@ void PlanSegmentManagerRpcService::executePlanSegment(
                 int exception_code = getCurrentExceptionCode();
                 auto exception_message = getCurrentExceptionMessage(false);
 
-                auto result = convertFailurePlanSegmentStatusToResult(std::move(query_context), execution_info, exception_code, exception_message);
+                auto result
+                    = convertFailurePlanSegmentStatusToResult(std::move(query_context), execution_info, exception_code, exception_message);
                 reportExecutionResult(result);
             }
         }
@@ -633,6 +670,11 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
+        /// avoid performing any rpc or lock acquire ops inside brpc worker
+
+        if (request->has_query_resource_size() && request->query_resource_size() > 0)
+            prepareQueryResource(request->query_resource_size(), cntl);
+
         auto query_common = std::make_shared<Protos::QueryCommon>();
         std::shared_ptr<SettingsChanges> settings_changes;
         prepareCommonParams(
@@ -642,6 +684,12 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
             cntl,
             query_common,
             settings_changes);
+
+        if (settings_changes->tryGet("enable_clean_resources_by_worker"))
+        {
+            auto session = context->acquireNamedCnchSession(query_common->txn_id(), {}, true, true);
+            session->registerPlanSegmentsCount(request->plan_segment_headers().size());
+        }
 
         // prepare segmentGroup
         std::vector<size_t> segment_ids;

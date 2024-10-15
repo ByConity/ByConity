@@ -183,6 +183,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
 void executePlanSegmentsRemotely(
     const AddressInfo & address_info,
     const PlanSegmentHeaders & plan_segment_headers,
+    const butil::IOBuf & query_resource_buf,
     const butil::IOBuf & query_common_buf,
     const butil::IOBuf & query_settings_buf,
     AsyncContextPtr & async_context,

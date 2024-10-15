@@ -19,6 +19,7 @@
 #include <Common/ThreadPool.h>
 #include <Interpreters/Context_fwd.h>
 
+#include <atomic>
 #include <mutex>
 
 
@@ -119,6 +120,10 @@ struct NamedCnchSession
 
     NamedCnchSession(NamedSessionKey key_, ContextPtr context_, size_t timeout_, NamedCnchSessions & parent_);
     void release();
+
+    std::optional<std::atomic_size_t> plan_segments_count;
+    void registerPlanSegmentsCount(size_t _plan_segments_count);
+    void eliminateCurrentPlanSegment();
 
     String getID() const { return std::to_string(key); }
 };

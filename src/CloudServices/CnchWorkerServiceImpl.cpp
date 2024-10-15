@@ -56,6 +56,7 @@
 #include <brpc/stream.h>
 #include <Common/Configurations.h>
 #include <Common/Exception.h>
+#include <CloudServices/QueryResourceUtils.h>
 #include <IO/copyData.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/ManifestCache.h>
@@ -81,12 +82,6 @@
 namespace ProfileEvents
 {
 extern const Event PreloadExecTotalOps;
-}
-
-namespace ProfileEvents
-{
-    extern const Event QueryCreateTablesMicroseconds;
-    extern const Event QuerySendResourcesMicroseconds;
 }
 
 namespace DB
@@ -716,183 +711,8 @@ void CnchWorkerServiceImpl::sendResources(
     google::protobuf::Closure * done)
 {
     SUBMIT_THREADPOOL({
-        LOG_TRACE(log, "Receiving resources for Session: {}", request->txn_id());
-        Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
-
-        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
-        auto query_context = session->context;
-        query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
-        if (request->has_session_timezone())
-            query_context->setSetting("session_timezone", request->session_timezone());
-
-        CurrentThread::QueryScope query_scope(query_context);
-        auto worker_resource = query_context->getCnchWorkerResource();
-
-        /// store cloud tables in cnch_session_resource.
-        {
-            Stopwatch create_timer;
-            /// create a copy of session_context to avoid modify settings in SessionResource
-            auto context_for_create = Context::createCopy(query_context);
-            for (int i = 0; i < request->create_queries_size(); i++)
-            {
-                auto create_query = request->create_queries().at(i);
-                auto object_columns = request->dynamic_object_column_schema().at(i);
-
-                worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
-            }
-            for (int i = 0; i < request->cacheable_create_queries_size(); i++)
-            {
-                auto & item = request->cacheable_create_queries().at(i);
-                ColumnsDescription object_columns;
-                if (item.has_dynamic_object_column_schema())
-                    object_columns = ColumnsDescription::parse(item.dynamic_object_column_schema());
-                worker_resource->executeCacheableCreateQuery(
-                    context_for_create,
-                    RPCHelpers::createStorageID(item.storage_id()),
-                    item.definition(),
-                    item.local_table_name(),
-                    static_cast<WorkerEngineType>(item.local_engine_type()),
-                    item.local_underlying_dictionary_tables(),
-                    object_columns);
-            }
-            create_timer.stop();
-            LOG_INFO(log, "Prepared {} tables for session {} in {} us", request->create_queries_size() + request->cacheable_create_queries_size(), request->txn_id(), create_timer.elapsedMicroseconds());
-            ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, create_timer.elapsedMicroseconds());
-        }
-
-        bool lazy_load_parts = request->has_lazy_load_data_parts() && request->lazy_load_data_parts();
-        for (const auto & data : request->data_parts())
-        {
-            /// By default, calling getTable (from WorkerResource) will trigger loading data parts.
-            /// Here is the first time and happens before parts are ready. So don't trigger load data parts here.
-            StorageID storage_id = {data.database(), data.table()};
-            auto storage = worker_resource->tryGetTable(storage_id, /*load_data_parts*/false);
-            if (!storage)
-                throw Exception(ErrorCodes::WORKER_TABLE_NOT_FOUND, "Table {} not found in worker resource, it's a bug.", storage_id.getNameForLogs());
-
-            bool is_dict_table = false;
-            if (lazy_load_parts)
-                is_dict_table = !!dynamic_cast<StorageDictCloudMergeTree *>(storage.get());
-
-            if (auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
-            {
-                if (data.has_table_version())
-                {
-                    WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
-                    UInt64 version = data.table_version();
-                    cloud_merge_tree->setDataDescription(std::move(worker_info), version);
-                    LOG_DEBUG(log, "Received table {} with data version {}",
-                        cloud_merge_tree->getStorageID().getNameForLogs(),
-                        version);
-                }
-                else if (!data.server_parts().empty())
-                {
-                    MergeTreeMutableDataPartsVector server_parts;
-                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
-                        server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
-                            *cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
-                    else
-                        server_parts
-                            = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts());
-
-                    auto server_parts_size = server_parts.size();
-
-                    if (request->has_disk_cache_mode())
-                    {
-                        auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
-                        if (disk_cache_mode != DiskCacheMode::AUTO)
-                        {
-                            for (auto & part : server_parts)
-                                part->disk_cache_mode = disk_cache_mode;
-                        }
-                    }
-
-                    cloud_merge_tree->receiveDataParts(std::move(server_parts));
-
-                    LOG_DEBUG(
-                        log,
-                        "Received {} parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
-                        server_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(), request->disk_cache_mode(), is_dict_table, lazy_load_parts);
-                }
-
-                if (!data.virtual_parts().empty())
-                {
-                    MergeTreeMutableDataPartsVector virtual_parts;
-                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
-                        virtual_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
-                            *cloud_merge_tree, data.virtual_parts(), data.virtual_part_bitmaps());
-                    else
-                        virtual_parts
-                            = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.virtual_parts());
-
-                    auto virtual_parts_size = virtual_parts.size();
-
-                    if (request->has_disk_cache_mode())
-                    {
-                        auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
-                        if (disk_cache_mode != DiskCacheMode::AUTO)
-                        {
-                            for (auto & part : virtual_parts)
-                                part->disk_cache_mode = disk_cache_mode;
-                        }
-                    }
-
-                    cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
-
-                    LOG_DEBUG(
-                        log,
-                        "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
-                        virtual_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(), request->disk_cache_mode(), is_dict_table, lazy_load_parts);
-                }
-
-                std::set<Int64> required_bucket_numbers;
-                for (const auto & bucket_number : data.bucket_numbers())
-                    required_bucket_numbers.insert(bucket_number);
-
-                cloud_merge_tree->setRequiredBucketNumbers(required_bucket_numbers);
-
-                for (const auto & mutation_str : data.cnch_mutation_entries())
-                {
-                    auto mutation_entry = CnchMergeTreeMutationEntry::parse(mutation_str);
-                    cloud_merge_tree->addMutationEntry(mutation_entry);
-                }
-
-                /// prepareDataPartsForRead/loadDataParts is an expensive action as it may involve remote read.
-                /// The worker rpc thread pool may be blocked when there are many `sendResources` requests.
-                /// lazy_load_parts means the storage just receives server_parts in rpc. And it will call `prepareDataPartsForRead` later (before reading).
-                /// One exception is StorageDictCloudMergeTree as it use a different read logic rather than StorageCloudMergeTree::read.
-                if (!lazy_load_parts || is_dict_table)
-                {
-                    cloud_merge_tree->prepareDataPartsForRead();
-                }
-            }
-            else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))
-            {
-                auto settings = hive_table->getSettings();
-                auto lake_scan_infos = ILakeScanInfo::deserialize(data.lake_scan_info_parts(), query_context, storage->getInMemoryMetadataPtr(), *settings);
-                hive_table->loadLakeScanInfos(lake_scan_infos);
-            }
-            else if (auto * cloud_file_table = dynamic_cast<IStorageCloudFile *>(storage.get()))
-            {
-                auto data_parts = createCnchFileDataParts(getContext(), data.file_parts());
-                cloud_file_table->loadDataParts(data_parts);
-
-                LOG_DEBUG(
-                    log,
-                    "Received and loaded {}  cloud file parts for table {}",
-                    data_parts.size(),
-                    cloud_file_table->getStorageID().getNameForLogs());
-            }
-            else
-                throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
-        }
-
-        watch.stop();
-        LOG_INFO(log, "Received all resources for session {} in {} us.", request->txn_id(), watch.elapsedMicroseconds());
-        ProfileEvents::increment(ProfileEvents::QuerySendResourcesMicroseconds, watch.elapsedMicroseconds());
+        loadQueryResource(*request, rpc_context);
     })
 }
 

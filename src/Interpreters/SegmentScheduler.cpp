@@ -85,17 +85,22 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     if (server_resource && !query_context->getSettingsRef().bsp_mode)
     {
         server_resource->setSendMutations(true);
-        if (query_context->getSettingsRef().enable_prune_source_plan_segment)
+        // If batch send plan segments, resource will be sent together with segments
+        if (query_context->getSettingsRef().enable_batch_send_plan_segment
+            && query_context->getSettingsRef().enable_batch_send_resources_together)
         {
-            auto source_pruner = dag_ptr->makeSourcePruner(plan_segments_ptr);
-            server_resource->sendResources(query_context);
-            source_pruner->pruneSource(server_resource.get(), dag_ptr->id_to_segment);
+            server_resource->prepareQueryResourceBuf(dag_ptr->query_resource_map, query_context);
         }
         else
         {
             server_resource->sendResources(query_context);
         }
-            
+
+        if (query_context->getSettingsRef().enable_prune_source_plan_segment)
+        {
+            auto source_pruner = dag_ptr->makeSourcePruner(plan_segments_ptr);
+            source_pruner->pruneSource(server_resource.get(), dag_ptr->id_to_segment);
+        }
     }
     {
         if (query_context->getSettingsRef().report_segment_profiles)

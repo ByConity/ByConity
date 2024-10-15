@@ -1715,6 +1715,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
     M(String, exchange_shuffle_method_name, "cityHash64V2", "Shuffle method name used in exchange", 0) \
     M(Bool, enable_batch_send_plan_segment, true, "Whether enable combined sending plan segments to reduce rpc calls", 0) \
+    M(Bool, enable_batch_send_resources_together, false, "Whether enable combined sending resources and plan segments to reduce rpc calls", 0) \
+    M(Bool, enable_clean_resources_by_worker, false, "Whether enable worker clean resources by itself", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \

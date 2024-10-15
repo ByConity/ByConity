@@ -1,4 +1,5 @@
 #include "sendPlanSegment.h"
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -84,9 +85,17 @@ void sendPlanSegmentsToAddress(
         dag_graph_ptr->plan_send_addresses.emplace(address_info);
     }
 
+    LOG_TRACE(
+        getLogger("SegmentScheduler::sendPlanSegments"),
+        "Worker id {} -> [query resource size {}, plan_segment_buf_size {}]",
+        worker_id.toString(),
+        dag_graph_ptr->query_resource_map[worker_id].size(),
+        plan_segment_headers[0].plan_segment_buf_size);
+
     executePlanSegmentsRemotely(
         address_info,
         plan_segment_headers,
+        dag_graph_ptr->query_resource_map[worker_id],
         dag_graph_ptr->query_common_buf,
         dag_graph_ptr->query_settings_buf,
         dag_graph_ptr->async_context,

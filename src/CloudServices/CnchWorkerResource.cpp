@@ -18,21 +18,22 @@
 
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <Core/Names.h>
+#include <Databases/DatabaseMemory.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
-#include <Poco/Logger.h>
-#include <Databases/DatabaseMemory.h>
 #include <Storages/ForeignKeysDescription.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageDictCloudMergeTree.h>
+#include <Poco/Logger.h>
 
 
 namespace DB
@@ -195,7 +196,7 @@ StoragePtr CnchWorkerResource::tryGetTable(const StorageID & table_id, bool load
         if (auto cloud_table = dynamic_pointer_cast<StorageCloudMergeTree>(res))
             cloud_table->prepareDataPartsForRead();
     }
-    
+
     return res;
 }
 

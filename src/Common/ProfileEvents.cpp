@@ -314,7 +314,7 @@
     M(PerfFilterElapsedMicroseconds, "") \
 \
     M(QueryCreateTablesMicroseconds, "") \
-    M(QuerySendResourcesMicroseconds, "") \
+    M(QueryLoadResourcesMicroseconds, "") \
     M(CloudTableDefinitionCacheHits, "") \
     M(CloudTableDefinitionCacheMisses, "") \
 \
