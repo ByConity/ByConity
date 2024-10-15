@@ -106,6 +106,7 @@ public:
     UInt64 master_thread_id = 0;
 
     LogsLevel client_logs_level = LogsLevel::none;
+    int query_logs_level_for_poco = 0;
 
     String query;
     UInt64 normalized_query_hash = 0;
@@ -332,6 +333,8 @@ public:
 
     void attachInternalTextLogsQueue(const InternalTextLogsQueuePtr & logs_queue,
                                      LogsLevel client_logs_level);
+
+    void setQueryLogsLevel(int query_logs_level_for_poco);
 
     /// Callback that is used to trigger sending fatal error messages to client.
     void setFatalErrorCallback(std::function<void()> callback);

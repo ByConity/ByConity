@@ -201,6 +201,7 @@ void InterpreterSetQuery::applyPointLookupProfile(ContextMutablePtr query_contex
         changes.setSetting("enable_prune_source_plan_segment", true);
         changes.setSetting("enable_table_scan_build_pipeline_optimization", true);
         changes.setSetting("use_sync_pipeline_executor", true);
+        changes.setSetting("query_logs_level", "warning");
         query_context->applySettingsChanges(changes);
     }
 }

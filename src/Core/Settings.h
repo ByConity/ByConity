@@ -786,6 +786,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
     M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
     M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
+    M(LogsLevel, query_logs_level, LogsLevel::none, "Respect query log level if it's specified. LogsLevel::none is used to represent the feature is disabled rather than we don't print any log for query. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal'", 0) \
     M(Bool, enable_optimize_predicate_expression, 1, "If it is set to true, optimize predicates to subqueries.", 0) \
     M(Bool, enable_optimize_predicate_expression_to_final_subquery, 1, "Allow push predicate to final subquery.", 0) \
     M(Bool, allow_push_predicate_when_subquery_contains_with, 1, "Allows push predicate when subquery contains WITH clause", 0) \

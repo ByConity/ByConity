@@ -197,6 +197,14 @@ void ThreadStatus::attachInternalTextLogsQueue(const InternalTextLogsQueuePtr & 
     thread_group->client_logs_level = client_logs_level;
 }
 
+void ThreadStatus::setQueryLogsLevel(int query_logs_level_for_poco)
+{
+    if (!thread_group)
+        return;
+    std::lock_guard lock(thread_group->mutex);
+    thread_group->query_logs_level_for_poco = query_logs_level_for_poco;
+}
+
 void ThreadStatus::setFatalErrorCallback(std::function<void()> callback)
 {
     fatal_error_callback = std::move(callback);

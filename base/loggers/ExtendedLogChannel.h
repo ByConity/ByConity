@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <Core/SettingsEnums.h>
 
 namespace Poco
 {
@@ -28,6 +29,7 @@ public:
     uint64_t thread_id = 0;
     std::string query_id;
     uint64_t xid = 0;
+    int query_logs_level_for_poco = 0;
 };
 
 
