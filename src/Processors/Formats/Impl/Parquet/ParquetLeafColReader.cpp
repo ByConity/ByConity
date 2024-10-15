@@ -585,9 +585,14 @@ void ParquetLeafColReader<TColumn>::readPageDict(const parquet::DictionaryPage &
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED, "Unsupported dictionary page encoding {}", dict_page.encoding());
     }
-    // LOG_DEBUG(log, "{} values in dictionary page of column {}", dict_page.num_values(), col_descriptor.name());
+    LOG_TRACE(log, "{} values in dictionary page of column {}", dict_page.num_values(), col_descriptor.name());
 
     dictionary = readDictPage<TColumn>(dict_page, col_descriptor, base_data_type);
+    if (unlikely(dictionary->size() < 2))
+    {
+        // must not small than ColumnUnique<ColumnString>::numSpecialValues()
+        dictionary->assumeMutable()->insertManyDefaults(2);
+    }
     if (std::is_same_v<TColumn, ColumnString>)
     {
         reading_low_cardinality = true;
