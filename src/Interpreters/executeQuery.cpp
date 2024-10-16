@@ -978,6 +978,19 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             ast = input_ast;
             applyCustomSetting(context, ast);
+            if (settings.use_sql_binding && !internal)
+            {
+                try
+                {
+                    ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
+                    if (binding_ast)
+                        ast = binding_ast;
+                }
+                catch (...)
+                {
+                    tryLogWarningCurrentException(getLogger("SQL Binding"), "SQL binding match error.");
+                }
+            }
         }
         bool in_interactive_txn = isQueryInInteractiveSession(context, ast);
         if (in_interactive_txn && isDDLQuery(context, ast))
@@ -2028,11 +2041,11 @@ BlockIO executeQuery(
     std::tie(ast, streams)
         = executeQueryImpl(query.data(), query.data() + query.size(), ast, context, internal, stage, !may_have_embedded_data, nullptr);
 
-    // Try to redirect streams to the target file instead of the client when outfile_in_server_with_tcp is true
-    tryOutfile(streams, ast, context);
-
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
+        // Try to redirect streams to the target file instead of the client when outfile_in_server_with_tcp is true
+        tryOutfile(streams, ast, context);
+
         String format_name = ast_query_with_output->format ? getIdentifierName(ast_query_with_output->format) : context->getDefaultFormat();
 
         if (format_name == "Null")
