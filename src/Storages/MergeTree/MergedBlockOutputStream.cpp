@@ -43,7 +43,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     bool blocks_are_granules_size,
     bool optimize_map_column_serialization,
     const BitmapBuildInfo & bitmap_build_info,
-    bool enable_partial_update)
+    bool enable_partial_update,
+    String on_duplicate_action)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_), columns_list(columns_list_), default_codec(default_codec_)
 {
     MergeTreeWriterSettings writer_settings(
@@ -54,7 +55,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         blocks_are_granules_size,
         optimize_map_column_serialization,
         /* enable_disk_based_key_index = */ metadata_snapshot->hasUniqueKey() && !enable_partial_update, /// TODO: optimize here
-        /*enable_partial_update_=*/ enable_partial_update);
+        /*enable_partial_update_=*/ enable_partial_update,
+        /*on_duplicate_action_=*/ on_duplicate_action);
 
     if (!part_path.empty())
         volume->getDisk()->createDirectories(part_path);

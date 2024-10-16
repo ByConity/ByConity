@@ -283,7 +283,8 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             block_id,
             primary_txn_id,
             /*hint_mutation=*/ 0,
-            /*partial_update_state=*/ dedup_parameters.enable_partial_update ? PartialUpdateState::RWProcessNeeded: PartialUpdateState::NotPartialUpdate);
+            /*partial_update_state=*/ dedup_parameters.enable_partial_update ? PartialUpdateState::RWProcessNeeded: PartialUpdateState::NotPartialUpdate,
+            /*on_duplicate_action=*/context->getSettingsRef().on_duplicate_action.value);
 
         if (txn->isSecondary())
             temp_part->secondary_txn_id = txn->getTransactionID();

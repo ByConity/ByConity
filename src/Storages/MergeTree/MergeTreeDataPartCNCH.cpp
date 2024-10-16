@@ -795,6 +795,22 @@ ColumnPtr MergeTreeDataPartCNCH::loadDedupSort() const
     return std::move(dedup_sort_columns);
 }
 
+CnchDedupHelper::PartialUpdateRule MergeTreeDataPartCNCH::loadPartialUpdateRule() const
+{
+    CnchDedupHelper::PartialUpdateRule partial_update_rule;
+    /// Load partial update rule from remote disk
+    auto checksums = getChecksums();
+    if (!checksums->has("_partial_update_rule_"))
+        return partial_update_rule;
+
+    auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_partial_update_rule_");
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size, "_partial_update_rule_");
+    LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
+    CnchDedupHelper::readPartialUpdateRule(partial_update_rule, buf);
+    return partial_update_rule;
+}
+
 IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
 {
     ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadPrimaryIndexMicroseconds);

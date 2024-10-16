@@ -1265,6 +1265,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, use_hive_split_level_filter, false, "", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+    M(String, on_duplicate_action, "", "Indicate partial update action when history duplicate key found", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
     M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
     M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \

@@ -466,6 +466,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, partial_update_max_process_parts, 100, "Max process parts for partial update sub iteration", 0) \
     M(UInt64, partial_update_max_process_rows, 15000000, "Max process rows for partial update sub iteration", 0) \
     M(MaxThreads, partial_update_query_parts_thread_size, 8, "The thread size of query data parts.", 0) \
+    M(MaxThreads, partial_update_process_on_duplicate_thread_size, 8, "The thread size of process on duplicate action.", 0) \
     M(MaxThreads, partial_update_query_columns_thread_size, 1, "The thread size of query columns for each part.", 0) \
     M(MaxThreads, partial_update_replace_columns_thread_size, 8, "The thread size of replace columns.", 0) \
     M(Bool, partial_update_enable_merge_map, true, "Map row will just replace the original one when it's false. Otherwise, it will merge row.", 0) \

@@ -368,7 +368,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     UInt64 block_id,
     Int64 mutation,
     Int64 hint_mutation,
-    PartialUpdateState partial_update_state)
+    PartialUpdateState partial_update_state,
+    String on_duplicate_action)
 {
     Block & block = block_with_partition.block;
     Int64 bucket_number = block_with_partition.bucket_info.bucket_number;
@@ -623,7 +624,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         /* blocks_are_granules_size(default) */false,
         context->getSettingsRef().optimize_map_column_serialization,
         bitmap_build_info,
-        enable_partial_update);
+        enable_partial_update,
+        on_duplicate_action);
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
 
     // pre-handle low-cardinality fall-back

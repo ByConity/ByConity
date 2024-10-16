@@ -31,12 +31,14 @@
 #include <Core/SettingsEnums.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
+#include <IO/VarInt.h>
 
 namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int ABORTED;
 extern const int CNCH_LOCK_ACQUIRE_FAILED;
+extern const int UNKNOWN_FORMAT;
 }
 
 namespace DB::CnchDedupHelper
@@ -675,7 +677,7 @@ pickWorkerForDedup(StorageCnchMergeTree & cnch_table, DedupTaskPtr dedup_task, c
 }
 
 String parseAndConvertColumnsIntoIndices(
-    MergeTreeMetaBase & storage, const NameSet & non_updatable_columns, const NamesAndTypesList & columns, const String & columns_name)
+    const MergeTreeMetaBase & storage, const NameSet & non_updatable_columns, const NamesAndTypesList & columns, const String & columns_name)
 {
     size_t columns_size = columns.size();
     size_t last_pos = 0, pos = 0, size = columns_name.size();
@@ -769,5 +771,45 @@ void simplifyFunctionColumns(MergeTreeMetaBase & storage, const StorageMetadataP
         }
         update_columns = std::move(simplify_update_columns);
     }
+}
+
+void writePartialUpdateRule(const PartialUpdateRule & partial_update_rule, WriteBuffer & to)
+{
+    writeString("partial update rule version: 1\n", to);
+    /// write enable_partial_update
+    writeString("enable partial update:", to);
+    writeVarUInt(partial_update_rule.enable_partial_update ? 1 : 0, to);
+    writeString("\n", to);
+    /// write on_duplicate_action
+    writeString("on duplicate action:", to);
+    writeString(partial_update_rule.on_duplicate_action, to);
+    writeString("\n", to);
+}
+
+bool readPartialUpdateRule(PartialUpdateRule & partial_update_rule, ReadBuffer & in)
+{
+    assertString("partial update rule version: ", in);
+    size_t format_version;
+    size_t enable_partial_update;
+    readText(format_version, in);
+    assertChar('\n', in);
+
+    switch (format_version)
+    {
+        case 1:
+            /// read enable_partial_update
+            assertString("enable partial update:", in);
+            readVarUInt(enable_partial_update, in);
+            partial_update_rule.enable_partial_update = (enable_partial_update == 1);
+            assertChar('\n', in);
+            /// read on_duplicate_action
+            assertString("on duplicate action:", in);
+            readString(partial_update_rule.on_duplicate_action, in);
+            assertChar('\n', in);
+            break;
+        default:
+            throw Exception("Bad format version: " + DB::toString(format_version), ErrorCodes::UNKNOWN_FORMAT);
+    }
+    return true;
 }
 }

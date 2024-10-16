@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include <CloudServices/CnchDedupHelper.h>
+#include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include "common/types.h"
@@ -111,6 +113,7 @@ public:
     ColumnPtr loadDeleteFlag() const;
     ColumnPtr loadUpdateColumns() const;
     ColumnPtr loadDedupSort() const;
+    CnchDedupHelper::PartialUpdateRule loadPartialUpdateRule() const;
 
     /// it's a no-op because in CNCH, projection parts are uploaded to parent part's data file
     virtual void projectionRemove(const String &, bool) const override { }

@@ -106,6 +106,7 @@ private:
     void finishDeleteFlagSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
     void finishUpdateColumnsSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
     void finishDedupSortSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
+    void finishPartialUpdateRuleSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
 
     ColumnPtr delete_flag;
     ColumnPtr update_columns;

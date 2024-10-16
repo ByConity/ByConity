@@ -21,7 +21,9 @@
 
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Parsers/formatAST.h>
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
@@ -50,6 +52,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_insert_overwrite("INSERT OVERWRITE");
     ParserKeyword s_replace_into("REPLACE INTO");
     ParserKeyword s_insert_into("INSERT INTO");
+    ParserKeyword s_on_duplicate_key_update("ON DUPLICATE KEY UPDATE");
 
     ParserKeyword s_table("TABLE");
     ParserKeyword s_function("FUNCTION");
@@ -85,10 +88,12 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr compression;
     ASTPtr settings_ast;
     ASTPtr partition_by_expr;
+    ASTPtr overwrite_partition;
+    ASTPtr on_duplicate_assignments;
     bool is_overwrite {false};
     bool is_replace {false};
     bool insert_ignore {false};
-    ASTPtr overwrite_partition;
+    bool on_duplicate_key_parsed {false};
 
     /// Insertion data
     const char * data = nullptr;
@@ -131,7 +136,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!name_p.parse(pos, table, expected))
             return false;
 
-        /// If there is a dot, previous name was database name, 
+        /// If there is a dot, previous name was database name,
         /// so read table name after dot.
         if (s_dot.ignore(pos, expected))
         {
@@ -147,7 +152,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (!s_lparen.ignore(pos, expected))
             return false;
-            
+
         if (!ParserList{std::make_unique<ParserPartition>(), std::make_unique<ParserToken>(TokenType::Comma), false}.parse(
                 pos, overwrite_partition, expected))
             return false;
@@ -167,6 +172,16 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
     Pos before_values = pos;
+
+    /// ON DUPLICATE KEY UPDATE
+    /// For INSERT INTO TABLE ON DUPLICATE KEY UPDATE on_duplicate_action VALUES
+    if (s_on_duplicate_key_update.ignore(pos, expected))
+    {
+        on_duplicate_key_parsed = true;
+        ParserList parser_assignment_list(std::make_unique<ParserAssignmentWithAlias>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
+        if (!parser_assignment_list.parse(pos, on_duplicate_assignments, expected))
+            return false;
+    }
 
     /// VALUES or FORMAT or SELECT
     if (s_values.ignore(pos, expected))
@@ -239,6 +254,19 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         return false;
     }
 
+    /// ON DUPLICATE KEY UPDATE
+    /// For INSERT INTO TABLE SELECT xxx ON DUPLICATE KEY UPDATE on_duplicate_action
+    if (s_on_duplicate_key_update.ignore(pos, expected))
+    {
+        /// ON DUPLICATE KEY UPDATE cannot be parsed twice
+        if (on_duplicate_key_parsed)
+            return false;
+
+        ParserList parser_assignment_list(std::make_unique<ParserAssignmentWithAlias>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
+        if (!parser_assignment_list.parse(pos, on_duplicate_assignments, expected))
+            return false;
+    }
+
     /// Read SETTINGS if they are defined
     if (s_settings.ignore(pos, expected))
     {
@@ -309,6 +337,25 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->columns = columns;
     query->select = select;
     query->watch = watch;
+    if (on_duplicate_assignments)
+    {
+        if (settings_ast)
+        {
+            auto *settings_to_change = settings_ast->as<ASTSetQuery>();
+            settings_to_change->changes.push_back({"on_duplicate_action", DB::serializeAST(*on_duplicate_assignments)});
+        }
+        else
+        {
+            auto setting_node = std::make_shared<ASTSetQuery>();
+
+            SettingsChanges changes;
+            setting_node->is_standalone = false;
+            changes.push_back({"on_duplicate_action", DB::serializeAST(*on_duplicate_assignments)});
+            setting_node->changes = std::move(changes);
+
+            settings_ast = setting_node;
+        }
+    }
     query->settings_ast = settings_ast;
     query->data = data != end ? data : nullptr;
     query->end = end;

@@ -88,7 +88,8 @@ public:
         UInt64 block_id = 0,
         Int64 mutation = 0,
         Int64 hint_mutation = 0,
-        PartialUpdateState partial_update_state = PartialUpdateState::NotPartialUpdate);
+        PartialUpdateState partial_update_state = PartialUpdateState::NotPartialUpdate,
+        String on_duplicate_action = "");
 
     MergeTreeMetaBase::MutableDataPartPtr writeProjectionPart(
         Block block, const ProjectionDescription & projection, const IMergeTreeDataPart * parent_part);
