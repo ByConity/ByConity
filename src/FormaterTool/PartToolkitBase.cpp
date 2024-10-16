@@ -145,6 +145,7 @@ void PartToolkitBase::applySettings()
         settings.set("s3_ak_id", s3_input_config->ak_id);
         settings.set("s3_ak_secret", s3_input_config->ak_secret);
         settings.set("s3_region", s3_input_config->region);
+        settings.set("s3_use_virtual_hosted_style", s3_input_config->is_virtual_hosted_style);
     }
 }
 

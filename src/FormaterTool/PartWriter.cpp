@@ -112,13 +112,6 @@ PartWriter::PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_) : 
         if (!endsWith(dest_path, "/"))
             dest_path.append("/");
     }
-
-    if (s3_input_config)
-    {
-        // Overwrite S3 source_path as:
-        // `S3://<bucket>/<root_path>/<data_file>`
-        source_path = "s3://" + s3_input_config->bucket + "/" + s3_input_config->root_prefix + "/" + source_path;
-    }
 }
 
 PartWriter::~PartWriter()
