@@ -1119,6 +1119,7 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     auto sample_block = metadata_snapshot->getSampleBlock();
+    auto default_columns = metadata_snapshot->getColumns().getDefaults();
     Names column_names = sample_block.getNames();
     NameSet name_set = sample_block.getNameSet();
 
@@ -1159,7 +1160,10 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             LOG_DEBUG(log, "Same update columns: {}, txn id: {}, part name: {}", same_update_columns, dedup_task->txn_id, part->name);
 
             if (size == 0)
+            {
                 columns_read = column_names;
+                update_column_set_list[part_id] = {columns_read.begin(), columns_read.end()};
+            }
             else
             {
                 /// Restore update columns must use part columns instead of storage columns
@@ -1194,6 +1198,11 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
                 if (data.merging_params.hasExplicitVersionColumn())
                     columns_read_set.insert(data.merging_params.version_column);
 
+                update_column_set_list[part_id] = {columns_read_set.begin(), columns_read_set.end()};
+                /// We need to read out the columns containing the default expression
+                for (const auto & default_column : default_columns)
+                    columns_read_set.insert(default_column.first);
+
                 columns_read = {columns_read_set.begin(), columns_read_set.end()};
             }
         }
@@ -1202,9 +1211,6 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             optimize_for_same_update_columns_atomic = false;
             columns_read = column_names;
         }
-
-        if (optimize_for_same_update_columns_atomic)
-            update_column_set_list[part_id] = {columns_read.begin(), columns_read.end()};
 
         size_t total_size = update_columns->size();
         to_block.insert(
