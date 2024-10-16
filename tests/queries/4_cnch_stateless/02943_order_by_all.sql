@@ -87,4 +87,10 @@ SELECT a, b, all FROM order_by_all ORDER BY all, a;
 -- SET allow_experimental_analyzer = 1;
 SELECT a, b, all FROM order_by_all ORDER BY all, a;
 
+set dialect_type = 'ANSI';
+
+SELECT b, a FROM order_by_all ORDER BY ALL NULLS FIRST;
+SELECT b, a FROM order_by_all ORDER BY ALL NULLS LAST;
+SELECT a, b AS all FROM order_by_all ORDER BY all SETTINGS enable_order_by_all = false;
+
 DROP TABLE IF EXISTS order_by_all;

@@ -1611,6 +1611,10 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
     std::vector<ASTPtr> grouping_expressions;
     std::vector<std::vector<ASTPtr>> grouping_sets;
 
+    // expand GROUP BY ALL
+    if (select_query.group_by_all)
+        expandGroupByAll(&select_query, select_expressions);
+
     if (select_query.groupBy())
     {
         bool allow_group_by_position = context->getSettingsRef().enable_positional_arguments && !select_query.group_by_with_rollup
@@ -1752,7 +1756,7 @@ void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & 
             .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
 
         if (context->getSettingsRef().enable_order_by_all && select_query.order_by_all)  
-            expandOrderByAll(&select_query);
+            expandOrderByAll(&select_query, select_expressions);
         for (auto order_item : select_query.orderBy()->children)
         {
             auto & order_elem = order_item->as<ASTOrderByElement &>();
