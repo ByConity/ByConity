@@ -69,11 +69,12 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
     NameToType name_to_type;
     for (const auto & item : output_stream.value().header)
     {
-        if (output_columns.contains(item.name))
+        auto it = output_columns.find(item.name);
+        if (it != output_columns.end())
         {
-            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(output_columns.at(item.name)));
+            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(it->second));
             name_to_type.emplace(item.name, item.type);
-            inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
+            inputs.emplace_back(NameAndTypePair{it->second, item.type});
         }
     }
     return std::make_shared<ProjectionStep>(DataStream{inputs}, assignments, name_to_type);
@@ -89,11 +90,15 @@ PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr 
     NameToType name_to_type;
     for (const auto & item : output_stream.value().header)
     {
-        if (output_columns.contains(item.name))
+        auto it = output_columns.find(item.name);
+        if (it != output_columns.end())
         {
-            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(rewrite.mappings.at(output_columns.at(item.name))));
+            auto new_symbol = rewrite.mappings.find(it->second);
+            if (new_symbol == rewrite.mappings.end())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "output_stream symbol not found in cte def: " + it->second);
+            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(new_symbol->second));
             name_to_type.emplace(item.name, item.type);
-            inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
+            inputs.emplace_back(NameAndTypePair{it->second, item.type});
         }
     }
     return PlanNodeBase::createPlanNode(

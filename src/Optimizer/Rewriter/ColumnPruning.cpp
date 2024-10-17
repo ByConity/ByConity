@@ -817,14 +817,14 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, ColumnPruningCo
             output_header.emplace_back(left_header.getByPosition(0));
             left_require.insert(left_header.getByPosition(0).name);
             ColumnPruningContext left_column_pruning_context_2{.name_set = left_require};
-            left = addProjection(VisitorUtil::accept(node.getChildren()[0], *this, left_column_pruning_context_2), left_require);
+            left = addProjection(VisitorUtil::accept(left, *this, left_column_pruning_context_2), left_require);
         }
         else if (right_header.columns() != 0)
         {
             output_header.emplace_back(right_header.getByPosition(0));
             right_require.insert(right_header.getByPosition(0).name);
             ColumnPruningContext right_column_pruning_context_2{.name_set = right_require};
-            right = addProjection(VisitorUtil::accept(node.getChildren()[1], *this, right_column_pruning_context_2), right_require);
+            right = addProjection(VisitorUtil::accept(right, *this, right_column_pruning_context_2), right_require);
         }
         else
         {
