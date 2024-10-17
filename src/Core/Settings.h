@@ -1034,7 +1034,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, handle_division_by_zero, false, "If set true, return null for division by zero (MySQL Behavior)", 0) \
     M(Bool, enable_bucket_for_distribute, true, "If set true, enable distribute by keyword by replacing with distribute", 0) \
     \
-    M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
+    M(Bool, optimize_rewrite_sum_if_to_count_if, false, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
     M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
     M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
