@@ -993,7 +993,7 @@ private:
     StoragePtr createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model);
     void detachOrAttachTable(const String & db, const String & name, const TxnTimestamp & ts, bool is_detach);
     DataModelPartWithNameVector getDataPartsMetaFromMetastore(
-        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, const Context * session_context, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataModelDeleteBitmapPtrVector getDeleteBitmapsInPartitionsImpl(

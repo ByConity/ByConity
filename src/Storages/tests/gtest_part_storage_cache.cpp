@@ -13,6 +13,11 @@ using namespace std::chrono;
 using namespace DB;
 using namespace testing;
 
+namespace DB::ErrorCodes
+{
+    extern const int TIMEOUT_EXCEEDED;
+}
+
 namespace CacheTestMock
 {
 
@@ -383,6 +388,75 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     EXPECT_EQ(partition_ids.size(), 3);
 
     load_from_func = false;
+
+    cache_manager->shutDown();
+}
+
+TEST_F(CacheManagerTest, GetPartsFromCacheWithMultiThreads)
+{
+    auto context = getContext().context;
+    auto settings = context->getSettingsRef();
+    settings.catalog_enable_multiple_threads = true;
+    context->setSettings(settings);
+
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
+    auto topology_version = PairInt64{1, 1};
+
+    // mock storage
+    String query = "create table gztest.test (id Int32) ENGINE=CnchMergeTree partition by id order by tuple()";
+    StoragePtr storage = CacheTestMock::createTable(query, context);
+    String storage_uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+
+    // add table entry in cache manager and mock load partitions
+    cache_manager->mayUpdateTableMeta(*storage, topology_version);
+    auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+
+    // initialize partition infos
+    Strings partitions;
+    for (size_t i = 1000; i<1005; i++)
+    {
+        partitions.push_back(toString(i));
+        entry->partitions.emplace(partitions.back(), std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, partitions.back(), RWLockImpl::create()));
+    }
+
+    auto mock_timeout_loading = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
+        throw Exception("Loading data reached timeout.", ErrorCodes::TIMEOUT_EXCEEDED);
+    };
+
+    EXPECT_EQ(entry->load_parts_by_partition, false);
+    // get data parts from cache with multiple threads. Load timeout exception will be thrown and after which the following loading will
+    // load by partition
+    try
+    {
+        cache_manager->getOrSetServerDataPartsInPartitions(*storage, partitions, mock_timeout_loading, TxnTimestamp::maxTS(), topology_version);
+    }
+    catch(Exception &e)
+    {
+        EXPECT_EQ(e.code(), ErrorCodes::TIMEOUT_EXCEEDED);
+    }
+
+    // Fall back to load parts by partition
+    EXPECT_EQ(entry->load_parts_by_partition, true);
+
+    auto mock_load = [&](const Strings & partition_not_cached, const Strings &) -> DataModelPartWrapperVector {
+        DataModelPartWrapperVector res;
+        for (const auto & partition_id : partition_not_cached)
+        {
+            auto loaded = CacheTestMock::createPartsBatch(partition_id, 10, storage);
+            res.insert(res.end(), loaded.begin(), loaded.end());
+        }
+        return res;
+    };
+
+    ServerDataPartsVector parts_from_cache = cache_manager->getOrSetServerDataPartsInPartitions(*storage, partitions, mock_load, TxnTimestamp::maxTS(), topology_version);
+    EXPECT_EQ(parts_from_cache.size(), 50);
+
+    // assert partition cache status Loaded
+    for (const auto & partition_id : partitions)
+    {
+        auto partition_info = entry->getPartitionInfo(partition_id);
+        EXPECT_EQ(partition_info->part_cache_status.isLoaded(), true);
+    }
 
     cache_manager->shutDown();
 }
