@@ -571,9 +571,9 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         dedup_tasks = convertIntoSubDedupTasks(all_visible_parts, all_staged_parts, all_uncommitted_parts, bucket_level_dedup, txn_id);
     }
 
+    std::mutex mutex;
     size_t dedup_pool_size = std::min(static_cast<size_t>(data.getSettings()->unique_table_dedup_threads), dedup_tasks.size());
     ThreadPool dedup_pool(dedup_pool_size);
-    std::mutex mutex;
     for (size_t i = 0; i < dedup_tasks.size(); ++i)
     {
         {
@@ -1123,11 +1123,6 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
     Names column_names = sample_block.getNames();
     NameSet name_set = sample_block.getNameSet();
 
-    size_t read_new_part_thread_num = std::max(
-        static_cast<size_t>(1),
-        std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
-    bool use_thread_pool = read_new_part_thread_num > 1;
-    ThreadPool read_new_data_pool(read_new_part_thread_num);
     std::vector<Block> blocks_from_current_dedup_new_parts{current_dedup_new_parts.size()};
     std::vector<NameSet> update_column_set_list{current_dedup_new_parts.size()};
     std::atomic<bool> optimize_for_same_update_columns_atomic = true;
@@ -1295,6 +1290,12 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             dedup_task->txn_id,
             dedup_task->getDedupLevelInfo());
     };
+
+    size_t read_new_part_thread_num = std::max(
+        static_cast<size_t>(1),
+        std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
+    bool use_thread_pool = read_new_part_thread_num > 1;
+    ThreadPool read_new_data_pool(read_new_part_thread_num);
     for (size_t part_id = 0; part_id < current_dedup_new_parts.size(); part_id++)
     {
         if (use_thread_pool)
@@ -1632,10 +1633,10 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 valid_query_parts_num++;
                 total_query_row += part_rowid_pair.size();
             }
+
             size_t read_history_part_thread_num = std::max(
                 static_cast<size_t>(1), std::min(valid_query_parts_num, static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
             bool use_thread_pool = read_history_part_thread_num > 1;
-            ThreadPool read_history_data_pool(read_history_part_thread_num);
             std::vector<Block> columns_from_storage_vector(read_history_part_thread_num);
             std::vector<PaddedPODArray<UInt32>> block_rowids_vector(read_history_part_thread_num);
 
@@ -1705,6 +1706,8 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                     j++;
                 }
             };
+
+            ThreadPool read_history_data_pool(read_history_part_thread_num);
             for (size_t i = 0; i < read_history_part_thread_num; ++i)
             {
                 columns_from_storage_vector[i] = metadata_snapshot->getSampleBlock();
@@ -2629,11 +2632,6 @@ IMergeTreeDataPartPtr MergeTreeDataDeduper::generateAndCommitPartInPartialUpdate
     watch.restart();
 
     IMergeTreeDataPartsVector partial_update_parts;
-    size_t write_part_thread_num
-        = std::max(static_cast<size_t>(1), std::min(split_block_num, static_cast<size_t>(data.getSettings()->cnch_write_part_threads)));
-    ThreadPool write_part_pool(write_part_thread_num);
-    bool use_thread_pool = write_part_thread_num > 1;
-
     IMutableMergeTreeDataPartsVector mutable_partial_update_parts{split_block_num};
     auto generate_drop_part = [&](size_t split_block_id) {
         auto drop_part_info = new_parts[split_block_id]->info;
@@ -2654,6 +2652,10 @@ IMergeTreeDataPartPtr MergeTreeDataDeduper::generateAndCommitPartInPartialUpdate
         mutable_partial_update_parts[split_block_id] = drop_part;
     };
 
+    size_t write_part_thread_num
+        = std::max(static_cast<size_t>(1), std::min(split_block_num, static_cast<size_t>(data.getSettings()->cnch_write_part_threads)));
+    bool use_thread_pool = write_part_thread_num > 1;
+    ThreadPool write_part_pool(write_part_thread_num);
     for (size_t i = 0; i < split_block_num; ++i)
     {
         if (use_thread_pool)
