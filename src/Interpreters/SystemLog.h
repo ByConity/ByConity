@@ -34,6 +34,7 @@
 #include <common/types.h>
 #include <Core/Defines.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Common/Stopwatch.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -42,6 +43,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
@@ -126,7 +128,6 @@ class ISystemLog
 {
 public:
     virtual String getName() = 0;
-    virtual ASTPtr getCreateTableQuery(ParserSettingsImpl dt) = 0;
     //// force -- force table creation (used for SYSTEM FLUSH LOGS)
     virtual void flush(bool force = false) = 0;
     virtual void prepareTable() = 0;
@@ -223,8 +224,9 @@ public:
     void shutdown() override
     {
         stopFlushThread();
-        if (table)
-            table->flushAndShutdown();
+        auto t = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
+        if (t)
+            t->flushAndShutdown();
     }
 
     String getName() override
@@ -232,7 +234,8 @@ public:
         return LogElement::name();
     }
 
-    ASTPtr getCreateTableQuery(ParserSettingsImpl dt) override;
+    ASTPtr getCreateTableQuery(ParserSettingsImpl dt);
+    ASTPtr getCreateTableQueryClean();
 
 protected:
     /// use raw logger here because TextLog requires logger->setLevel() capability
@@ -243,6 +246,8 @@ protected:
     const StorageID table_id;
     const String storage_def;
     StoragePtr table;
+    String create_query;
+    String old_create_query;
     bool is_prepared = false;
     const size_t flush_interval_milliseconds;
     ThreadFromGlobalPool saving_thread;
@@ -296,6 +301,14 @@ SystemLog<LogElement>::SystemLog(
 {
     assert((database_name_ == DatabaseCatalog::SYSTEM_DATABASE) || (database_name_ == CNCH_SYSTEM_LOG_DB_NAME));
     log = getRawLogger("SystemLog (" + database_name_ + "." + table_name_ + ")");
+
+    // Initialize `create_query` with dialect_type.
+    auto query_context = Context::createCopy(context);
+    auto dialect_type = ParserSettings::valueOf(query_context->getSettingsRef());
+
+    /// NOTE: CnchSystemLog has no storage_def when created. And it has a different logic of comparing table schema, see CnchSystemLog::prepareTable().
+    if (!storage_def.empty())
+        create_query = serializeAST(*getCreateTableQuery(dialect_type));
 }
 
 
@@ -573,6 +586,7 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
 }
 
 
+
 template <typename LogElement>
 void SystemLog<LogElement>::prepareTable()
 {
@@ -585,15 +599,14 @@ void SystemLog<LogElement>::prepareTable()
 
     if (table)
     {
-        auto metadata_columns = table->getInMemoryMetadataPtr()->getColumns();
-        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns, dialect_type);
+        if (old_create_query.empty())
+        {
+            old_create_query = serializeAST(*getCreateTableQueryClean());
+            if (old_create_query.empty())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty CREATE QUERY for {}", backQuoteIfNeed(table_id.table_name));
+        }
 
-        auto ordinary_columns = LogElement::getNamesAndTypes();
-        auto alias_columns = LogElement::getNamesAndAliases();
-        auto current_query = InterpreterCreateQuery::formatColumns(
-            ordinary_columns, alias_columns, ParserSettings::valueOf(query_context->getSettingsRef()));
-
-        if (old_query->getTreeHash() != current_query->getTreeHash())
+        if (old_create_query != create_query)
         {
             /// Rename the existing table.
             int suffix = 0;
@@ -619,9 +632,11 @@ void SystemLog<LogElement>::prepareTable()
 
             LOG_DEBUG(
                 log,
-                "Existing table {} for system log has obsolete or different structure. Renaming it to {}",
+                "Existing table {} for system log has obsolete or different structure. Renaming it to {}.\nOld: {}\nNew: {}\n.",
                 description,
-                backQuoteIfNeed(to.table));
+                backQuoteIfNeed(to.table),
+                old_create_query,
+                create_query);
 
             query_context->makeQueryContext();
             InterpreterRenameQuery(rename, query_context).execute();
@@ -637,15 +652,16 @@ void SystemLog<LogElement>::prepareTable()
     {
         /// Create the table.
         LOG_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
-        auto create = getCreateTableQuery(ParserSettings::valueOf(query_context->getSettingsRef()));
-
+        auto create_query_ast = getCreateTableQuery(dialect_type);
         query_context->makeQueryContext();
 
-        InterpreterCreateQuery interpreter(create, query_context);
+        InterpreterCreateQuery interpreter(create_query_ast, query_context);
         interpreter.setInternal(true);
         interpreter.execute();
 
         table = DatabaseCatalog::instance().getTable(table_id, getContext());
+
+        old_create_query.clear();
     }
 
     is_prepared = true;
@@ -668,11 +684,37 @@ ASTPtr SystemLog<LogElement>::getCreateTableQuery(ParserSettingsImpl dt)
 
     ParserStorage storage_parser(dt);
     ASTPtr storage_ast = parseQuery(
-        storage_parser, storage_def.data(), storage_def.data() + storage_def.size(),
-        "Storage to create table for " + LogElement::name(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+        storage_parser,
+        storage_def.data(),
+        storage_def.data() + storage_def.size(),
+        "Storage to create table for " + LogElement::name(),
+        0,
+        DBMS_DEFAULT_MAX_PARSER_DEPTH);
     create->set(create->storage, storage_ast);
 
+    // Write additional (default) settings for (only) MergeTree engine to make it possible
+    // to compare ASTs and recreate tables on settings changes.
+    const auto & engine = create->storage->engine->as<ASTFunction &>();
+    if (endsWith(engine.name, "MergeTree"))
+    {
+        auto storage_settings = std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+        storage_settings->loadFromQuery(*create->storage);
+    }
+
     return create;
+}
+
+// Returns CREATE TABLE query, but with removed UUID.
+// This way it can be used to compared with the `SystemLog::getCreateTableQuery`.
+template <typename LogElement>
+ASTPtr SystemLog<LogElement>::getCreateTableQueryClean()
+{
+    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, getContext());
+    ASTPtr old_ast = database->getCreateTableQuery(table_id.table_name, getContext());
+    auto & old_create_query_ast = old_ast->as<ASTCreateQuery &>();
+    /// Reset UUID
+    old_create_query_ast.uuid = UUIDHelpers::Nil;
+    return old_ast;
 }
 
 template<typename TLogElement>
