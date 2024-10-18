@@ -237,29 +237,17 @@ PlanNodePtr PruneSortingInfoRewriter::visitTableScanNode(TableScanNode & node, S
 
     // prune unused read order columns
     // eg, select * from table(order by a,b,c) where a = 'x' and d = 'y' order by b,d
-    // required sort columns may be: b,d; read order columns should be a,b
+    // required sort columns: b,d; read order columns should be a,b
+
+    // eg2, select * from table(order by c,d,e) where a = 'x' order by a, b
+    // required sort columns: a, read order columns is empty
     auto read_order = step->getReadOrder();
     auto it = std::find_if(read_order.rbegin(), read_order.rend(), [&](const SortColumnDescription & sort_column) {
         return required_columns.contains(sort_column.column_name);
     });
 
     SortDescription pruned_read_order(read_order.begin(), read_order.begin() + std::distance(it, read_order.rend()));
-
-    if (!required.sort_desc.empty() && pruned_read_order.empty())
-    {
-        // do nothing if all columns in required don't exist in table
-        if (logger->error())
-        {
-            Names names;
-            for (const auto & desc : required.sort_desc)
-                names.emplace_back(desc.column_name);
-            LOG_WARNING(logger, "unkown required sorting: {}", fmt::format("{}", fmt::join(names, ", ")));
-        }
-    }
-    else
-    {
-        node.getStep()->setReadOrder(pruned_read_order);
-    }
+    node.getStep()->setReadOrder(pruned_read_order);
 
     return node.shared_from_this();
 }

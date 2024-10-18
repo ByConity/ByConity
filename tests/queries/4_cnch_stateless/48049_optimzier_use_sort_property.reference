@@ -1,7 +1,7 @@
 -- { echoOn }
 explain select * from test order by a, b, c, d;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST, c ASC NULLS LAST, d ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -10,10 +10,10 @@ Projection Est. ? rows
          │     Prefix Order: {a, b, c}
          └─ TableScan default.test Est. ? rows
                   Input Order Info: {a ASC ANY, b ASC ANY, c ASC ANY}
-                  Outputs: [a, b, c, d]
+                  Outputs: [a, b, c, d, e]
 explain select * from test order by a desc, b desc, c desc, d desc;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {a DESC NULLS LAST, b DESC NULLS LAST, c DESC NULLS LAST, d DESC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -22,10 +22,10 @@ Projection Est. ? rows
          │     Prefix Order: {a, b, c}
          └─ TableScan default.test Est. ? rows
                   Input Order Info: {a DESC ANY, b DESC ANY, c DESC ANY}
-                  Outputs: [a, b, c, d]
+                  Outputs: [a, b, c, d, e]
 explain select * from test order by a, b desc, c;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {a ASC NULLS LAST, b DESC NULLS LAST, c ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -34,10 +34,10 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ TableScan default.test Est. ? rows
                   Input Order Info: {a ASC ANY}
-                  Outputs: [a, b, c, d]
+                  Outputs: [a, b, c, d, e]
 explain select * from test order by a desc, b, c desc;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {a DESC NULLS LAST, b ASC NULLS LAST, c DESC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -46,7 +46,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ TableScan default.test Est. ? rows
                   Input Order Info: {a DESC ANY}
-                  Outputs: [a, b, c, d]
+                  Outputs: [a, b, c, d, e]
 explain select a, b, concat(c, d) as e from test order by a, b, e;
 Projection Est. ? rows
 │     Expressions: [a, b], e:=`expr#concat(c, d)`
@@ -91,7 +91,7 @@ Projection Est. ? rows
                      Outputs: [a, b, c, d]
 explain select * from test where a = 'x' order by b, c, d;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {b ASC NULLS LAST, c ASC NULLS LAST, d ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -103,10 +103,10 @@ Projection Est. ? rows
             └─ TableScan default.test Est. ? rows
                      Input Order Info: {a ASC ANY, b ASC ANY, c ASC ANY}
                      Where: a = \'x\'
-                     Outputs: [a, b, c, d]
+                     Outputs: [a, b, c, d, e]
 explain select * from test where a = 'x' order by b desc, c desc, d desc;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {b DESC NULLS LAST, c DESC NULLS LAST, d DESC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -118,10 +118,10 @@ Projection Est. ? rows
             └─ TableScan default.test Est. ? rows
                      Input Order Info: {a DESC ANY, b DESC ANY, c DESC ANY}
                      Where: a = \'x\'
-                     Outputs: [a, b, c, d]
+                     Outputs: [a, b, c, d, e]
 explain select * from test where a = 'x' and d = 'z' order by d, b, c;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {d ASC NULLS LAST, b ASC NULLS LAST, c ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -133,10 +133,10 @@ Projection Est. ? rows
             └─ TableScan default.test Est. ? rows
                      Input Order Info: {a ASC ANY, b ASC ANY, c ASC ANY}
                      Where: (a = \'x\') AND (d = \'z\')
-                     Outputs: [a, b, c, d]
+                     Outputs: [a, b, c, d, e]
 explain select * from test where a = 'x' and d = 'z' order by d desc, b desc, c desc;
 Projection Est. ? rows
-│     Expressions: [a, b, c, d]
+│     Expressions: [a, b, c, d, e]
 └─ Sorting Est. ? rows
    │     Order by: {d DESC NULLS LAST, b DESC NULLS LAST, c DESC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -148,7 +148,7 @@ Projection Est. ? rows
             └─ TableScan default.test Est. ? rows
                      Input Order Info: {a DESC ANY, b DESC ANY, c DESC ANY}
                      Where: (a = \'x\') AND (d = \'z\')
-                     Outputs: [a, b, c, d]
+                     Outputs: [a, b, c, d, e]
 explain pipeline select * from test where a = 'x' order by b, c limit 10;
 
 Segment[ 1 ] :
@@ -228,6 +228,91 @@ Projection Est. 10 rows, cost 7.400000e-01
                               Input Order Info: {a DESC ANY, b DESC ANY, c DESC ANY}
                               Where: (a = \'3\') AND (b = \'3\')
                               Outputs: a_1:=a, b_1:=b, c_1:=c
+explain select a from test where d = 'x' order by d;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {d ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {d ASC NULLS LAST}
+         │     Prefix Order: {d}
+         └─ Filter Est. ? rows
+            │     Condition: d = \'x\'
+            └─ TableScan default.test Est. ? rows
+                     Where: d = \'x\'
+                     Outputs: [a, d]
+explain select a from test where d = 'x' order by d, e;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {d ASC NULLS LAST, e ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {d ASC NULLS LAST, e ASC NULLS LAST}
+         │     Prefix Order: {d}
+         └─ Filter Est. ? rows
+            │     Condition: d = \'x\'
+            └─ TableScan default.test Est. ? rows
+                     Where: d = \'x\'
+                     Outputs: [a, d, e]
+explain select a from test where d = 'x' and e = 'z' order by d, e;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {d ASC NULLS LAST, e ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {d ASC NULLS LAST, e ASC NULLS LAST}
+         │     Prefix Order: {d, e}
+         └─ Filter Est. ? rows
+            │     Condition: (d = \'x\') AND (e = \'z\')
+            └─ TableScan default.test Est. ? rows
+                     Where: (d = \'x\') AND (e = \'z\')
+                     Outputs: [a, d, e]
+explain select a from test order by a || c, a || b;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {expr#concat(a, c) ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {expr#concat(a, c) ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST}
+         └─ Projection Est. ? rows
+            │     Expressions: [a], expr#concat(a, b):=concat(a, b), expr#concat(a, c):=concat(a, c)
+            └─ TableScan default.test Est. ? rows
+                     Outputs: [a, b, c]
+explain select a from test order by a, a || b, b;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST, b ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST, b ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Projection Est. ? rows
+            │     Expressions: [a, b], expr#concat(a, b):=concat(a, b)
+            └─ TableScan default.test Est. ? rows
+                     Input Order Info: {a ASC ANY}
+                     Outputs: [a, b]
+explain select a from test where (a || b) = 'xy' order by a, a || b, b;
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST, b ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST, expr#concat(a, b) ASC NULLS LAST, b ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Projection Est. ? rows
+            │     Expressions: [a, b], expr#concat(a, b):=concat(a, b)
+            └─ Filter Est. ? rows
+               │     Condition: concat(a, b) = \'xy\'
+               └─ TableScan default.test Est. ? rows
+                        Input Order Info: {a ASC ANY}
+                        Where: concat(a, b) = \'xy\'
+                        Outputs: [a, b]
 -- { echoOn }
 select a as e, b, concat(c, d) as f from test order by e desc, b desc, f desc;
 3	3	44
