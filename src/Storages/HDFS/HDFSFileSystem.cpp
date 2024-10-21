@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <random>
+#include <consul/bridge.h>
 #include "common/types.h"
 #include <Common/formatIPv6.h>
 #include <Common/filesystemHelpers.h>
@@ -74,7 +75,7 @@ String addSchemeOnNeed(const String & ori, const String & prefix ) {
     }
 }
 
-HostWithPortsVec lookupNNProxy(const String & hdfs_service)
+HostWithPortsVec lookupNNProxy(const String & hdfs_service, UInt32 nnproxy_cache_timeout)
 {
     HostWithPortsVec nnproxys;
     auto sd_consul = ServiceDiscoveryFactory::instance().tryGet(ServiceDiscoveryMode::CONSUL);
@@ -85,12 +86,10 @@ HostWithPortsVec lookupNNProxy(const String & hdfs_service)
         {
             if (retry++ > 2)
                 throw Exception("No available nnproxy " + hdfs_service, ErrorCodes::NETWORK_ERROR);
-            nnproxys = sd_consul->lookup(hdfs_service, ComponentType::NNPROXY);
-        } while (nnproxys.size() == 0);
+            nnproxys = sd_consul->lookup(hdfs_service, ComponentType::NNPROXY, "", nnproxy_cache_timeout);
+        } while (nnproxys.empty());
     }
-    else
-        throw Exception("There is no consul service discovery", ErrorCodes::LOGICAL_ERROR);
-    return nnproxys;
+    throw Exception("There is no consul service discovery", ErrorCodes::LOGICAL_ERROR);
 }
 
 void setHdfsHaConfig(
@@ -822,6 +821,7 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
     const String hdfs_addr_key = config_key("hdfs_addr");
     const String hdfs_ha_key = config_key("hdfs_ha_nameservice");
     const String hdfs_nnproxy_key = config_key("hdfs_nnproxy");
+    const String hdfs_nnproxy_ttl_key = config_key("nnproxy_ttl");
 
     String hdfs_user = config.getString(hdfs_user_key, "clickhouse");
 
@@ -863,6 +863,7 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
         {
             // this is a nnproxy.
             connect_params = HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
+            connect_params.nnproxy_cache_timeout = config.getUInt(hdfs_nnproxy_ttl_key, 3600);
         }
     }
 
@@ -913,7 +914,7 @@ std::vector<HDFSConnectionParams::IpWithPort> HDFSConnectionParams::lookupAndShu
     if (conn_type != CONN_NNPROXY)
         return ret;
 
-    HostWithPortsVec nnproxys = lookupNNProxy(hdfs_service);
+    HostWithPortsVec nnproxys = lookupNNProxy(hdfs_service, nnproxy_cache_timeout);
     assert(nnproxys.size() > 0);
     shuffleAddrs(nnproxys);
     for (auto it : nnproxys)
@@ -1101,7 +1102,7 @@ String HDFSConnectionParams::toString() const
             break;
         case CONN_NNPROXY:
             ss << "[type = conn_nnproxy, "
-               << "user = " << hdfs_user << ", nnproxy = " << hdfs_service << "]";
+               << "user = " << hdfs_user << ", nnproxy = " << hdfs_service << "" << ", nnproxy_ttl = " << nnproxy_cache_timeout << "]";
             break;
         // default:
         //     ss << "unknown connection type";

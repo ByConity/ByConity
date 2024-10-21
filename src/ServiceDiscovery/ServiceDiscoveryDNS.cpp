@@ -109,7 +109,7 @@ ServiceDiscoveryDNS::ServiceDiscoveryDNS(const Poco::Util::AbstractConfiguration
 }
 
 // TODO: consider adding a bool parameter need_hostname to reduce unnecessary resolve hostname call.
-HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentType type, const String & vw_name)
+HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentType type, const String & vw_name, UInt32)
 {
     HostWithPortsVec res;
     ServicePair service_pair;

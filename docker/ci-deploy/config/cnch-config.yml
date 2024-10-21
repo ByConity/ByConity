@@ -158,3 +158,4 @@ external_catalog_mgr:
   fdb:
     cluster_file: /config/fdb/cluster
 hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"
+hdfs_nnproxy: ""
