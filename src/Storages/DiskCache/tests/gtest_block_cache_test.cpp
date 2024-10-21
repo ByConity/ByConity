@@ -1092,7 +1092,6 @@ TEST(BlockCache, UsePriorities)
         }
     }
     driver->flush();
-    driver->drain();
 
     {
         Buffer value;
@@ -1152,7 +1151,6 @@ TEST(BlockCache, UsePrioritiesSizeClass)
         }
     }
     driver->flush();
-    driver->drain();
 
     {
         Buffer value;
@@ -1488,7 +1486,6 @@ TEST(BlockCache, RecoveryBadConfig)
                 log.push_back(std::move(e));
             }
             driver->flush();
-            driver->drain();
         }
 
         driver->persist();
