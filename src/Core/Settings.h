@@ -1420,7 +1420,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
-    M(Bool, enable_expand_distinct_optimization, true, "Whether enable rewrite distinct optimization", 0)                                            \
+    M(Bool, enable_expand_distinct_optimization, false, "Whether enable rewrite distinct optimization", 0)                                            \
     M(ExpandMode, expand_mode, ExpandMode::EXPAND, "Rewrite distinct optimization, Expand Mode : EXPAND|UNION|CTE", 0)                                            \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_common_join_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
