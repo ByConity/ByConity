@@ -313,7 +313,8 @@ public:
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility = VisibilityLevel::Visible,
-        const std::set<Int64> & bucket_numbers = {});
+        const std::set<Int64> & bucket_numbers = {},
+        bool disable_cache = false);
 
     /// @param bucket_numbers If empty fetch all bucket_numbers, otherwise fetch the given bucket_numbers.
     ServerDataPartsVector getServerDataPartsInPartitions(
@@ -322,7 +323,8 @@ public:
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility = VisibilityLevel::Visible,
-        const std::set<Int64> & bucket_numbers = {});
+        const std::set<Int64> & bucket_numbers = {},
+        bool disable_cache = false);
 
     ServerDataPartsWithDBM getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
 
@@ -354,7 +356,8 @@ public:
         const TxnTimestamp & ts,
         const Context * session_context = nullptr,
         VisibilityLevel visibility = VisibilityLevel::Visible,
-        const std::set<Int64> & bucket_numbers = {});
+        const std::set<Int64> & bucket_numbers = {},
+        bool disable_cache = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsFromMetastore(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility = VisibilityLevel::Visible);
     DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(
@@ -1016,7 +1019,7 @@ private:
 
     void mayUpdateUHUT(const StoragePtr & storage);
 
-    bool canUseCache(const ConstStoragePtr & storage, const Context * session_context);
+    bool canUseCache(const ConstStoragePtr & storage, const Context * session_context, bool disable_cache);
 
     void finishCommitInBatch(
         const StoragePtr & storage,
