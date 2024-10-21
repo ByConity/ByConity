@@ -618,7 +618,7 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
     /// XXX: Currently, the checksum of a part depends on the remote load, which is unreasonable.
     /// The mutation in the file of the memory part object may not correct.
     /// Here we do special processing for partial update
-    if (needPartialUpdateProcess())
+    if (partial_update_state != PartialUpdateState::NotPartialUpdate)
     {
         for (auto & file : res->files)
             file.second.mutation = parent_part ? parent_part->info.mutation : info.mutation;
