@@ -1873,10 +1873,12 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         const VisibilityLevel visibility,
-        const std::set<Int64> & bucket_numbers)
+        const std::set<Int64> & bucket_numbers,
+        const bool disable_cache)
     {
         ServerDataPartsWithDBM res;
-        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, VisibilityLevel::All, bucket_numbers);
+        res.first
+            = getServerDataPartsInPartitions(storage, partitions, ts, session_context, VisibilityLevel::All, bucket_numbers, disable_cache);
 
         if (res.first.empty())
             return res;
@@ -1884,7 +1886,13 @@ namespace Catalog
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
             res.second = getDeleteBitmapsInPartitions(
-                storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All, bucket_numbers);
+                storage,
+                {partitions.begin(), partitions.end()},
+                ts,
+                /*session_context=*/nullptr,
+                VisibilityLevel::All,
+                bucket_numbers,
+                disable_cache);
 
         /// Make sure they use the same records of transactions list.
         if (ts && visibility != VisibilityLevel::All)
@@ -1933,7 +1941,8 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         const VisibilityLevel visibility,
-        const std::set<Int64> & bucket_numbers)
+        const std::set<Int64> & bucket_numbers,
+        const bool disable_cache)
     {
         ServerDataPartsVector res;
         String source;
@@ -1973,7 +1982,7 @@ namespace Catalog
                     context.getServerType() == ServerType::cnch_server
                     && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
                 {
-                    bool can_use_cache = canUseCache(storage, session_context);
+                    bool can_use_cache = canUseCache(storage, session_context, disable_cache);
 
                     if (!can_use_cache)
                     {
@@ -2090,7 +2099,8 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         const VisibilityLevel visibility,
-        const std::set<Int64> & bucket_numbers)
+        const std::set<Int64> & bucket_numbers,
+        const bool disable_cache)
     {
         DeleteBitmapMetaPtrVector res;
         String source;
@@ -2133,7 +2143,7 @@ namespace Catalog
                     context.getServerType() == ServerType::cnch_server
                     && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
                 {
-                    bool can_use_cache = canUseCache(storage, session_context);
+                    bool can_use_cache = canUseCache(storage, session_context, disable_cache);
                     can_use_cache &= !context.getConfigRef().getBool("disable_delete_bitmap_cache", false);
 
                     if (!can_use_cache)
@@ -2723,8 +2733,10 @@ namespace Catalog
             meta_proxy->setNonHostUpdateTimeStamp(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), current_pts);
     }
 
-    bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context)
+    bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context, const bool disable_cache)
     {
+        if (disable_cache)
+            return false;
         if (!context.getPartCacheManager())
             return false;
         if (context.getSettingsRef().server_write_ha)
@@ -5650,42 +5662,9 @@ namespace Catalog
     }
 
     PartitionMetrics::PartitionMetricsStore Catalog::getPartitionMetricsStoreFromMetastore(
-        const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()> need_abort)
+        const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()>)
 
     {
-        auto calculate_metrics_by_partition = [&](ServerDataPartsVector & parts) {
-            PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
-
-            for (auto & part : parts)
-            {
-                if (unlikely(need_abort()))
-                {
-                    LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
-                    break;
-                }
-
-                /// For those blocks only have deleted part, just ignore them because the covered part may be already removed by GC.
-                /// But we should still calculate it's `last_modification_time`.
-                res->updateLastModificationTime(part->part_model());
-            }
-
-            std::sort(parts.begin(), parts.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
-            auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
-
-            for (auto & part : visible_parts)
-            {
-                if (unlikely(need_abort()))
-                {
-                    LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
-                    break;
-                }
-
-                res->update(part->part_model());
-            }
-
-            return res;
-        };
-
         PartitionMetrics::PartitionMetricsStore ret;
         runWithMetricSupport(
             [&] {
@@ -5697,36 +5676,25 @@ namespace Catalog
 
                 /// Get latest table version.
                 StoragePtr storage = getTableByUUID(context, table_uuid, max_commit_time);
-                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+                const auto & merge_tree_storage = dynamic_cast<const StorageCnchMergeTree &>(*storage);
 
-                IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, partition_id);
+                /// Do not use cached parts, because this is not a user query.
+                ServerDataPartsWithDBM parts_with_dbm = getServerDataPartsInPartitionsWithDBM(
+                    storage, {partition_id}, max_commit_time, nullptr, VisibilityLevel::Committed, {}, true);
+                LOG_TRACE(
+                    log,
+                    "getPartitionMetricsStoreFromMetastore for table {} partition {} get parts: {}, bitmaps: {}",
+                    table_uuid,
+                    partition_id,
+                    parts_with_dbm.first.size(),
+                    parts_with_dbm.second.size());
 
-                ServerDataPartsVector parts;
-                while (it->next())
+                if (parts_with_dbm.first.empty())
                 {
-                    if (unlikely(need_abort()))
-                    {
-                        LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
-                        break;
-                    }
-                    Protos::DataModelPart part_model;
-                    part_model.ParseFromString(it->value());
-
-                    /// Skip the Uncommitted parts or the parts that
-                    /// cannot be seen by the time `max_commit_time`.
-                    if (part_model.commit_time() == 0 || part_model.commit_time() > max_commit_time)
-                    {
-                        LOG_TRACE(log, "Skip parts: {}, max_commit_time: {}", part_model.ShortDebugString(), max_commit_time);
-                        continue;
-                    }
-
-                    parts.emplace_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(merge_tree_storage, std::move(part_model))));
+                    return;
                 }
 
-                if (!parts.empty())
-                {
-                    ret = *calculate_metrics_by_partition(parts);
-                }
+                ret = PartitionMetrics::PartitionMetricsStore(parts_with_dbm, merge_tree_storage);
             },
             ProfileEvents::GetPartitionMetricsFromMetastoreSuccess,
             ProfileEvents::GetPartitionMetricsFromMetastoreFailed);

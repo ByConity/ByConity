@@ -777,6 +777,8 @@ message PartitionPartsMetricsSnapshot {
   required uint64 last_update_time = 8;
   required uint64 last_snapshot_time = 9;
   optional uint64 last_modification_time = 10;
+  optional int64 dropped_parts_size = 11;
+  optional int64 dropped_parts_number = 12;
 }
 
 // Key: <prefix><table_uuid>

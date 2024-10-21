@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <Storages/CnchTablePartitionMetrics.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -529,6 +531,8 @@ PartitionMetrics::PartitionMetricsStore::PartitionMetricsStore(const Protos::Par
     total_parts_size = snapshot.total_parts_size();
     total_rows_count = snapshot.total_rows_count();
     total_parts_number = snapshot.total_parts_number();
+    dropped_parts_size = snapshot.dropped_parts_size();
+    dropped_parts_number = snapshot.dropped_parts_number();
     has_bucket_number_neg_one = snapshot.hash_bucket_number_neg_one();
     is_single_table_definition_hash = snapshot.is_single_table_definition_hash();
     table_definition_hash = snapshot.table_definition_hash();
@@ -543,6 +547,8 @@ Protos::PartitionPartsMetricsSnapshot PartitionMetrics::PartitionMetricsStore::t
     res.set_total_parts_size(total_parts_size);
     res.set_total_rows_count(total_rows_count);
     res.set_total_parts_number(total_parts_number);
+    res.set_dropped_parts_size(dropped_parts_size);
+    res.set_dropped_parts_number(dropped_parts_number);
     res.set_hash_bucket_number_neg_one(has_bucket_number_neg_one);
     res.set_is_single_table_definition_hash(is_single_table_definition_hash);
     res.set_table_definition_hash(table_definition_hash);
@@ -558,6 +564,8 @@ PartitionMetrics::PartitionMetricsStore PartitionMetrics::PartitionMetricsStore:
     res.total_parts_size = this->total_parts_size + rhs.total_parts_size;
     res.total_rows_count = this->total_rows_count + rhs.total_rows_count;
     res.total_parts_number = this->total_parts_number + rhs.total_parts_number;
+    res.dropped_parts_size = this->dropped_parts_size + rhs.dropped_parts_size;
+    res.dropped_parts_number = this->dropped_parts_number + rhs.dropped_parts_number;
     res.has_bucket_number_neg_one = this->has_bucket_number_neg_one || rhs.has_bucket_number_neg_one;
     res.is_single_table_definition_hash = this->is_single_table_definition_hash && rhs.is_single_table_definition_hash;
     // TODO: verify with GuanZhe.
@@ -616,6 +624,9 @@ void PartitionMetrics::PartitionMetricsStore::update(const Protos::DataModelPart
         total_rows_count -= (part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : part_model.rows_count());
         total_parts_size -= (part_model.has_covered_parts_size() ? part_model.covered_parts_size() : part_model.size());
         total_parts_number -= (part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 1);
+        dropped_parts_size
+            += (part_model.has_covered_parts_size() ? (part_model.covered_parts_size() + part_model.size()) : part_model.size());
+        dropped_parts_number += (part_model.has_covered_parts_count() ? (part_model.covered_parts_count() + 1) : 2);
     }
     else
     {
@@ -677,5 +688,95 @@ bool PartitionMetrics::PartitionMetricsStore::matches(const PartitionMetricsStor
 {
     return total_parts_size == rhs.total_parts_size && total_parts_number == rhs.total_parts_number
         && total_rows_count == rhs.total_rows_count && last_modification_time == rhs.last_modification_time;
+}
+PartitionMetrics::PartitionMetricsStore::PartitionMetricsStore(
+    ServerDataPartsWithDBM & parts_with_dbm, const StorageCnchMergeTree & storage)
+{
+    if (parts_with_dbm.first.empty())
+        return;
+
+
+    /// 1. Use all parts to calculate last_update_time and last_modification_time.
+    for (const auto & part : parts_with_dbm.first)
+    {
+        auto cur = part;
+        while (cur)
+        {
+            updateLastModificationTime(cur->part_model());
+            last_update_time = std::max(last_update_time, cur->part_model().commit_time());
+            cur = cur->tryGetPreviousPart();
+        }
+    }
+
+    /// 2. Divide parts into two groups: using and dropped.
+    ServerDataPartsWithDBM using_parts_with_dbm;
+    ServerDataPartsWithDBM dropped_parts_with_dbm;
+
+    /// 3. Prepare for rows count.
+    using_parts_with_dbm.first = CnchPartsHelper::calcVisibleParts(
+        parts_with_dbm.first, false, CnchPartsHelper::DisableLogging, &dropped_parts_with_dbm.first);
+    CnchPartsHelper::calcVisibleDeleteBitmaps(parts_with_dbm.second, using_parts_with_dbm.second);
+
+    /// 4. For each (user-visible) parts, update total_parts_size, total_parts_number
+    /// has_bucket_number_neg_one, is_single_table_definition_hash, is_deleted
+    /// and table_definition_hash.
+    for (const auto & part : using_parts_with_dbm.first)
+    {
+        auto cur = part;
+        while (cur) {
+            total_parts_size += cur->size();
+            total_parts_number += 1;
+            if (part->part_model().bucket_number() == -1)
+                has_bucket_number_neg_one = true;
+            if (table_definition_hash != 0 && table_definition_hash != part->part_model().table_definition_hash())
+                is_single_table_definition_hash = false;
+            table_definition_hash = cur->part_model().table_definition_hash();
+            is_deleted = false;
+
+            cur = cur->tryGetPreviousPart();
+        }
+    }
+
+    /// 5. For dropped_parts_size and dropped_parts_number, we use dropped_parts_with_dbm.
+    for (const auto & part : dropped_parts_with_dbm.first)
+    {
+        auto cur = part;
+        while (cur) {
+            dropped_parts_size += cur->size();
+            dropped_parts_number += 1;
+            cur = cur->tryGetPreviousPart();
+        }
+    }
+
+    /// 6. Pick rows count logic from StorageCnchMergeTree.cpp
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        storage.getDeleteBitmapMetaForServerParts(using_parts_with_dbm.first, using_parts_with_dbm.second);
+
+    for (const auto & part : using_parts_with_dbm.first)
+        total_rows_count += part->rowsCount() - part->deletedRowsCount(storage);
+}
+void PartitionMetrics::PartitionMetricsStore::removeDroppedPart(const Protos::DataModelPart & part_model)
+{
+    dropped_parts_size -= part_model.size();
+    dropped_parts_number -= 1;
+}
+void PartitionMetrics::removeDroppedPart(const Protos::DataModelPart & part_model)
+{
+    std::unique_lock write_lock(mutex);
+    if (old_store.has_value())
+    {
+        if (part_model.commit_time() > old_store.value().first)
+        {
+            new_store.removeDroppedPart(part_model);
+        }
+        else
+        {
+            old_store.value().second.removeDroppedPart(part_model);
+        }
+    }
+    else
+    {
+        new_store.removeDroppedPart(part_model);
+    }
 }
 }

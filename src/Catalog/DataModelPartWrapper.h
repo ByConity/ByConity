@@ -76,6 +76,8 @@ class DataPartInterface
 {
 public:
     virtual bool isServerDataPart() const = 0;
+    DataPartInterface() = default;
+    DataPartInterface(const DataPartInterface &) = default;
     virtual ~DataPartInterface() = default;
 };
 

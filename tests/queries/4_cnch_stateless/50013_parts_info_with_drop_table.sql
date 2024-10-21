@@ -14,7 +14,7 @@ SELECT lessOrEquals (
   (
     SELECT count()
     FROM system.cnch_parts_info
-    WHERE database = currentDatabase(0) AND table = 'pi'
+    WHERE database = currentDatabase() AND table = 'pi'
   )
   ,
   1
@@ -36,7 +36,7 @@ SELECT lessOrEquals (
   (
     SELECT count()
     FROM system.cnch_parts_info
-    WHERE database = currentDatabase(0) AND table = 'pi'
+    WHERE database = currentDatabase() AND table = 'pi'
   )
   ,
   1
@@ -58,7 +58,7 @@ SELECT lessOrEquals (
   (
     SELECT count()
     FROM system.cnch_parts_info
-    WHERE database = currentDatabase(0) AND table = 'pi'
+    WHERE database = currentDatabase() AND table = 'pi'
   )
   ,
   1

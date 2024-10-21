@@ -5,7 +5,6 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
 #include <optional>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -19,6 +18,13 @@
 
 namespace DB
 {
+
+namespace Catalog
+{
+    struct TrashItems;
+}
+
+class StorageCnchMergeTree;
 
 /**
  * @class TableMetrics
@@ -57,6 +63,10 @@ public:
         String toString() const { return toSnapshot().DebugString(); }
 
         bool validateMetrics() const;
+        /// We have two phases of GC. For dropped_parts,
+        /// phase-one GC will add some value to statistics,
+        /// meanwhile phase-two GC will substract it from statistics.
+        /// So `positive` means whether the value is added or substracted.
         void update(const ServerDataPartPtr & part, size_t ts, bool positive = true);
         void update(const DeleteBitmapMetaPtr & bitmap, size_t ts, bool positive = true);
         void update(const Protos::DataModelPart & part, size_t ts, bool positive = true);
@@ -106,9 +116,13 @@ public:
      */
     struct PartitionMetricsStore
     {
+        /// Parts that visible to users.
         int64_t total_parts_size{0};
         int64_t total_parts_number{0};
         int64_t total_rows_count{0};
+        /// Parts that is in phase-one GC.
+        int64_t dropped_parts_size{0};
+        int64_t dropped_parts_number{0};
         // Will be true if there is one part that has bucket_number == -1
         bool has_bucket_number_neg_one{false};
         // False if there are multiple table_definition_hash in this partition
@@ -123,6 +137,7 @@ public:
 
         PartitionMetricsStore() = default;
         explicit PartitionMetricsStore(const Protos::PartitionPartsMetricsSnapshot & snapshot);
+        explicit PartitionMetricsStore(ServerDataPartsWithDBM & parts_with_dbm, const StorageCnchMergeTree & storage);
 
         PartitionMetricsStore operator+(const PartitionMetricsStore & rhs) const;
         PartitionMetricsStore & operator+=(const PartitionMetricsStore & rhs);
@@ -132,11 +147,15 @@ public:
 
         void updateLastModificationTime(const Protos::DataModelPart & part_model);
         void update(const Protos::DataModelPart & part_model);
+        /// Called by phase-one GC.
+        void removeDroppedPart(const Protos::DataModelPart & part_model);
         bool validateMetrics() const;
         bool matches(const PartitionMetricsStore & rhs) const;
     };
 
     bool validateMetrics();
+    /// Called by phase-one GC.
+    void removeDroppedPart(const Protos::DataModelPart & part_model);
     bool isRecalculating() { return recalculating.load(); }
 
     void update(const Protos::DataModelPart & part_model);

@@ -245,7 +245,7 @@ namespace
             if (Operation::isRangeTombstone(prev))
             {
                 /// Sort will place range tombstones consecutively at the beginning of each partition.
-                /// We'll record theri boundaries during iteration and process them when reaching partition end
+                /// We'll record their boundaries during iteration and process them when reaching partition end
                 if (range_tombstone_beg_it == end)
                     range_tombstone_beg_it = prev_it;
                 range_tombstone_end_it = std::next(prev_it);
@@ -336,7 +336,8 @@ namespace
         bool skip_drop_ranges,
         Vec * visible_alone_drop_ranges,
         Vec * invisible_dropped_parts,
-        LoggingOption logging)
+        LoggingOption logging,
+        Vec * invisible_parts = nullptr)
     {
         using Part = typename Vec::value_type;
 
@@ -348,7 +349,10 @@ namespace
         if (all_parts.size() == 1)
         {
             if (skip_drop_ranges && all_parts.front()->get_deleted())
-                ; /// do nothing
+            {
+                if (invisible_parts)
+                    *invisible_parts = all_parts;
+            }
             else
                 visible_parts = all_parts;
 
@@ -379,6 +383,9 @@ namespace
                         /// i) curr_part is also a DROP RANGE mark, and must be the bigger one
                         if ((*curr_it)->get_info().level == MergeTreePartInfo::MAX_LEVEL)
                         {
+                            if (invisible_parts)
+                                invisible_parts->push_back(*prev_it);
+
                             if (invisible_dropped_parts)
                                 invisible_dropped_parts->push_back(*prev_it);
 
@@ -395,6 +402,9 @@ namespace
                         /// ii) curr_part is marked as dropped by prev_part
                         else if ((*curr_it)->get_info().max_block <= prev_part->get_info().max_block)
                         {
+                            if (invisible_parts)
+                                invisible_parts->push_back(*curr_it);
+
                             if (invisible_dropped_parts)
                                 invisible_dropped_parts->push_back(*curr_it);
 
@@ -412,7 +422,10 @@ namespace
                     /// c) different partition
 
                     if (skip_drop_ranges)
-                        ; /// do nothing
+                    {
+                        if (invisible_parts)
+                            invisible_parts->push_back(prev_part);
+                    }
                     else
                         visible_parts_.push_back(prev_part);
 
@@ -430,7 +443,11 @@ namespace
                 else
                 {
                     if (skip_drop_ranges && prev_part->get_deleted())
-                        ; /// do nothing
+                    {
+                        /// do nothing
+                        if (invisible_parts)
+                            invisible_parts->push_back(prev_part);
+                    }
                     else
                         visible_parts_.push_back(prev_part);
 
@@ -550,9 +567,10 @@ MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, 
     return calcVisiblePartsImpl<MergeTreeDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging)
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging, ServerDataPartsVector * invisible_parts)
 {
-    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
+    return calcVisiblePartsImpl<ServerDataPartsVector>(
+        all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging, invisible_parts);
 }
 
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging)
