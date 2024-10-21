@@ -73,28 +73,28 @@ struct LengthUTF8Impl
     {
         throw Exception("Cannot apply function lengthUTF8 to IPv4 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
-    
-    static bool isCompilable(const DataTypes & )
+
+    [[maybe_unused]] static bool isCompilable(const DataTypes & )
     {
         return false;
     }
-    static llvm::Value * compileString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    [[maybe_unused]] static llvm::Value * compileString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
     {
         return nullptr;
     }
-    static llvm::Value * compileFixedString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    [[maybe_unused]] static llvm::Value * compileFixedString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
     {
         return nullptr;
     }
-    static llvm::Value * compileArray(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    [[maybe_unused]] static llvm::Value * compileArray(llvm::IRBuilderBase & , const DataTypes & , Values &  )
     {
         return nullptr;
     }
-    static llvm::Value * compileMap(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    [[maybe_unused]] static llvm::Value * compileMap(llvm::IRBuilderBase & , const DataTypes & , Values &  )
     {
         return nullptr;
     }
-    static llvm::Value * compileUuid(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    [[maybe_unused]] static llvm::Value * compileUuid(llvm::IRBuilderBase & , const DataTypes & , Values &  )
     {
         return nullptr;
     }

@@ -24,7 +24,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionStringOrArrayToT.h>
 #include <common/map.h>
-#include <llvm/llvm/include/llvm/IR/IRBuilder.h>
+#include <llvm-project/llvm/include/llvm/IR/IRBuilder.h>
 
 namespace DB
 {

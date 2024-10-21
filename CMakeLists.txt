@@ -285,38 +285,30 @@ endif ()
 # Enable it explicitly.
 set (COMPILER_FLAGS "${COMPILER_FLAGS} -fasynchronous-unwind-tables")
 
-if (${CMAKE_VERSION} VERSION_LESS "3.12.4")
-    # CMake < 3.12 doesn't support setting 20 as a C++ standard version.
-    # We will add C++ standard controlling flag in CMAKE_CXX_FLAGS manually for now.
-
-    if (COMPILER_GCC OR COMPILER_CLANG)
-        # to make numeric_limits<__int128> works with GCC
-        set (_CXX_STANDARD "gnu++2a")
-    else ()
-        set (_CXX_STANDARD "c++2a")
-    endif ()
-
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${_CXX_STANDARD}")
-else ()
-    set (CMAKE_CXX_STANDARD 20)
-    set (CMAKE_CXX_EXTENSIONS ON) # Same as gnu++2a (ON) vs c++2a (OFF): https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html
-    set (CMAKE_CXX_STANDARD_REQUIRED ON)
-endif ()
+set (CMAKE_CXX_STANDARD 23)
+set (CMAKE_CXX_EXTENSIONS OFF)
+set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set (CMAKE_C_STANDARD 11)
-set (CMAKE_C_EXTENSIONS ON)
+set (CMAKE_C_EXTENSIONS ON) # required by most contribs written in C
 set (CMAKE_C_STANDARD_REQUIRED ON)
 
-if (COMPILER_GCC OR COMPILER_CLANG)
-    # Enable C++14 sized global deallocation functions. It should be enabled by setting -std=c++14 but I'm not sure.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsized-deallocation")
-endif ()
+# Enable C++14 sized global deallocation functions. It should be enabled by setting -std=c++14 but I'm not sure.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsized-deallocation")
 
 # falign-functions=32 prevents from random performance regressions with the code change. Thus, providing more stable
 # benchmarks.
-if (COMPILER_GCC OR COMPILER_CLANG)
-    set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
-endif ()
+set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
+
+if (ARCH_AMD64)
+    # align branches within a 32-Byte boundary to avoid the potential performance loss when code layout change,
+    # which makes benchmark results more stable.
+    set(BRANCHES_WITHIN_32B_BOUNDARIES "-mbranches-within-32B-boundaries")
+    set(COMPILER_FLAGS "${COMPILER_FLAGS} ${BRANCHES_WITHIN_32B_BOUNDARIES}")
+endif()
+
+# Disable floating-point expression contraction in order to get consistent floating point calculation results across platforms
+set (COMPILER_FLAGS "${COMPILER_FLAGS} -ffp-contract=off")
 
 # Compiler-specific coverage flags e.g. -fcoverage-mapping for gcc
 option(WITH_COVERAGE "Profile the resulting binary/binaries" OFF)
@@ -538,7 +530,6 @@ include (cmake/find/rdkafka.cmake)
 include (cmake/find/libuv.cmake) # for amqpcpp and cassandra
 include (cmake/find/amqpcpp.cmake)
 include (cmake/find/capnp.cmake)
-include (cmake/find/llvm.cmake)
 include (cmake/find/h3.cmake)
 include (cmake/find/libxml2.cmake)
 include (cmake/find/brotli.cmake)

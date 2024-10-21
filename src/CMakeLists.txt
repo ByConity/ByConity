@@ -321,13 +321,6 @@ if (USE_PARQUET)
 endif()
 
 set (DBMS_COMMON_LIBRARIES)
-# libgcc_s does not provide an implementation of an atomics library. Instead,
-# GCC's libatomic library can be used to supply these when using libgcc_s.
-if ((NOT USE_LIBCXX) AND COMPILER_CLANG AND OS_LINUX)
-    list (APPEND DBMS_COMMON_LIBRARIES atomic)
-endif()
-
-
 # hash functions
 option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)
 
@@ -395,6 +388,14 @@ if (USE_EMBEDDED_COMPILER)
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${LLVM_INCLUDE_DIRS})
 endif ()
 
+if (ENABLE_PROJ)
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PROJ_INCLUDE_DIR} ${SQLITE3_INCLUDE_DIR})
+endif()
+
+if (ENABLE_GDAL)
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC "${GDAL_INCLUDE_DIR}/include" "${GDAL_INCLUDE_DIR}/gcore" "${GDAL_INCLUDE_DIR}/port")
+endif()
+
 # Otherwise it will slow down stack traces printing too much.
 set_source_files_properties(
         Common/Elf.cpp
@@ -442,6 +443,7 @@ target_link_libraries(clickhouse_common_io
             libmetrics2
             consistent-hashing
             ch_contrib::re2
+            ch_contrib::llvm
         PRIVATE
             ${UDNS_LIBRARIES}
 )
@@ -456,6 +458,7 @@ dbms_target_link_libraries(PUBLIC roaring)
 
 if(USE_SIMDJSON)
     dbms_target_link_libraries(PRIVATE simdjson)
+
 endif()
 
 if (USE_ZTI_LIBRARY)

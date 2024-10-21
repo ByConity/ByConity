@@ -82,7 +82,18 @@ public:
     EmbeddedType operator[](int64_t index) const { return bounds_[index]; }
 
     // only for text output
-    String getElementAsString(int64_t index) const override { return boost::lexical_cast<String>(operator[](index)); }
+    String getElementAsString(int64_t index) const override
+    {
+        if constexpr (std::is_same_v<T, char8_t>)
+        {
+            /// char8_t cannot be converted to string implicitly.
+            return std::to_string(operator[](index));
+        }
+        else
+        {
+            return boost::lexical_cast<String>(operator[](index));
+        }
+    }
 
     bool equals(const BucketBoundsImpl<T> & right) const;
 

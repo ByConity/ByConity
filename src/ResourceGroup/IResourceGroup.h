@@ -123,7 +123,7 @@ public:
     virtual bool canQueueMore() const = 0;
     virtual ~IResourceGroup() {}
 
-    std::lock_guard<std::mutex> getLock() const {return std::lock_guard<std::mutex>(root->mutex);}
+    std::lock_guard<std::mutex> getLock() const TSA_NO_THREAD_SAFETY_ANALYSIS {return std::lock_guard<std::mutex>(root->mutex);}
 
     Container::iterator run(const Context & query_context);
     Handle insert(Container::iterator it) { return std::make_shared<QueryEntityHandler>(it); }

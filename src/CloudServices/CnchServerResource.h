@@ -241,7 +241,7 @@ public:
     }
 
 private:
-    auto getLock() const
+    auto getLock() const TSA_NO_THREAD_SAFETY_ANALYSIS
     {
         return std::lock_guard(mutex);
     }
