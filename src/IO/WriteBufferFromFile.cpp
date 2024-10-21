@@ -32,8 +32,9 @@ WriteBufferFromFile::WriteBufferFromFile(
     mode_t mode,
     char * existing_memory,
     size_t alignment,
-    ThrottlerPtr throttler_)
-    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment, throttler_), file_name(file_name_)
+    ThrottlerPtr bytes_throttler_,
+    ThrottlerPtr qps_throttler_)
+    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment, bytes_throttler_, qps_throttler_), file_name(file_name_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
