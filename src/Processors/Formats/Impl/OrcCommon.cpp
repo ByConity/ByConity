@@ -647,9 +647,6 @@ static void buildORCSearchArgumentImpl(
 
             break;
         }
-#if USE_GIS == 1
-        case KeyCondition::RPNElement::FUNCTION_GEOMETRY:
-#endif
         case KeyCondition::RPNElement::FUNCTION_UNKNOWN: {
             builder.literal(orc::TruthValue::YES_NO_NULL);
             rpn_stack.pop_back();

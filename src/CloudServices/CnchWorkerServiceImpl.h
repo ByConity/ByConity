@@ -185,12 +185,6 @@ public:
         Protos::SendCreateQueryResp * response,
         google::protobuf::Closure * done) override;
 
-    void sendQueryDataParts(
-        google::protobuf::RpcController * cntl,
-        const Protos::SendDataPartsReq * request,
-        Protos::SendDataPartsResp * response,
-        google::protobuf::Closure * done) override;
-
     void sendResources(
         google::protobuf::RpcController * cntl,
         const Protos::SendResourcesReq * request,
@@ -201,21 +195,6 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::RemoveWorkerResourceReq * request,
         Protos::RemoveWorkerResourceResp * response,
-        google::protobuf::Closure * done) override;
-
-    /*
-    void sendQueryVirtualDataParts(
-        google::protobuf::RpcController * cntl,
-        const Protos::SendVirtualDataPartsReq * request,
-        Protos::SendVirtualDataPartsResp * response,
-        google::protobuf::Closure * done) override {}
-        */
-
-
-    void sendCnchFileDataParts(
-        google::protobuf::RpcController * cntl,
-        const Protos::SendCnchFileDataPartsReq * request,
-        Protos::SendCnchFileDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
     void checkDataParts(

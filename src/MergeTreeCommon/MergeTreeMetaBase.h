@@ -436,6 +436,7 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
+    virtual bool supportIntermedicateResultCache() const override { return true; }
     ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
 
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }

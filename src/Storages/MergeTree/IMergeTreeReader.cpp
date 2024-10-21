@@ -97,7 +97,7 @@ IMergeTreeReader::IMergeTreeReader(
     }
 
     columns_from_part.set_empty_key(StringRef());
-    
+
     for (const auto & column_from_part : part_columns)
         columns_from_part.emplace(column_from_part.name, &column_from_part.type);
 
@@ -124,7 +124,7 @@ void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_e
     try
     {
         size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
-    
+
         auto mutable_this = const_cast<IMergeTreeReader *>(this);
         DB::fillMissingColumns(res_columns, num_rows, columns, metadata_snapshot, num_bitmap_columns, &(mutable_this->filled_missing_column_types));
         should_evaluate_missing_defaults = std::any_of(
@@ -579,7 +579,7 @@ void IMergeTreeReader::readData(
     {
         return getCompressedIndex(data_part, name_and_type, substream_path);
     };
-    
+
     deserialize_settings.zero_copy_read_from_cache = settings.read_settings.zero_copy_read_from_cache;
 
     const auto & name = name_and_type.name;
@@ -672,20 +672,14 @@ const NamesAndTypesList & IMergeTreeReader::getBitmapColumns() const
 NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & required_column)
 {
     auto name_in_storage = required_column.getNameInStorage();
-
-    decltype(columns_from_part.begin()) it;
     if (alter_conversions.isColumnRenamed(name_in_storage))
-    {
-        String old_name = alter_conversions.getColumnOldName(name_in_storage);
-        it = columns_from_part.find(old_name);
-    }
-    else
-    {
-        it = columns_from_part.find(name_in_storage);
-    }
+        name_in_storage = alter_conversions.getColumnOldName(name_in_storage);
 
+    auto it = columns_from_part.find(name_in_storage);
     if (it == columns_from_part.end())
+    {
         return required_column;
+    }
 
     const auto & type = *it->second;
     if (required_column.isSubcolumn())
