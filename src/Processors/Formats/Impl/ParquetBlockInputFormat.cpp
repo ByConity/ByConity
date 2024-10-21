@@ -565,7 +565,8 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
             *field_util,
             format_settings,
             std::vector<int>{static_cast<int>(row_group_idx)},
-            prewhere_info);
+            prewhere_info,
+            getColumnMapping());
     }
     else
     {

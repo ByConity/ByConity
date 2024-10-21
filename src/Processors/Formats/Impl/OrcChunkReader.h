@@ -1,6 +1,7 @@
 #pragma once
 #include "Columns/IColumn.h"
 #include <Common/Logger.h>
+#include "Processors/Formats/IInputFormat.h"
 #include "Storages/MergeTree/KeyCondition.h"
 #include "config_formats.h"
 #if USE_ORC
@@ -37,6 +38,7 @@ struct ScanParams
     size_t range_length = 0;
     size_t chunk_size = 4096;
 
+    ColumnMappingPtr column_mapping;
     // ORC releated.
     std::optional<std::string> orc_tail;
 };
@@ -56,7 +58,7 @@ public:
     Status readNext(Block & block);
     Status prepareFileReader();
     static void buildColumnNameToId(const Block & header, const orc::Type & root_type, std::map<std::string, int64_t> & column_name_to_id);
-    static ColumnPtr filterBlock(const Block & block, const SelectQueryInfo & query_info);
+    ColumnPtr filterBlock(const Block & block, const SelectQueryInfo & query_info);
     static Block
     mergeBlock(Block & block, Chunk & left, Block & left_header, Chunk & right, Block & right_header); // merge left and right into block
     static Block mergeBlock(Block & block, Block & left_block, Chunk & right, Block & right_header); // merge left and right into block

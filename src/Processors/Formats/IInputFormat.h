@@ -52,6 +52,15 @@ struct ColumnMapping
     /// Whether we have any columns that are not read from file at all,
     /// and must be always initialized with defaults.
     bool have_always_default_columns{false};
+
+    /// Pass in missing default value
+    struct TypeWithDefaultValue {
+        DataTypePtr type;
+        Field default_value;
+    };
+
+    std::unordered_map<String, TypeWithDefaultValue> name_of_default_columns;
+    void addConstColumn(Block & block, const Names & required_columns) const;
 };
 
 using ColumnMappingPtr = std::shared_ptr<ColumnMapping>;

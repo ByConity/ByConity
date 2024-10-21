@@ -444,7 +444,6 @@ ColumnPtr OrcScanner::filterBlock(const Block & block, const SelectQueryInfo & q
             prewhere_actions->row_level_filter
                 = std::make_shared<ExpressionActions>(prewhere_info->row_level_filter, ExpressionActionsSettings{});
 
-
         prewhere_actions->prewhere_actions
             = std::make_shared<ExpressionActions>(prewhere_info->prewhere_actions, ExpressionActionsSettings{});
 
@@ -456,8 +455,17 @@ ColumnPtr OrcScanner::filterBlock(const Block & block, const SelectQueryInfo & q
 
     size_t num_rows = block.rows();
     Block block_with_filter = block;
+
+    auto add_default_columns = [&] (Block & blk, const Names & column_names) {
+        if (scan_params.column_mapping)
+            scan_params.column_mapping->addConstColumn(blk, column_names);
+    };
+
     if (prewhere_actions->alias_actions)
+    {
+        add_default_columns(block_with_filter, prewhere_actions->alias_actions->getRequiredColumns());
         prewhere_actions->alias_actions->execute(block_with_filter, true);
+    }
     // TODO what's row_level_filter
 
     // if (prewhere_info->row_level_filter)
@@ -467,7 +475,10 @@ ColumnPtr OrcScanner::filterBlock(const Block & block, const SelectQueryInfo & q
     // }
 
     if (prewhere_actions->prewhere_actions)
+    {
+        add_default_columns(block_with_filter, prewhere_actions->prewhere_actions->getRequiredColumns());
         prewhere_actions->prewhere_actions->execute(block_with_filter, &block_with_filter, num_rows, true);
+    }
 
     // if (prewhere_actions->remove_prewhere_column)
     // {
