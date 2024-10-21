@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <cstddef>
 #include <memory>
 #include <unordered_map>
 #include <Core/Types.h>
@@ -116,7 +117,7 @@ public:
     /// Get the cluster name
     std::string getClusterName() const { return cluster; }
 
-    virtual HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "") = 0;
+    virtual HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "", UInt32 custom_cache_timeout = 0) = 0;
     virtual ServiceEndpoints lookupEndpoints(const String &)
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method {} doesn't lookupEndpoints now", getName());
