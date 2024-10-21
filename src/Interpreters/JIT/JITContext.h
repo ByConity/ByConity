@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include <llvm/llvm/include/llvm/IR/Module.h>
+#include <llvm-project/llvm/include/llvm/IR/Module.h>
 
 namespace DB
 {

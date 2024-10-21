@@ -73,7 +73,7 @@ private:
     friend class CnchWorkerServiceImpl;
     friend class CloudTablesBlockSource;
 
-    auto getLock() const { return std::lock_guard(mutex); }
+    auto getLock() const TSA_NO_THREAD_SAFETY_ANALYSIS { return std::lock_guard(mutex); }
 
     using DatabaseAndTableName = std::pair<String, String>;
     struct DatabaseAndTableNameHash

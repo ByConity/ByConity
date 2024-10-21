@@ -122,7 +122,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
     // If there are remaining tasks can be stolen, read the whole part
     // For remote storage like S3, we can send less net request if task is bigger
     if (thread_tasks.parts_and_ranges.size() > 1) {
-        need_marks = marks_in_part; 
+        need_marks = marks_in_part;
     } else {
         // If only last part is left, get whole part to read if it is small enough.
         if (marks_in_part <= min_marks_to_read)

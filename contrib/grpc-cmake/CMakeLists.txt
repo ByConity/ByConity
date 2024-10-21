@@ -1,3 +1,4 @@
+set (CMAKE_CXX_STANDARD 20)
 set(_gRPC_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/grpc")
 set(_gRPC_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/grpc")
 

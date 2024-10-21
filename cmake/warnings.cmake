@@ -109,6 +109,8 @@ if (COMPILER_CLANG)
         no_warning(enum-constexpr-conversion)
         no_warning(documentation-html)
         no_warning(documentation)
+        no_warning(unsafe-buffer-usage) # too aggressive
+        no_warning(thread-safety-negative) # experimental flag, too many false positives
 
         # XXX: libstdc++ has some of these for 3way compare
         if (NOT USE_LIBCXX)
