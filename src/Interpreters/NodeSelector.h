@@ -107,6 +107,7 @@ struct NodeSelectorResult
     std::vector<size_t> indexes;
     std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     std::unordered_map<AddressInfo, std::vector<std::set<Int64>>, AddressInfo::Hash> buckets_on_workers;
+    std::unordered_map<AddressInfo, std::unordered_map<UUID, SourceTaskStat>, AddressInfo::Hash> worker_source_task_stats;
 
     //input plansegment id => source address and partition ids, ordered by parallel index, used by bsp mode
     std::map<PlanSegmentInstanceId, std::vector<PlanSegmentMultiPartitionSource>> sources;

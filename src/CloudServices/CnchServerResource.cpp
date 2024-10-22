@@ -402,9 +402,6 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     if (all_resources.empty())
         return;
 
-    if (resource_option)
-        initSourceTaskPayload(context, all_resources);
-
     Stopwatch rpc_watch;
     auto worker_group_status = context->getWorkerGroupStatusPtr();
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
@@ -671,6 +668,8 @@ void CnchServerResource::allocateResource(
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);
+                    if (resource_option)
+                        initSourceTaskPayload(context, storage, host_ports, assigned_parts);
                     CnchPartsHelper::flattenPartsVector(assigned_parts);
                     LOG_TRACE(
                         log,
@@ -759,36 +758,18 @@ void CnchServerResource::allocateResource(
 }
 
 void CnchServerResource::initSourceTaskPayload(
-    const ContextPtr & context, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
+    const ContextPtr & context, StoragePtr storage, const HostWithPorts & host_with_ports, ServerDataPartsVector & visible_parts)
 {
-    for (const auto & [host_ports, assinged_resource] : all_resources)
+    auto uuid = storage->getStorageID().uuid;
+    for (const auto & p : visible_parts)
     {
-        for (const auto & r : assinged_resource)
-        {
-            auto uuid = r.storage->getStorageID().uuid;
-            bool reclustered = r.storage->isTableClustered(context);
-            for (const auto & p : r.server_parts)
-            {
-                auto bucket_number = getBucketNumberOrInvalid(p->part_model_wrapper->bucketNumber(), reclustered);
-                auto addr = AddressInfo(host_ports.getHost(), host_ports.getTCPPort(), "", "", host_ports.exchange_port);
-                source_task_payload[uuid][addr].part_num += 1;
-                source_task_payload[uuid][addr].rows += p->rowExistsCount();
-                source_task_payload[uuid][addr].buckets.insert(bucket_number);
-            }
-            if (log->trace())
-            {
-                for (const auto & [addr, payload] : source_task_payload[uuid])
-                {
-                    LOG_TRACE(
-                        log,
-                        "Source task payload for {}.{} addr:{} is {}",
-                        r.storage->getDatabaseName(),
-                        r.storage->getTableName(),
-                        addr.toShortString(),
-                        payload.toString());
-                }
-            }
-        }
+        bool reclustered = storage->isTableClustered(context);
+        auto bucket_number = getBucketNumberOrInvalid(p->part_model_wrapper->bucketNumber(), reclustered);
+        auto addr = AddressInfo(host_with_ports.getHost(), host_with_ports.getTCPPort(), "", "", host_with_ports.exchange_port);
+        source_task_payload[uuid][addr].part_num += 1;
+        source_task_payload[uuid][addr].rows += p->rowExistsCount();
+        source_task_payload[uuid][addr].visible_parts.push_back(p);
+        source_task_payload[uuid][addr].buckets.insert(bucket_number);
     }
 }
 }

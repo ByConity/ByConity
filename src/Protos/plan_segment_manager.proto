@@ -134,6 +134,11 @@ message SourceTaskFilter {
   repeated int64 buckets = 3;
 }
 
+message SourceTaskStat {
+  required StorageID storage_id = 1;
+  optional uint64 rows = 2;
+}
+
 message SubmitPlanSegmentRequest {
   // major version number
   required uint32 brpc_protocol_major_revision = 1;
@@ -156,6 +161,7 @@ message SubmitPlanSegmentRequest {
   optional SourceTaskFilter source_task_filter = 11;
   repeated PlanSegmentMultiPartitionSource sources = 12;
   optional uint32 worker_epoch = 13;
+  repeated SourceTaskStat source_task_stats = 15; 
 }
 
 message PlanSegmentHeader {

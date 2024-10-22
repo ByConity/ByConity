@@ -3,6 +3,9 @@
 #include <map>
 #include <set>
 #include <string>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Core/Types.h>
+#include <Interpreters/StorageID.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/adaptor/transformed.hpp>
@@ -15,6 +18,7 @@ namespace DB
 struct SourceTaskPayload
 {
     std::set<Int64> buckets;
+    ServerDataPartsVector visible_parts;
     size_t rows = 0;
     size_t part_num = 0;
     String toString() const
@@ -25,6 +29,17 @@ struct SourceTaskPayload
             rows,
             part_num);
     }
+};
+
+struct SourceTaskStat
+{
+    SourceTaskStat(StorageID storage_id_, size_t rows_) : storage_id(storage_id_), rows(rows_)
+    {
+    }
+    StorageID storage_id;
+    size_t rows;
+    Protos::SourceTaskStat toProto() const;
+    static SourceTaskStat fromProto(const Protos::SourceTaskStat & proto);
 };
 
 struct SourceTaskPayloadOnWorker

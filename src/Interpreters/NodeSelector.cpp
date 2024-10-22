@@ -516,6 +516,7 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
 
         is_bucket_valid = is_bucket_valid && hasBucketScan(*plan_segment_ptr);
 
+        /// table => (worker => payload)
         const auto & source_task_payload_map = query_context->getCnchServerResource()->getSourceTaskPayload();
         for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
         {
@@ -530,7 +531,15 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
                         rows_count += p.rows;
                         auto & worker_payload = payload_on_workers[addr];
                         worker_payload.rows += p.rows;
-                        worker_payload.part_num += 1;
+                        worker_payload.part_num += p.part_num;
+                        LOG_TRACE(
+                            log,
+                            "Payload on Worker({}) is rows:{} part_num:{} visible_part size:{} buckets size:{}",
+                            addr.toShortString(),
+                            p.rows,
+                            p.part_num,
+                            p.visible_parts.size(),
+                            p.buckets.size());
                         if (is_bucket_valid)
                         {
                             for (auto bucket : p.buckets)

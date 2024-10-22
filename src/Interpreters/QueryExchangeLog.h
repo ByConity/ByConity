@@ -15,8 +15,8 @@
 
 #pragma once
 
-#include <Interpreters/SystemLog.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/SystemLog.h>
 
 namespace ProfileEvents
 {

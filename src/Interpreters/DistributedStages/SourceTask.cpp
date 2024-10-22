@@ -1,5 +1,7 @@
 #include <Interpreters/DistributedStages/SourceTask.h>
-#include "common/types.h"
+#include <Protos/RPCHelpers.h>
+#include <Protos/plan_segment_manager.pb.h>
+#include <common/types.h>
 
 
 namespace DB
@@ -38,6 +40,20 @@ void SourceTaskFilter::fromProto(const Protos::SourceTaskFilter & proto)
             buckets->insert(b);
         }
     }
+}
+
+Protos::SourceTaskStat SourceTaskStat::toProto() const
+{
+    Protos::SourceTaskStat proto;
+    storage_id.toProto(*proto.mutable_storage_id());
+    proto.set_rows(rows);
+
+    return proto;
+}
+
+SourceTaskStat SourceTaskStat::fromProto(const Protos::SourceTaskStat & proto)
+{
+    return {RPCHelpers::createStorageID(proto.storage_id()), proto.rows()};
 }
 
 } // namespace DB

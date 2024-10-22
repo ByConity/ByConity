@@ -361,8 +361,8 @@ namespace
             return visible_parts;
         }
 
-        auto process_parts = [&](Vec & parts, size_t begin_pos, size_t end_pos, Vec & visible_parts_)
-        {
+        auto process_parts = [&](Vec & parts, size_t begin_pos, size_t end_pos, Vec & visible_parts_) {
+            /// NOTE! BSPScheduler relies on the same sort algorithm to estimate correct rows for table scan tasks
             pdqsort(parts.begin() + begin_pos, parts.begin() + end_pos, PartComparator<Part>{});
 
             /// One-pass algorithm to construct delta chains

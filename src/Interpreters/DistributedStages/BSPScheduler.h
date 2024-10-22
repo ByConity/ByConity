@@ -253,6 +253,8 @@ private:
     void resendResource(const HostWithPorts & host_ports);
 
     Protos::SendResourceRequestReq fillResourceRequestToProto(const ResourceRequest & req);
+    std::unordered_map<UUID, SourceTaskStat> createSourceTaskStats(
+        PlanSegment * plan_segment_ptr, const SegmentTaskInstance & instance, const SourceTaskFilter & source_task_filter);
 
     // All batch task will be enqueue first. The schedule logic will pop queue and schedule the poped tasks.
     EventQueue queue{10000};

@@ -5,7 +5,11 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerResource.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
 #include <Common/CurrentThread.h>
@@ -31,6 +35,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <pdqsort.h>
 #include <CloudServices/CnchServerResource.h>
 
 namespace ProfileEvents
@@ -711,6 +716,57 @@ void BSPScheduler::sendResources(PlanSegment * plan_segment_ptr)
     }
 }
 
+std::unordered_map<UUID, SourceTaskStat> BSPScheduler::createSourceTaskStats(
+    PlanSegment * plan_segment_ptr, const SegmentTaskInstance & instance, const SourceTaskFilter & source_task_filter)
+{
+    std::unordered_map<UUID, SourceTaskStat> source_task_stats;
+    const auto & source_task_payload_map = query_context->getCnchServerResource()->getSourceTaskPayload();
+    AddressInfo addr;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        addr = node_selector_result[instance.segment_id].worker_nodes[instance.parallel_index].address;
+    }
+    for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+    {
+        auto storage_id = plan_segment_input->getStorageID();
+        if (storage_id && storage_id->hasUUID())
+        {
+            if (auto iter = source_task_payload_map.find(storage_id->uuid); iter != source_task_payload_map.end())
+            {
+                auto source_task_payload_iter = iter->second.find(addr);
+                auto [iiter, _] = source_task_stats.emplace(storage_id->uuid, SourceTaskStat(storage_id.value(), 0));
+                if (source_task_payload_iter != iter->second.end())
+                {
+                    auto visible_parts = source_task_payload_iter->second.visible_parts;
+                    /// pdqsort is unstable, but all visible parts share different ids by CnchPartsHelper::PartComparator,
+                    /// so worker and server will share the same order
+                    /// refer to calcVisiblePartsImpl for more details
+                    pdqsort(visible_parts.begin(), visible_parts.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
+                    filterParts(visible_parts, source_task_filter);
+                    for (const auto & part : visible_parts)
+                    {
+                        iiter->second.rows += part->rowExistsCount();
+                    }
+                }
+            }
+        }
+    }
+    if (log->trace())
+    {
+        for (const auto & [_, stat] : source_task_stats)
+        {
+            LOG_TRACE(
+                log,
+                "SourceTaskStats(table:{}) of segment instance({}_{}) contains {} rows",
+                stat.storage_id.getFullTableName(),
+                instance.segment_id,
+                instance.parallel_index,
+                stat.rows);
+        }
+    }
+    return source_task_stats;
+}
+
 void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task)
 {
     // Register exchange for all outputs.
@@ -761,6 +817,10 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
     {
         execution_info.source_task_filter.buckets = source_task_buckets[instance];
     }
+
+    auto source_task_stats = createSourceTaskStats(dag_graph_ptr->getPlanSegmentPtr(task_id), instance, execution_info.source_task_filter);
+    if (!source_task_stats.empty())
+        execution_info.source_task_stats = source_task_stats;
 
     PlanSegmentInstanceId instance_id = PlanSegmentInstanceId{static_cast<UInt32>(task_id), static_cast<UInt32>(index)};
     {

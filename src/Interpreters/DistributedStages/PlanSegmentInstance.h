@@ -68,6 +68,7 @@ struct PlanSegmentExecutionInfo
     UInt32 attempt_id = std::numeric_limits<UInt32>::max();
     std::unordered_map<UInt64, std::vector<PlanSegmentMultiPartitionSource>> sources;
     UInt32 worker_epoch{0};
+    std::unordered_map<UUID, SourceTaskStat> source_task_stats;
 };
 
 struct PlanSegmentInstance
