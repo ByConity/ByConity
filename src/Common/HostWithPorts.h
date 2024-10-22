@@ -204,11 +204,14 @@ public:
     std::string getExchangeAddress() const { return getRPCAddress(); }
     std::string getExchangeStatusAddress() const { return getRPCAddress(); }
 
+    bool operator<(const HostWithPorts & rhs) const { return id < rhs.getId(); }
     const std::string & getHost() const { return host; }
     uint16_t getTCPPort() const { return tcp_port; }
     uint16_t getHTTPPort() const { return http_port; }
     uint16_t getRPCPort() const { return rpc_port; }
     std::string toDebugString() const;
+
+    String getId() const { return id; }
 
     static HostWithPorts fromRPCAddress(const std::string & s);
 
