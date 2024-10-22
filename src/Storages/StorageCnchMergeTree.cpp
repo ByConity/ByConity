@@ -2702,6 +2702,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
         const StorageID target_storage_id = getStorageID();
         std::optional<DaemonManager::BGJobInfo> merge_job_info = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, local_context->getCurrentQueryId());
 
+        size_t rpc_timeout_ms = local_context->getSettingsRef().max_execution_time.totalMilliseconds();
         if (!merge_job_info || merge_job_info->host_port.empty())
             LOG_DEBUG(log, "Skip removing related merge tasks as there is no valid host server for table's merge job: {}", target_storage_id.getNameForLogs());
         else
@@ -2709,7 +2710,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
             auto server_client_ptr = local_context->getCnchServerClient(merge_job_info->host_port);
             if (!server_client_ptr)
                 throw Exception("Failed to get server client with host port " + merge_job_info->host_port, ErrorCodes::SYSTEM_ERROR);
-            if (!server_client_ptr->removeMergeMutateTasksOnPartitions(target_storage_id, {partition_id}))
+            if (!server_client_ptr->removeMergeMutateTasksOnPartitions(target_storage_id, {partition_id}, rpc_timeout_ms))
             {
                 auto msg = fmt::format(
                     "Failed to remove MergeMutateTasks for partitions: {}, table: {}.",

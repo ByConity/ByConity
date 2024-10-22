@@ -932,7 +932,7 @@ std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
     return res;
 }
 
-bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)
+bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions, UInt64 timeout_ms)
 {
     auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
@@ -941,6 +941,8 @@ bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & stor
     for (const auto & p : partitions)
         request.add_partitions(p);
     Protos::RemoveMergeMutateTasksOnPartitionsResp response;
+    if (timeout_ms)
+        cntl.set_timeout_ms(std::min(timeout_ms, 30000ul));
 
     stub->removeMergeMutateTasksOnPartitions(&cntl, &request, &response, nullptr);
 
