@@ -270,7 +270,7 @@ protected:
 class ExceptionHandlerWithFailedInfo : public ExceptionHandler
 {
     using ErrorCode = int32_t;
-    using WorkerIdErrorCodeMap = std::unordered_map<DB::WorkerId, ErrorCode, DB::WorkerIdHash, DB::WorkerIdEqual>;
+    using WorkerIdErrorCodeMap = std::unordered_map<DB::WorkerId, ErrorCode, DB::WorkerIdHash>;
 
 public:
     void addFailedRpc(const DB::WorkerId & worker_id, int32_t error_code)

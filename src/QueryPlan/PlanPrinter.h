@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
+#include <Optimizer/CostModel/CostModel.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/ProcessorProfile.h>
 
@@ -55,7 +56,6 @@ public:
     static String jsonLogicalPlan(
         QueryPlan & plan,
         std::optional<PlanNodeCost> plan_cost,
-        const CostModel & cost_model,
         const StepProfiles & profiles = {},
         const PlanCostMap & costs = {},
         const QueryPlanSettings & settings = {});

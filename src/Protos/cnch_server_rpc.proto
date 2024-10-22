@@ -182,7 +182,6 @@ message FetchPartitionsReq {
   repeated string column_name_filter = 5;
   optional uint64 txnid = 6;
   optional bool ignore_ttl = 7;
-  optional TraceInfo trace_info = 255;
 }
 
 message FetchPartitionsResp {

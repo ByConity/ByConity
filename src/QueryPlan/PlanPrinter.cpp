@@ -163,7 +163,6 @@ String PlanPrinter::textLogicalPlan(
 String PlanPrinter::jsonLogicalPlan(
     QueryPlan & plan,
     std::optional<PlanNodeCost> plan_cost,
-    const CostModel & cost_model,
     const StepProfiles & profiles,
     const PlanCostMap & costs,
     const QueryPlanSettings & settings)

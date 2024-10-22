@@ -132,6 +132,7 @@ public:
         ::google::protobuf::Closure * done) override;
 
 private:
+
     ContextMutablePtr context;
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     Poco::Logger * log;

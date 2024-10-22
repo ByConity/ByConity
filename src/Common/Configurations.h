@@ -128,10 +128,6 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, max_concurrent_insert_queries, "", 0, ConfigFlag::Default, "") \
     M(UInt64, max_concurrent_system_queries, "", 0, ConfigFlag::Default, "") \
     M(Float32, cache_size_to_ram_max_ratio, "", 0.5, ConfigFlag::Default, "") \
-    M(UInt64, uncompressed_cache_size, "", 0, ConfigFlag::Default, "") \
-    M(UInt64, mark_cache_size, "", 5368709120, ConfigFlag::Default, "") \
-    M(UInt64, cnch_checksums_cache_size, "", 5368709120, ConfigFlag::Default, "") \
-    M(UInt64, cnch_primary_index_cache_size, "", 5368709120, ConfigFlag::Default, "") \
     M(UInt64, shutdown_wait_unfinished, "", 5, ConfigFlag::Default, "") \
     M(UInt64, cnch_transaction_ts_expire_time, "", 2 * 60 * 60 * 1000, ConfigFlag::Default, "") \
     M(UInt64, cnch_task_heartbeat_interval, "", 5, ConfigFlag::Default, "") \

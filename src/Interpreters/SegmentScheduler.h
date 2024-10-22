@@ -53,7 +53,7 @@ struct ExceptionWithCode
     int code;
 };
 
-using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentStatus>;
+using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 struct PlanSegmentProfile;
 using PlanSegmentProfilePtr = std::shared_ptr<PlanSegmentProfile>;
 using PlanSegmentProfiles = std::vector<PlanSegmentProfilePtr>;
@@ -109,7 +109,7 @@ public:
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     bool alreadyReceivedAllSegmentStatus(const String & query_id);
-    void onSegmentFinished(const RuntimeSegmentStatus & status);
+    void onSegmentFinished(const RuntimeSegmentsStatus & status);
     std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
 
     PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;

@@ -499,7 +499,7 @@ bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id)
     return true;
 }
 
-void SegmentScheduler::onSegmentFinished(const RuntimeSegmentStatus & status)
+void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
 {
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(status.query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
