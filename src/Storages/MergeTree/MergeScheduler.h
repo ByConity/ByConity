@@ -123,7 +123,7 @@ public:
 
     void prepareCountMerges();
     void prepareCountQueries();
-    PartSizeInfo countPartSize(const IMergeSelector::PartsRange & parts, size_t begin, size_t end);
+    PartSizeInfo countPartSize(const IMergeSelector<IMergeTreeDataPart>::PartsRange & parts, size_t begin, size_t end);
 
     void getEstimatedBytes(size_t & bytes)
     {
@@ -151,7 +151,7 @@ public:
     void prepare();
     bool strategyOfTime();
     bool strategyOfSize(const MergeScheduler::PartSizeInfo & part_size_info, bool only_check = false);
-    bool canMerge(const IMergeSelector::PartsRange & parts, size_t begin, size_t end);
+    bool canMerge(const IMergeSelector<IMergeTreeDataPart>::PartsRange & parts, size_t begin, size_t end);
     static bool expiredUTCTime(const ContextPtr & context);
     MergeTreeData::DataPartsVector getPartsForOptimize(const MergeTreeData::DataPartsVector & parts);
 

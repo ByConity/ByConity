@@ -27,10 +27,12 @@
 namespace DB
 {
 
+class IMergeTreeDataPart;
+
 /** Select parts to merge based on its level.
   * Select first range of parts of parts_to_merge length with minimum level.
   */
-class LevelMergeSelector : public IMergeSelector
+class LevelMergeSelector : public IMergeSelector<IMergeTreeDataPart>
 {
 public:
     struct Settings

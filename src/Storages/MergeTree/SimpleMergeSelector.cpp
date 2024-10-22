@@ -263,7 +263,7 @@ SimpleMergeSelector::selectMulti(PartsRanges & partitions, size_t max_total_size
     // Fall back to default behavior when enable_batch_select is not turned on.
     if (!settings.enable_batch_select)
     {
-        return IMergeSelector::selectMulti(partitions, max_total_size_to_merge, merge_scheduler);
+        return IMergeSelector<IMergeTreeDataPart>::selectMulti(partitions, max_total_size_to_merge, merge_scheduler);
     }
 
     PartsRanges res;

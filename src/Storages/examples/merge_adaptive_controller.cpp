@@ -38,13 +38,23 @@ struct TestAction
     UInt64 ts; /// in milliseconds
     TestActionType type;
 
-    IMergeSelector::PartsRange merge_parts{};
-    IMergeSelector::Part future_part{};
+    IMergeSelector<ServerDataPart>::PartsRange merge_parts{};
+    IMergeSelector<ServerDataPart>::Part future_part{};
 
     /// need to order by ts assending
     bool operator < (const TestAction & rhs) const { return this->ts > rhs.ts; }
 };
 
+static std::shared_ptr<MergeTreePartInfo> part_info = std::make_shared<MergeTreePartInfo>();
+static DataModelPartWrapperPtr global_data_model_part_wrapper = std::make_shared<DataModelPartWrapper>();
+
+class MockDataPart: public ServerDataPart
+{
+public:
+    MockDataPart(UInt64 id_): ServerDataPart(global_data_model_part_wrapper), id(id_) {}
+
+    UInt64 id{0};
+};
 
 constexpr const UInt64 SECOND_TO_MS = 1000UL;
 constexpr const UInt64 MINUTE_TO_MS = 60UL * SECOND_TO_MS;
@@ -54,6 +64,7 @@ constexpr const UInt64 DAY_TO_MS = 24UL * HOUR_TO_MS;
 constexpr const UInt64 SAMPLE_INTERVAL_MS = 1 * MINUTE_TO_MS;
 
 const UUID STORAGE_UUID = UUIDHelpers::generateV4();
+const StorageID STORAGE_ID("test_db", "test_table", STORAGE_UUID);
 const String PARTITION_ID = "all";
 
 const UInt64 LEVEL_0_PART_ROWS = 10000;
@@ -61,9 +72,10 @@ const UInt64 LEVEL_0_PART_SIZE = 100 * 1024 * 1024; // 10MB
 
 struct TestState
 {
-    IMergeSelector::PartsRanges all_partitions{{}};
-    IMergeSelector::PartsRange future_merging_parts{};
+    IMergeSelector<ServerDataPart>::PartsRanges all_partitions{{}};
+    IMergeSelector<ServerDataPart>::PartsRange future_merging_parts{};
     std::priority_queue<TestAction> actions_queue{};
+    std::unordered_map<UInt64, std::shared_ptr<MockDataPart> > all_parts{};
 
     UInt64 milliseconds{0};
     UInt64 seconds{0};
@@ -85,7 +97,7 @@ struct TestState
     void reset()
     {
         *this = TestState{};
-        bg_task_stats = std::make_shared<MergeTreeBgTaskStatistics>(STORAGE_UUID);
+        bg_task_stats = std::make_shared<MergeTreeBgTaskStatistics>(STORAGE_ID);
         bg_task_stats->setInitializeState(MergeTreeBgTaskStatistics::InitializeState::InitializeSucceed);
     }
 
@@ -101,7 +113,7 @@ void updatePartsAge(UInt64 curr_ms, UInt64 last_ms)
     }
 }
 
-String getPartitionID(const IMergeSelector::Part &)
+String getPartitionID(const IMergeSelector<ServerDataPart>::Part &)
 {
     return PARTITION_ID;
 }
@@ -117,32 +129,35 @@ static size_t minValueWithoutZero(size_t a, size_t b)
     return a == 0 ? b : (b == 0 ? a : std::min(a, b));
 }
 
-IMergeSelector::PartsRange mergeSelect(bool with_adaptive_controller)
+IMergeSelector<ServerDataPart>::PartsRanges mergeSelect(bool with_adaptive_controller)
 {
     DanceMergeSelector::Settings settings;
     settings.select_nonadjacent_parts_allowed = true;
-    settings.min_parts_to_merge_base = 3;
+    settings.min_parts_to_merge_base = 5;
     DanceMergeSelector selector(settings);
-    selector.debugSetGetPartitionID(getPartitionID);
 
     if (with_adaptive_controller)
     {
-        std::unordered_map<String, std::vector<UInt64> > future_part_rows {{PARTITION_ID, {}}};
+        std::unordered_map<String, std::pair<UInt64, UInt64> > future_part_rows;
         for (const auto & p: current_stat.future_merging_parts)
-            future_part_rows[PARTITION_ID].emplace_back(p.rows);
+        {
+            auto it = future_part_rows.try_emplace(PARTITION_ID, 0UL, 0UL).first;
+            it->second.first++;
+            it->second.second += p.rows;
+        }
 
         auto adaptive_controller = std::make_shared<MergeSelectorAdaptiveController>(
             /*is_bucket_table_*/ false,
             params.num_workers,
+            /*wa_optimize_threshold*/ 4,
             settings.max_parts_to_merge_base.value);
-        adaptive_controller->debugSetGetPartitionID(getPartitionID);
-        adaptive_controller->debugSetNow(current_stat.seconds);
+        adaptive_controller->setCurrentTime(current_stat.seconds);
         adaptive_controller->init(current_stat.bg_task_stats, current_stat.all_partitions, future_part_rows);
-        
+
         /// Some trace logs with adaptive controller
         if (params.enable_trace)
         {
-            bool need_control = adaptive_controller->needControlWriteAmplification(PARTITION_ID);
+            bool need_control = adaptive_controller->needOptimizeWriteAmplification(PARTITION_ID);
             const auto & [max_parts_, max_rows_] = adaptive_controller->getMaxPartsAndRows(PARTITION_ID);
             size_t max_parts = std::min(max_parts_, settings.max_parts_to_merge_base.value);
             size_t max_rows = minValueWithoutZero(max_rows_, settings.max_total_rows_to_merge);
@@ -171,19 +186,22 @@ IMergeSelector::PartsRange mergeSelect(bool with_adaptive_controller)
         selector.setAdaptiveController(adaptive_controller);
     }
 
-    IMergeSelector::PartsRange selected_parts = selector.select(current_stat.all_partitions, 0);
+    IMergeSelector<ServerDataPart>::PartsRanges selected_ranges = selector.selectMulti(current_stat.all_partitions, 0);
 
     /// Some trace logs with merge selector
-    if (params.enable_trace && with_adaptive_controller && !selected_parts.empty())
+    if (params.enable_trace && with_adaptive_controller && !selected_ranges.empty())
     {
-        UInt64 total_rows = 0;
-        for (auto & p: selected_parts)
-            total_rows += p.rows;
+        for (const auto & selected_parts: selected_ranges)
+        {
+            UInt64 total_rows = 0;
+            for (auto & p: selected_parts)
+                total_rows += p.rows;
 
-        std::cout << "Selected merge with " << selected_parts.size() << " parts with " << total_rows << " rows.\n";
+            std::cout << "Selected merge with " << selected_parts.size() << " parts with " << total_rows << " rows.\n";
+        }
     }
 
-    return selected_parts;
+    return selected_ranges;
 }
 
 void testImpl(UInt64 start_time, UInt64 final_time, bool have_inserts, bool with_adaptive_controller, UInt64 stop_early = 0)
@@ -193,7 +211,7 @@ void testImpl(UInt64 start_time, UInt64 final_time, bool have_inserts, bool with
         current_stat.actions_queue.push(TestAction{.ts = start_time, .type = ACTION_TYPE_MERGE_SELECT});
         current_stat.actions_queue.push(TestAction{.ts = start_time, .type = ACTION_TYPE_INSERT});
     }
-    
+
     UInt64 start_time_s = start_time / SECOND_TO_MS;
 
     UInt64 last_sample_time = 0;
@@ -223,13 +241,16 @@ void testImpl(UInt64 start_time, UInt64 final_time, bool have_inserts, bool with
             if (!have_inserts)
                 break;
 
+            auto it = current_stat.all_parts.try_emplace(current_stat.block_id).first;
+            it->second = std::make_shared<MockDataPart>(current_stat.block_id++);
+
             /// TODO(shiyuze): support random rows/size
-            IMergeSelector::Part part = IMergeSelector::Part{
+            IMergeSelector<ServerDataPart>::Part part = IMergeSelector<ServerDataPart>::Part{
                 .size = LEVEL_0_PART_SIZE,
                 .rows = LEVEL_0_PART_ROWS,
                 .age = 0,
                 .level = 0,
-                .data = reinterpret_cast<const void *>(current_stat.block_id++),
+                .data = reinterpret_cast<const void *>(it->second.get()),
             };
 
             current_stat.inserted++;
@@ -244,36 +265,43 @@ void testImpl(UInt64 start_time, UInt64 final_time, bool have_inserts, bool with
             bool selected = true;
             if (current_stat.concurrent_merges < params.max_concurrent_merges)
             {
-                auto selected_range = mergeSelect(with_adaptive_controller);
-                selected = !selected_range.empty();
-                if (!selected_range.empty())
+                auto selected_ranges = mergeSelect(with_adaptive_controller);
+                selected = !selected_ranges.empty();
+                for (const auto & selected_range: selected_ranges)
                 {
-                    auto merge_completed_action = TestAction{
-                        .ts = current_stat.milliseconds + selected_range.size() * params.part_merge_elapsed_ms,
-                        .type = ACTION_TYPE_MERGE_COMPLETED,
-                        .merge_parts = selected_range,
-                        .future_part = {.size = 0, .rows = 0, .age = 0, .level = 0, .data = reinterpret_cast<const void *>(current_stat.block_id++), },
-                    };
-
-                    std::unordered_set<const void *> selected_datas;
-                    for (auto & p: selected_range)
+                    if (!selected_range.empty())
                     {
-                        merge_completed_action.future_part.size += p.size;
-                        merge_completed_action.future_part.rows += p.rows;
-                        merge_completed_action.future_part.level = std::max(merge_completed_action.future_part.level, p.level + 1);
-                        selected_datas.insert(p.data);
+                        auto it = current_stat.all_parts.try_emplace(current_stat.block_id).first;
+                        it->second = std::make_shared<MockDataPart>(current_stat.block_id++);
+
+                        auto merge_completed_action = TestAction{
+                            .ts = current_stat.milliseconds + selected_range.size() * params.part_merge_elapsed_ms,
+                            .type = ACTION_TYPE_MERGE_COMPLETED,
+                            .merge_parts = selected_range,
+                            .future_part = {.size = 0, .rows = 0, .age = 0, .level = 0, .data = reinterpret_cast<const void *>(it->second.get()), },
+                        };
+
+                        std::unordered_set<const void *> selected_datas;
+                        for (auto & p: selected_range)
+                        {
+                            merge_completed_action.future_part.size += p.size;
+                            merge_completed_action.future_part.rows += p.rows;
+                            merge_completed_action.future_part.level = std::max(merge_completed_action.future_part.level, p.level + 1);
+                            selected_datas.insert(p.data);
+                            current_stat.all_parts.erase(reinterpret_cast<const MockDataPart *>(p.data)->id);
+                        }
+
+                        current_stat.all_partitions[0].erase(
+                            std::remove_if(current_stat.all_partitions[0].begin(), current_stat.all_partitions[0].end(),
+                                [&](const IMergeSelector<ServerDataPart>::Part & p) { return selected_datas.count(p.data); }),
+                            current_stat.all_partitions[0].end()
+                        );
+
+                        current_stat.future_merging_parts.emplace_back(merge_completed_action.future_part);
+                        current_stat.actions_queue.push(std::move(merge_completed_action));
+                        current_stat.concurrent_merges++;
+                        current_stat.concurrent_merging_parts += selected_range.size();
                     }
-
-                    current_stat.all_partitions[0].erase(
-                        std::remove_if(current_stat.all_partitions[0].begin(), current_stat.all_partitions[0].end(),
-                            [&](const IMergeSelector::Part & p) { return selected_datas.count(p.data); }),
-                        current_stat.all_partitions[0].end()
-                    );
-
-                    current_stat.future_merging_parts.emplace_back(merge_completed_action.future_part);
-                    current_stat.actions_queue.push(std::move(merge_completed_action));
-                    current_stat.concurrent_merges++;
-                    current_stat.concurrent_merging_parts += selected_range.size();
                 }
             }
             UInt64 select_interval_ms = selected ? params.select_interval_ms : params.select_interval_ms * 10;
@@ -288,7 +316,7 @@ void testImpl(UInt64 start_time, UInt64 final_time, bool have_inserts, bool with
             UInt64 num_future_parts_before = current_stat.future_merging_parts.size();
             current_stat.future_merging_parts.erase(
                 std::remove_if(current_stat.future_merging_parts.begin(), current_stat.future_merging_parts.end(),
-                    [&](const IMergeSelector::Part & p) { return p.data == part.data; }),
+                    [&](const IMergeSelector<ServerDataPart>::Part & p) { return p.data == part.data; }),
                 current_stat.future_merging_parts.end()
             );
             if (current_stat.future_merging_parts.size() != num_future_parts_before - 1)
@@ -360,7 +388,8 @@ void testHistoricalPartition(bool with_adaptive_controller)
     UInt64 merged_bytes_before = current_stat.merged_bytes;
     testImpl(params.real_time_test_ms, params.real_time_test_ms + params.historical_test_ms, false, with_adaptive_controller, 3000);
 
-    std::sort(current_stat.all_partitions[0].begin(), current_stat.all_partitions[0].end(), [](const IMergeSelector::Part & lhs, const IMergeSelector::Part & rhs)
+    std::sort(current_stat.all_partitions[0].begin(), current_stat.all_partitions[0].end(),
+        [](const IMergeSelector<ServerDataPart>::Part & lhs, const IMergeSelector<ServerDataPart>::Part & rhs)
     {
         return lhs.level > rhs.level;
     });
@@ -380,7 +409,7 @@ void testHistoricalPartition(bool with_adaptive_controller)
         << "  Num merges: " << current_stat.merged - merged_before
         << "  Tree depth: " << current_stat.max_level
         << "  Final parts: " << current_stat.all_partitions[0].size() << " ( " << final_parts_ss.str() << " )"
-        << "  Standard deviation or rows: " << std::sqrt(variance(part_rows))
+        << "  Standard deviation of rows: " << std::sqrt(variance(part_rows))
         << "\n\n\n";
 }
 
@@ -397,6 +426,9 @@ int main(int argc, char ** argv)
         std::cout << helpString(argv[0]) << std::endl;
         return -1;
     }
+
+    part_info->partition_id = PARTITION_ID;
+    global_data_model_part_wrapper->info = part_info;
 
     params = TestParams{
         .real_time_test_ms = 24 * HOUR_TO_MS,

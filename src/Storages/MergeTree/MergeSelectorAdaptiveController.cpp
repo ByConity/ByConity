@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeSelectorAdaptiveController.h>
 
+#include <Catalog/DataModelPartWrapper.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 
 namespace DB
@@ -13,8 +14,8 @@ static double getAverageWithoutZero(double a, double b, double abs_zero = 1E-6)
 
 void MergeSelectorAdaptiveController::init(
     MergeTreeBgTaskStatisticsPtr & stats,
-    const IMergeSelector::PartsRanges & parts_ranges,
-    const std::multimap<String, UInt64> & unselectable_part_rows)
+    const IMergeSelector<ServerDataPart>::PartsRanges & parts_ranges,
+    const std::unordered_map<String, std::pair<UInt64, UInt64> > & unselectable_part_rows)
 {
     estimators.clear();
     if (!now)
@@ -23,7 +24,7 @@ void MergeSelectorAdaptiveController::init(
     /// Currently only support write amplification control, which is not suitable for bucket table.
     if (is_bucket_table || expected_parts < 1)
         return;
-    
+
     /// Update current_parts, current_rows and smallest_part_rows
     std::unordered_set<String> partition_ids;
     for (const auto & parts_range: parts_ranges)
@@ -53,16 +54,15 @@ void MergeSelectorAdaptiveController::init(
         }
     }
 
-    /// Update current_parts, current_rows and smallest_part_rows by unselectable parts rows
-    for (const auto & [p, r]: unselectable_part_rows)
+    /// Update current_parts, current_rows by unselectable parts rows
+    for (const auto & [p, pair]: unselectable_part_rows)
     {
         auto it = estimators.find(p);
         if (it == estimators.end())
             continue;
-        
-        it->second.current_parts++;
-        it->second.current_rows += r;
-        it->second.smallest_part_rows = std::min(it->second.smallest_part_rows, r);
+
+        it->second.current_parts += pair.first;
+        it->second.current_rows += pair.second;
     }
 
     /// Update other infos in estimators
@@ -75,7 +75,7 @@ void MergeSelectorAdaptiveController::init(
                 auto it = partition_stats_map.find(partition_id);
                 if (it == partition_stats_map.end())
                     continue;
-                
+
                 auto & estimator_elem = estimators[partition_id];
 
                 if (auto last_hour_stats_optional = it->second.last_hour_stats.lastIntervalStats(now))
@@ -107,15 +107,18 @@ void MergeSelectorAdaptiveController::init(
     }
 }
 
-bool MergeSelectorAdaptiveController::needControlWriteAmplification(const String & partition_id) const
+bool MergeSelectorAdaptiveController::needOptimizeWriteAmplification(const String & partition_id) const
 {
+    if (wa_optimize_threshold == 0)
+        return false;
+
     const auto & estimator_elem = getEstimatorElement(partition_id);
 
     /// Write amplification may be not precise enough if only a little insertions.
     if (is_bucket_table || expected_parts < 1 || !isRealTimePartition(estimator_elem) || !haveEnoughInfo(estimator_elem))
         return false;
-    
-    return estimator_elem.current_parts <= 4 * expected_parts && std::get<0>(estimator_elem.wa) > std::get<1>(estimator_elem.wa);
+
+    return estimator_elem.current_parts <= wa_optimize_threshold * expected_parts && std::get<0>(estimator_elem.wa) > std::get<1>(estimator_elem.wa);
 }
 
 /// write_amplification, wa_min, wa_max
@@ -129,23 +132,16 @@ std::tuple<double, double, double> MergeSelectorAdaptiveController::getWriteAmpl
 std::pair<size_t, size_t> MergeSelectorAdaptiveController::getMaxPartsAndRows(const String & partition_id) const
 {
     if (is_bucket_table || expected_parts < 1)
-        return std::make_pair(max_parts_to_merge, 0); /// Won't modify merge selector settings
+        return std::make_pair(std::numeric_limits<size_t>::max() - 1, 0); /// Won't modify merge selector settings
 
     const auto & estimator_elem = getEstimatorElement(partition_id);
     if (estimator_elem.current_parts <= expected_parts)
         return std::make_pair(1, 1); /// Won't allow any merge
 
-    size_t max_parts = estimator_elem.current_parts - expected_parts + 1;
+    size_t max_parts = estimator_elem.current_parts - expected_parts;
     size_t max_rows = estimator_elem.current_rows / expected_parts + estimator_elem.smallest_part_rows - 1;
 
     return std::make_pair(max_parts, max_rows);
-}
-
-String MergeSelectorAdaptiveController::getPartitionID(const IMergeSelector::Part & part)
-{
-    if (unlikely(get_partition_id))
-        return get_partition_id(part);
-    return part.getDataPartPtr()->info.partition_id;
 }
 
 }

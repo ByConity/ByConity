@@ -23,14 +23,18 @@
 #include <Storages/MergeTree/MergeSelectorAdaptiveController.h>
 #include <Storages/StorageCnchMergeTree.h>
 
+#include <boost/functional/hash.hpp>
+
 namespace DB
 {
+
+static void groupPartsByColumnsMutationsCommitTime(const ServerDataPartsVector & parts, std::vector<ServerDataPartsVector> & part_ranges);
 
 ServerSelectPartsDecision selectPartsToMerge(
     const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
-    const std::multimap<String, UInt64> & unselectable_part_rows,
+    const std::unordered_map<String, std::pair<UInt64, UInt64> > & unselectable_part_rows,
     ServerCanMergeCallback can_merge_callback,
     const SelectPartsToMergeSettings & settings,
     LoggerPtr log)
@@ -50,11 +54,12 @@ ServerSelectPartsDecision selectPartsToMerge(
     bool aggressive = settings.aggressive;
     bool enable_batch_select = settings.enable_batch_select;
     bool final = settings.final;
+    bool select_nonadjacent_parts_allowed = data_settings->cnch_merge_select_nonadjacent_parts.value;
     // bool merge_with_ttl_allowed = settings.merge_with_ttl_allowed
 
     time_t current_time = std::time(nullptr);
 
-    IMergeSelector::PartsRanges parts_ranges;
+    IMergeSelector<ServerDataPart>::PartsRanges parts_ranges;
 
     /// StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
@@ -79,93 +84,104 @@ ServerSelectPartsDecision selectPartsToMerge(
 
     for (auto & bucket: buckets)
     {
-        const String * prev_partition_id = nullptr;
-        /// Previous part only in boundaries of partition frame
-        const ServerDataPartPtr * prev_part = nullptr;
+        std::vector<ServerDataPartsVector> part_ranges_before_split;
+        if (select_nonadjacent_parts_allowed)
+            groupPartsByColumnsMutationsCommitTime(bucket.second, part_ranges_before_split);
+        else
+            part_ranges_before_split.emplace_back(std::move(bucket.second));
 
-        for (const auto & part : bucket.second)
+        for (const auto & range_before_split: part_ranges_before_split)
         {
-            const String & partition_id = part->info().partition_id;
+            const String * prev_partition_id = nullptr;
+            /// Previous part only in boundaries of partition frame
+            const ServerDataPartPtr * prev_part = nullptr;
 
-            if (!prev_partition_id
-                || partition_id != *prev_partition_id
-                || (!parts_ranges.empty() && parts_ranges.back().size() >= max_parts_to_break))
+            for (const auto & part : range_before_split)
             {
-                if (parts_ranges.empty() || !parts_ranges.back().empty())
-                    parts_ranges.emplace_back();
+                const String & partition_id = part->info().partition_id;
 
-                /// New partition frame.
-                prev_partition_id = &partition_id;
-                prev_part = nullptr;
-            }
+                /// If select_nonadjacent_parts_allowed is true, DanceMergeSelector will reorder parts by rows
+                bool need_split_by_max_parts_to_break = !select_nonadjacent_parts_allowed
+                    && !parts_ranges.empty() && parts_ranges.back().size() >= max_parts_to_break;
 
-            /// Check predicate only for the first part in each range.
-            if (!prev_part)
-            {
-                /* Parts can be merged with themselves for TTL needs for example.
-                * So we have to check if this part is currently being inserted with quorum and so on and so forth.
-                * Obviously we have to check it manually only for the first part
-                * of each partition because it will be automatically checked for a pair of parts. */
-                if (!can_merge_callback(nullptr, part))
-                    continue;
-
-                /// This part can be merged only with next parts (no prev part exists), so start
-                /// new interval if previous was not empty.
-                if (!parts_ranges.back().empty())
-                    parts_ranges.emplace_back();
-            }
-            else
-            {
-                /// If we cannot merge with previous part we had to start new parts
-                /// interval (in the same partition)
-                if (!can_merge_callback(*prev_part, part))
+                if (!prev_partition_id || partition_id != *prev_partition_id || need_split_by_max_parts_to_break)
                 {
-                    /// Now we have no previous part
+                    if (parts_ranges.empty() || !parts_ranges.back().empty())
+                        parts_ranges.emplace_back();
+
+                    /// New partition frame.
+                    prev_partition_id = &partition_id;
                     prev_part = nullptr;
+                }
 
-                    /// Mustn't be empty
-                    assert(!parts_ranges.back().empty());
-
-                    /// Some parts cannot be merged with previous parts and also cannot be merged with themselves,
-                    /// for example, merge is already assigned for such parts, or they participate in quorum inserts
-                    /// and so on.
-                    /// Also we don't start new interval here (maybe all next parts cannot be merged and we don't want to have empty interval)
+                /// Check predicate only for the first part in each range.
+                if (!prev_part)
+                {
+                    /* Parts can be merged with themselves for TTL needs for example.
+                    * So we have to check if this part is currently being inserted with quorum and so on and so forth.
+                    * Obviously we have to check it manually only for the first part
+                    * of each partition because it will be automatically checked for a pair of parts. */
                     if (!can_merge_callback(nullptr, part))
                         continue;
 
-                    /// Starting new interval in the same partition
-                    parts_ranges.emplace_back();
+                    /// This part can be merged only with next parts (no prev part exists), so start
+                    /// new interval if previous was not empty.
+                    if (!parts_ranges.back().empty())
+                        parts_ranges.emplace_back();
                 }
+                else
+                {
+                    /// If we cannot merge with previous part we had to start new parts
+                    /// interval (in the same partition)
+                    if (!can_merge_callback(*prev_part, part))
+                    {
+                        /// Now we have no previous part
+                        prev_part = nullptr;
+
+                        /// Mustn't be empty
+                        assert(!parts_ranges.back().empty());
+
+                        /// Some parts cannot be merged with previous parts and also cannot be merged with themselves,
+                        /// for example, merge is already assigned for such parts, or they participate in quorum inserts
+                        /// and so on.
+                        /// Also we don't start new interval here (maybe all next parts cannot be merged and we don't want to have empty interval)
+                        if (!can_merge_callback(nullptr, part))
+                            continue;
+
+                        /// Starting new interval in the same partition
+                        parts_ranges.emplace_back();
+                    }
+                }
+
+                IMergeSelector<ServerDataPart>::Part part_info;
+                part_info.size = part->part_model().size();
+                time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
+                auto p_part = part->tryGetPreviousPart();
+                while (p_part)
+                {
+                    ++part_info.chain_depth;
+                    part_info.size += p_part->part_model().size();
+                    part_commit_time = TxnTimestamp(p_part->getCommitTime()).toSecond();
+                    p_part = p_part->tryGetPreviousPart();
+                }
+                /// Consider the base part's age as the part chain's age,
+                /// so that the merge selector will give it a better score.
+                part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
+                part_info.rows = part->rowsCount();
+                part_info.level = part->info().level;
+                part_info.data = part.get();
+                /// TODO:
+                /// part_info.ttl_infos = &part->ttl_infos;
+                /// part_info.compression_codec_desc = part->default_codec->getFullCodecDesc();
+                /// part_info.shall_participate_in_merges = has_volumes_with_disabled_merges ? part->shallParticipateInMerges(storage_policy) : true;
+                part_info.shall_participate_in_merges = true;
+
+                ++parts_selected_precondition;
+
+                parts_ranges.back().emplace_back(part_info);
+
+                prev_part = &part;
             }
-
-            IMergeSelector::Part part_info;
-            part_info.size = part->part_model().size();
-            time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
-            auto p_part = part->tryGetPreviousPart();
-            while (p_part)
-            {
-                ++part_info.chain_depth;
-                part_info.size += p_part->part_model().size();
-                part_commit_time = TxnTimestamp(p_part->getCommitTime()).toSecond();
-                p_part = p_part->tryGetPreviousPart();
-            }
-            /// Consider the base part's age as the part chain's age, 
-            /// so that the merge selector will give it a better score.
-            part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
-            part_info.rows = part->rowsCount();
-            part_info.level = part->info().level;
-            part_info.data = &part;
-            /// TODO:
-            /// part_info.ttl_infos = &part->ttl_infos;
-            /// part_info.compression_codec_desc = part->default_codec->getFullCodecDesc();
-            /// part_info.shall_participate_in_merges = has_volumes_with_disabled_merges ? part->shallParticipateInMerges(storage_policy) : true;
-            part_info.shall_participate_in_merges = true;
-
-            ++parts_selected_precondition;
-
-            parts_ranges.back().emplace_back(part_info);
-
-            prev_part = &part;
         }
     }
 
@@ -179,7 +195,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     /*
     if (metadata_snapshot->hasAnyTTL() && merge_with_ttl_allowed && !ttl_merges_blocker.isCancelled())
     {
-        IMergeSelector::PartsRange parts_to_merge;
+        IMergeSelector<ServerDataPart>::PartsRange parts_to_merge;
 
         /// TTL delete is preferred to recompression
         TTLDeleteMergeSelector delete_ttl_selector(
@@ -238,7 +254,7 @@ ServerSelectPartsDecision selectPartsToMerge(
         merge_settings.min_parts_to_merge_base = 1;
     merge_settings.final = final;
     merge_settings.max_age_for_single_part_chain = data_settings->merge_with_ttl_timeout;
-    merge_settings.select_nonadjacent_parts_allowed = data_settings->cnch_merge_select_nonadjacent_parts;
+    merge_settings.select_nonadjacent_parts_allowed = select_nonadjacent_parts_allowed;
     auto merge_selector = std::make_unique<DanceMergeSelector>(merge_settings);
 
     /// Using adaptive controller
@@ -252,9 +268,13 @@ ServerSelectPartsDecision selectPartsToMerge(
 
             if (expected_parts_number > 0)
             {
+                UInt64 write_amplification_optimize_threshold = data_settings->cnch_merge_write_amplification_optimize_threshold.value;
+                if (log)
+                    LOG_TRACE(log, "Using adaptive controller, expected_parts_number is {}", expected_parts_number);
                 auto adaptive_controller = std::make_shared<MergeSelectorAdaptiveController>(
                     data.isBucketTable(),
                     expected_parts_number,
+                    write_amplification_optimize_threshold,
                     merge_settings.max_parts_to_merge_base.value);
                 adaptive_controller->init(bg_task_stats, parts_ranges, unselectable_part_rows);
                 merge_selector->setAdaptiveController(adaptive_controller);
@@ -280,7 +300,7 @@ ServerSelectPartsDecision selectPartsToMerge(
             {
                 if (log)
                     LOG_ERROR(log, "merge selector returned only one part to merge {}, skip this range.",
-                        (*static_cast<const ServerDataPartPtr *>(range.front().data))->name());
+                        static_cast<const ServerDataPart *>(range.front().data)->name());
                 continue;
             }
             // throw Exception("Logical error: merge selector returned only one part to merge", ErrorCodes::LOGICAL_ERROR);
@@ -288,8 +308,8 @@ ServerSelectPartsDecision selectPartsToMerge(
         auto & emplaced_parts = res.emplace_back();
         emplaced_parts.reserve(range.size());
         for (auto & part : range)
-            emplaced_parts.push_back(*static_cast<const ServerDataPartPtr *>(part.data));
-        
+            emplaced_parts.push_back(static_cast<const ServerDataPart *>(part.data)->shared_from_this());
+
         /// When enable selct nonadjacent parts, merge selector can sort parts by rows/size/age to get a
         /// better selection. After selection, we need to sort parts again to get right result part name.
         if (data_settings->cnch_merge_select_nonadjacent_parts.value)
@@ -312,6 +332,25 @@ void groupPartsByBucketNumber(const MergeTreeMetaBase & data, std::unordered_map
             it->second.push_back(part);
         else
             grouped_buckets.emplace(part->part_model().bucket_number(), ServerDataPartsVector{part});
+    }
+}
+
+static void groupPartsByColumnsMutationsCommitTime(const ServerDataPartsVector & parts, std::vector<ServerDataPartsVector> & part_ranges)
+{
+    using GroupKeyType = std::pair<UInt64, UInt64>;
+    std::unordered_map<GroupKeyType, ServerDataPartsVector, boost::hash<GroupKeyType> > grouped_ranges;
+
+    for (const auto & p: parts)
+    {
+        GroupKeyType key = std::make_pair(p->getColumnsCommitTime(), p->getMutationCommitTime());
+        auto it = grouped_ranges.try_emplace(key).first;
+        it->second.emplace_back(p);
+    }
+
+    for (auto & [_, range]: grouped_ranges)
+    {
+        part_ranges.emplace_back();
+        std::swap(range, part_ranges.back());
     }
 }
 

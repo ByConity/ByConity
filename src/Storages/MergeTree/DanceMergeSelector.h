@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Catalog/DataModelPartWrapper.h>
 #include <Core/BaseSettings.h>
 #include <Storages/MergeTree/MergeSelector.h>
 #include <Storages/MergeTree/MergeSelectorAdaptiveController.h>
@@ -23,7 +24,7 @@
 namespace DB
 {
 class MergeScheduler;
-class MergeTreeMetaBase;
+class ServerDataPart;
 
 #define MERGE_MAX_PARTS_TO_BREAK 10000
 
@@ -69,7 +70,7 @@ public:
     void loadFromConfig(const Poco::Util::AbstractConfiguration & config);
 };
 
-class DanceMergeSelector : public IMergeSelector
+class DanceMergeSelector : public IMergeSelector<ServerDataPart>
 {
 public:
     using Iterator = PartsRange::const_iterator;
@@ -108,10 +109,14 @@ public:
         }
     };
 
-    void debugSetGetPartitionID(std::function<String (const Part &)> get_partition_id_) { get_partition_id = get_partition_id_; }
-
 private:
-    void selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr);
+    void selectWithinPartition(
+        const PartsRange & parts,
+        const size_t max_total_size_to_merge,
+        /// partition_id -> {allowed_parts_in_all_ranges, allowed_rows_in_single_range}
+        std::unordered_map<String, std::pair<UInt64, UInt64> > & allowed_parts_rows,
+        MergeScheduler * merge_scheduler = nullptr);
+
     bool allow(double base, double sum_size, double max_size, double min_age, double range_size);
 
     const Settings settings;
@@ -125,11 +130,10 @@ private:
     // const MergeSelectorAdaptiveController & controller;
     std::shared_ptr<MergeSelectorAdaptiveController> controller;
 
-    std::function<String (const Part &)> get_partition_id{};
+    void selectRangesFromScoreTable(const PartsRange & parts, const std::vector<std::vector<double>> & score_table, size_t i, size_t j, size_t n,
+        size_t max_width, std::vector<BestRangeWithScore> & out, size_t & allowed_parts);
 
-    void selectRangesFromScoreTable(const PartsRange & parts, const std::vector<std::vector<double>> & score_table, size_t i, size_t j, size_t n, size_t max_width, std::vector<BestRangeWithScore> & out);
-
-    String getPartitionID(const Part & part);
+    String getPartitionID(const Part & part) { return part.getDataPartPtr()->info().partition_id; }
 
     inline bool enable_batch_select_for_partition(const String & partition_id)
     {

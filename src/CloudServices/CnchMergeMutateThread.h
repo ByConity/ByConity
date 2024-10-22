@@ -57,7 +57,7 @@ struct ManipulationTaskRecord
 
     /// Set task_record's commit_start_time once it go into txn commit stage.
     /// There are some other operations may be conflict with merge.
-    /// 1. DROP PARTITION - get the current max block id and generate a DropRange part. 
+    /// 1. DROP PARTITION - get the current max block id and generate a DropRange part.
     ///    Need to cancel merge tasks before getting data parts.
     /// 2. INGEST PARTITION - generate new content based on current source parts.
     ///    Need to cancel merge tasks and suspend the merge process before INGEST PARTITION finish.
@@ -230,10 +230,18 @@ private:
         return currently_merging_mutating_parts;
     }
 
+    std::unordered_map<String, std::pair<UInt64, UInt64> > copyCurrentlyMergingMutatingTasksRows()
+    {
+        std::lock_guard lock(currently_merging_mutating_parts_mutex);
+        return merging_mutating_tasks_rows;
+    }
+
     Strings removeLockedPartition(const Strings & partitions);
 
     std::mutex currently_merging_mutating_parts_mutex;
     NameSet currently_merging_mutating_parts;
+    /// partition_id -> {future_parts_number, future_part_rows}
+    std::unordered_map<String, std::pair<UInt64, UInt64> > merging_mutating_tasks_rows;
 
     std::condition_variable currently_synchronous_tasks_cv; /// for waitTasksFinish function
     std::mutex currently_synchronous_tasks_mutex;
