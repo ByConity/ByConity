@@ -1,5 +1,5 @@
 #include <Transaction/GlobalTxnCommitter.h>
-#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerLeader.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <Common/ErrorCodes.h>
 
@@ -33,7 +33,7 @@ TableTxnCommitterPtr GlobalTxnCommitter::getTableTxnCommitter(const UUID & uuid)
 
 bool GlobalTxnCommitter::commit(const TransactionCnchPtr & txn)
 {
-    auto server_manager = getContext()->getCnchServerManager();
+    auto server_manager = getContext()->getCnchServerLeader();
     if (!server_manager)
         throw Exception("Cannot commit transaction because ServerManager is unavailable.", ErrorCodes::LOGICAL_ERROR);
 

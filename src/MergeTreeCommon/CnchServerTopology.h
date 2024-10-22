@@ -26,11 +26,12 @@ namespace DB
 class CnchServerVwTopology
 {
 public:
-    CnchServerVwTopology(const String & vw_name_);
+    explicit CnchServerVwTopology(const String & vw_name_);
 
+    bool operator<(const CnchServerVwTopology & other) const;
     void addServer(const HostWithPorts & server);
     const HostWithPortsVec & getServerList() const;
-    
+
     String getServerVwName() const;
 
     String format() const;
@@ -46,7 +47,8 @@ class CnchServerTopology
 {
 
 public:
-    CnchServerTopology() {}
+    CnchServerTopology() = default;
+    explicit CnchServerTopology(const String & leader_info_) : leader_info(leader_info_) { }
 
     void addServer(const HostWithPorts & server, const String & server_vw_name = DEFAULT_SERVER_VW_NAME);
 
@@ -75,16 +77,33 @@ public:
 
     bool isSameTopologyWith(const CnchServerTopology & other_topology) const;
 
+    std::pair<std::map<String, CnchServerVwTopology>, std::map<String, CnchServerVwTopology>>
+    diffWith(const CnchServerTopology & other_topology) const;
+
+    const String & getLeaderInfo() const { return leader_info; }
+    void setLeaderInfo(const String & leader_info_) { leader_info = leader_info_; }
+    const String & getReason() const { return reason; }
+    void setReason(const String & reason_) { reason = reason_; }
+
 private:
     UInt64 lease_initialtime = 0;
     UInt64 lease_expiration = 0;
     UInt64 term = 0;
+    String leader_info;
+    String reason;
     HostWithPortsVec servers;
     std::map<String, CnchServerVwTopology> vw_topologies;
 };
 
 
 String dumpTopologies(const std::list<CnchServerTopology>& topologies);
-
+/**
+ * @brief Dump the difference two topologies. (a helper function for debugging)
+ *
+ * @param topology_diff Diffs of two topologies. Each part of the pair
+ * is a map of vw_name to vw_topology. You can get the diff
+ * by calling `diffWith` method of `CnchServerTopology`.
+ * @return A string representation of the difference.
+ */
+String dumpTopologies(const std::pair<std::map<String, CnchServerVwTopology>, std::map<String, CnchServerVwTopology>> & topology_diff);
 }
-

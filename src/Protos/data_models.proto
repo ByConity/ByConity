@@ -371,6 +371,9 @@ message DataModelTopology {
   repeated DataModelVwTopology vw_topologies = 3;
   optional uint64 initialtime = 4;
   optional uint64 term = 5;
+  optional string leader_info = 6;
+  /// Reason why there is a new Topology.
+  optional string reason = 7;
 }
 
 message DataModelTopologyVersions { repeated DataModelTopology topologies = 1; }

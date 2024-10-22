@@ -174,8 +174,6 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
         host_with_ports.rpc_port = rpc_port;
         host_with_ports.tcp_port = tcp_port > 0 ? tcp_port : 0;
         host_with_ports.http_port = http_port > 0 ? http_port : 0;
-        host_with_ports.exchange_port = rpc_port;
-        host_with_ports.exchange_status_port = rpc_port;
         res.push_back(host_with_ports);
     }
 

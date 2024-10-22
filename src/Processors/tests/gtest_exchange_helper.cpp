@@ -8,5 +8,5 @@ Coordination::BrpcExchangeReceiverRegistryService * ExchangeRemoteTest::service_
 
 DB::HostWithPortsVec MockServiceDiscoveryClient::lookup(const String & /*psm_name*/, DB::ComponentType /*type*/, const String & /*vw_name*/, UInt32)
 {
-    return {DB::HostWithPorts("127.0.0.1", brpc_server_port, 0, 0, 0, 0, "")};
+    return {DB::HostWithPorts("127.0.0.1", brpc_server_port, 0, 0, "")};
 }

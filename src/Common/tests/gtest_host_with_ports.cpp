@@ -70,25 +70,23 @@ TEST(HostWithPortsUtils, HostWithPortsGetAddress)
     constexpr uint16_t rpc_port = 9000;
     constexpr uint16_t tcp_port = 9001;
     constexpr uint16_t http_port = 9002;
-    constexpr uint16_t exchange_port = 9003;
-    constexpr uint16_t exchange_status_port = 9004;
 
-    HostWithPorts hp0 {"::1", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp0 {"::1", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hp0.getRPCAddress(), "[::1]:9000");
     EXPECT_EQ(hp0.getTCPAddress(), "[::1]:9001");
     EXPECT_EQ(hp0.getHTTPAddress(), "[::1]:9002");
 
-    HostWithPorts hp1 {"[::1]", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp1 {"[::1]", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hp1.getRPCAddress(), "[::1]:9000");
     EXPECT_EQ(hp1.getTCPAddress(), "[::1]:9001");
     EXPECT_EQ(hp1.getHTTPAddress(), "[::1]:9002");
 
-    HostWithPorts hp2 {"127.0.0.1", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp2 {"127.0.0.1", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hp2.getRPCAddress(), "127.0.0.1:9000");
     EXPECT_EQ(hp2.getTCPAddress(), "127.0.0.1:9001");
     EXPECT_EQ(hp2.getHTTPAddress(), "127.0.0.1:9002");
 
-    HostWithPorts hp3 {"www.google.com", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp3 {"www.google.com", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hp3.getRPCAddress(), "www.google.com:9000");
     EXPECT_EQ(hp3.getTCPAddress(), "www.google.com:9001");
     EXPECT_EQ(hp3.getHTTPAddress(), "www.google.com:9002");
@@ -112,22 +110,20 @@ TEST(HostWithPortsUtils, HostWithPortHash)
     constexpr uint16_t rpc_port = 9000;
     constexpr uint16_t tcp_port = 9001;
     constexpr uint16_t http_port = 9002;
-    constexpr uint16_t exchange_port = 9003;
-    constexpr uint16_t exchange_status_port = 9004;
     std::hash<DB::HostWithPorts> hasher;
 
-    HostWithPorts hp0 {"::1", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp0 {"::1", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hasher(hp0), hasher(hp0));
-    HostWithPorts hp1 {"[::1]", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp1{"[::1]", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hasher(hp1), hasher(hp1));
 
-    HostWithPorts hp2 {"[1:1:3:1::166]", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
-    HostWithPorts hp3 {"1:1:3:1::166", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp2 {"[1:1:3:1::166]", rpc_port, tcp_port, http_port, ""};
+    HostWithPorts hp3 {"1:1:3:1::166", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hasher(hp2), hasher(hp3));
     EXPECT_EQ(hasher(hp2), hasher(hp2));
     EXPECT_EQ(hasher(hp3), hasher(hp3));
 
-    HostWithPorts hp4 {"10.1.1.1", rpc_port, tcp_port, http_port, exchange_port, exchange_status_port, ""};
+    HostWithPorts hp4 {"10.1.1.1", rpc_port, tcp_port, http_port, ""};
     EXPECT_EQ(hasher(hp4), hasher(hp4));
 }
 

@@ -14,6 +14,7 @@
  */
 
 #include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchTopologyManager.h>
 
 #include <Common/Exception.h>
 #include <Catalog/Catalog.h>
@@ -23,7 +24,8 @@
 namespace DB
 {
 
-CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config) : WithContext(context_)
+CnchTopologyManager::CnchTopologyManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
+    : WithContext(context_)
 {
     auto task_func = [this] (String task_name, std::function<bool ()> func, UInt64 interval, std::atomic<UInt64> & last_time, BackgroundSchedulePool::TaskHolder & task)
     {
@@ -68,25 +70,18 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
             , lease_renew_task);
     });
 
-    async_query_status_check_task = getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [this, task_func](){
-        UInt64 async_query_status_check_interval = getContext()->getRootConfig().async_query_status_check_period * 1000;
-        task_func("AsyncQueryStatusChecker"
-            , [this]() -> bool { return checkAsyncQueryStatus(); }
-            , async_query_status_check_interval
-            , async_query_status_check_time
-            , async_query_status_check_task);
-    });
-
     updateServerVirtualWarehouses(config);
 
     /// For leader election
     const auto & conf = getContext()->getRootConfig();
-    auto refresh_interval_ms = conf.service_discovery_kv.server_manager_refresh_interval_ms.value;
-    auto expired_interval_ms = conf.service_discovery_kv.server_manager_expired_interval_ms.value;
+    auto refresh_interval_ms = conf.service_discovery_kv.topology_maintainer_refresh_interval_ms.value;
+    auto expired_interval_ms = conf.service_discovery_kv.topology_maintainer_expired_interval_ms.value;
     auto prefix = conf.service_discovery_kv.election_prefix.value;
-    auto election_path = prefix + conf.service_discovery_kv.server_manager_host_path.value;
+    auto election_path = prefix + conf.service_discovery_kv.topology_maintainer_host_path.value;
     auto host = getContext()->getHostWithPorts();
     auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
+
+    LOG_INFO(log, "Start election on {}", election_path);
 
     elector = std::make_shared<StorageElector>(
         std::make_shared<ServerManagerKvStorage>(metastore_ptr),
@@ -99,7 +94,7 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
     );
 }
 
-CnchServerManager::~CnchServerManager()
+CnchTopologyManager::~CnchTopologyManager()
 {
     try
     {
@@ -111,18 +106,18 @@ CnchServerManager::~CnchServerManager()
     }
 }
 
-bool CnchServerManager::isLeader() const
+bool CnchTopologyManager::isLeader() const
 {
     return elector->isLeader();
 }
 
-std::optional<HostWithPorts> CnchServerManager::getCurrentLeader() const
+std::optional<HostWithPorts> CnchTopologyManager::getCurrentLeader() const
 {
     return elector->getLeaderInfo();
 }
 
 /// Callback by StorageElector. Need to gurantee no exception thrown in this method.
-bool CnchServerManager::onLeader()
+bool CnchTopologyManager::onLeader()
 {
     auto current_address = getContext()->getHostWithPorts().getRPCAddress();
 
@@ -131,7 +126,6 @@ bool CnchServerManager::onLeader()
         initLeaderStatus();
         lease_renew_task->activateAndSchedule();
         topology_refresh_task->activateAndSchedule();
-        async_query_status_check_task->activateAndSchedule();
     }
     catch (...)
     {
@@ -144,7 +138,7 @@ bool CnchServerManager::onLeader()
     return true;
 }
 
-bool CnchServerManager::onFollower()
+bool CnchTopologyManager::onFollower()
 {
     try
     {
@@ -159,7 +153,7 @@ bool CnchServerManager::onFollower()
     return true;
 }
 
-bool CnchServerManager::refreshTopology()
+bool CnchTopologyManager::refreshTopology()
 {
     try
     {
@@ -189,7 +183,7 @@ bool CnchServerManager::refreshTopology()
 
             {
                 std::unique_lock lock(topology_mutex);
-                auto temp_topology = Topology();
+                auto temp_topology = Topology(getContext()->getHostWithPorts().getRPCAddress());
                 for (const auto & server : server_vector)
                 {
                     const auto & hostname = server.id;
@@ -207,8 +201,17 @@ bool CnchServerManager::refreshTopology()
                     else
                         temp_topology.addServer(server, server_vw_name);
                 }
-                if (cached_topologies.empty() || !cached_topologies.back().isSameTopologyWith(temp_topology))
+                if (cached_topologies.empty())
+                {
+                    temp_topology.setReason("cached_topologies is empty.");
                     next_version_topology = temp_topology;
+                }
+                else if (!cached_topologies.back().isSameTopologyWith(temp_topology))
+                {
+                    auto reason = fmt::format("has topology diff: {}", dumpTopologies(cached_topologies.back().diffWith(temp_topology)));
+                    temp_topology.setReason(reason);
+                    next_version_topology = temp_topology;
+                }
             }
         }
         else
@@ -226,7 +229,7 @@ bool CnchServerManager::refreshTopology()
     return true;
 }
 
-bool CnchServerManager::renewLease()
+bool CnchTopologyManager::renewLease()
 {
     try
     {
@@ -260,7 +263,7 @@ bool CnchServerManager::renewLease()
                     next_version_topology->setTerm(++term);
                     next_version_topology->setExpiration(current_time_ms + lease_life_ms);
                     cached_topologies.push_back(*next_version_topology);
-                    LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
+                    LOG_WARNING(log, "Add new topology {}", cached_topologies.back().format());
                 }
                 else
                 {
@@ -285,11 +288,12 @@ bool CnchServerManager::renewLease()
                         next_version_topology->setInitialTime(new_lease_initial_time);
                         next_version_topology->setExpiration(new_lease_initial_time + lease_life_ms);
                         cached_topologies.push_back(*next_version_topology);
-                        LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
+                        LOG_WARNING(log, "Add new topology {}", cached_topologies.back().format());
                     }
                     else
                     {
                         cached_topologies.back().setExpiration(current_time_ms + lease_life_ms);
+                        cached_topologies.back().setLeaderInfo(getContext()->getHostWithPorts().getRPCAddress());
                     }
                 }
             }
@@ -309,43 +313,7 @@ bool CnchServerManager::renewLease()
     return true;
 }
 
-bool CnchServerManager::checkAsyncQueryStatus()
-{
-    /// Mark inactive jobs to failed.
-    try
-    {
-        auto statuses = getContext()->getCnchCatalog()->getIntermidiateAsyncQueryStatuses();
-        std::vector<Protos::AsyncQueryStatus> to_expire;
-        for (const auto & status : statuses)
-        {
-            /// Find the expired statuses.
-            UInt64 start_time = static_cast<UInt64>(status.start_time());
-            UInt64 execution_time = static_cast<UInt64>(status.max_execution_time());
-            /// TODO(WangTao): We could have more accurate ways to expire status whose execution time is unlimited, like check its real status from host server.
-            if (execution_time == 0)
-                execution_time = getContext()->getRootConfig().async_query_expire_time;
-            if (time(nullptr) - start_time > execution_time)
-            {
-                to_expire.push_back(std::move(status));
-            }
-        }
-
-        if (!to_expire.empty())
-        {
-            LOG_INFO(log, "Mark {} async queries to failed.", to_expire.size());
-            getContext()->getCnchCatalog()->markBatchAsyncQueryStatusFailed(to_expire, "Status expired");
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        return false;
-    }
-
-    return true;
-}
-
-void CnchServerManager::initLeaderStatus()
+void CnchTopologyManager::initLeaderStatus()
 {
     std::unique_lock lock(topology_mutex);
     cached_topologies = getContext()->getCnchCatalog()->getTopologies();
@@ -355,14 +323,14 @@ void CnchServerManager::initLeaderStatus()
     LOG_DEBUG(log , "Successfully initialize leader status.");
 }
 
-void CnchServerManager::shutDown()
+void CnchTopologyManager::shutDown()
 {
     try
     {
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
-        async_query_status_check_task->deactivate();
         elector->stop();
+        LOG_INFO(log, "Successfully shutdown topology manager.");
     }
     catch (...)
     {
@@ -371,7 +339,7 @@ void CnchServerManager::shutDown()
 }
 
 /// call me when election is expired
-void CnchServerManager::partialShutdown()
+void CnchTopologyManager::partialShutdown()
 {
     try
     {
@@ -379,7 +347,6 @@ void CnchServerManager::partialShutdown()
 
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
-        async_query_status_check_task->deactivate();
     }
     catch (...)
     {
@@ -387,13 +354,22 @@ void CnchServerManager::partialShutdown()
     }
 }
 
-void CnchServerManager::updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name)
+void CnchTopologyManager::updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name)
 {
     Poco::Util::AbstractConfiguration::Keys config_keys;
     config.keys(config_name, config_keys);
 
     std::unordered_map<String, String> new_server_virtual_warehouses;
-
+    /*
+    * Config example:
+    *
+    * server_virtual_warehouses:
+    *   server_vw_xyz:
+    *       host1: cnch-default-1
+    *       host2: cnch-default-2
+    *   server_vw_abc:
+    *       host1: cnch-default-3
+    */
     for (const auto & server_virtual_warehouse : config_keys)
     {
         Poco::Util::AbstractConfiguration::Keys host_keys;
@@ -418,34 +394,7 @@ void CnchServerManager::updateServerVirtualWarehouses(const Poco::Util::Abstract
     server_virtual_warehouses = new_server_virtual_warehouses;
 }
 
-void CnchServerManager::dumpServerStatus() const
-{
-    std::stringstream ss;
-    ss << "[leader selection result] : \n"
-       << "is_leader : " <<  isLeader() << std::endl
-       << "[tasks info] : \n"
-       << "current_time : " << time(nullptr) << std::endl
-       << "refresh_topology_time : " << refresh_topology_time << std::endl
-       << "renew_lease_time : " << renew_lease_time << std::endl
-       << "async_query_status_check_time : " << async_query_status_check_time << std::endl
-       << "[current cached topology] : \n";
-
-    {
-        std::unique_lock lock(topology_mutex, std::defer_lock);
-        if (lock.try_lock_for(std::chrono::milliseconds(1000)))
-        {
-            ss << DB::dumpTopologies(cached_topologies);
-        }
-        else
-        {
-            ss << "Failed to accquire server manager lock";
-        }
-    }
-    LOG_INFO(log, "Dump server status :\n{}", ss.str());
-}
-
-
-bool CnchServerManager::vwStartsWith(const String & full_name, const String & prefix)
+bool CnchTopologyManager::vwStartsWith(const String & full_name, const String & prefix)
 {
     if (!full_name.starts_with(prefix))
         return false;

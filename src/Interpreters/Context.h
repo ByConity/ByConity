@@ -277,9 +277,10 @@ class DeleteBitmapCache;
 class PartCacheManager;
 class IServiceDiscovery;
 using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
-class CnchTopologyMaster;
 class CnchServerTopology;
-class CnchServerManager;
+class CnchServerLeader;
+class CnchTopologyManager;
+class CnchTopologyMaster;
 struct RootConfiguration;
 class TxnTimestamp;
 class TransactionCoordinatorRcCnch;
@@ -1618,9 +1619,9 @@ public:
     void initDaemonManagerClientPool(const String & service_name);
     DaemonManagerClientPtr getDaemonManagerClient() const;
 
-    void setCnchServerManager(const Poco::Util::AbstractConfiguration & config);
-    std::shared_ptr<CnchServerManager> getCnchServerManager() const;
-    void updateServerVirtualWarehouses(const ConfigurationPtr & config);
+    void setCnchServerLeader(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<CnchServerLeader> getCnchServerLeader() const;
+    void updateCnchTopologyManager(const Poco::Util::AbstractConfiguration & config);
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
 

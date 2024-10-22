@@ -42,8 +42,6 @@ NamesAndTypesList StorageSystemWorkers::getNamesAndTypes()
         {"tcp_port", std::make_shared<DataTypeUInt16>()},
         {"rpc_port", std::make_shared<DataTypeUInt16>()},
         {"http_port", std::make_shared<DataTypeUInt16>()},
-        {"exchange_port", std::make_shared<DataTypeUInt16>()},
-        {"exchange_status_port", std::make_shared<DataTypeUInt16>()},
         {"vw_name", std::make_shared<DataTypeString>()},
         {"worker_group_id", std::make_shared<DataTypeString>()},
         {"query_num", std::make_shared<DataTypeUInt32>()},
@@ -127,8 +125,6 @@ void StorageSystemWorkers::fillData(MutableColumns & res_columns, const ContextP
                 res_columns[i++]->insert(node.host_ports.tcp_port);
                 res_columns[i++]->insert(node.host_ports.rpc_port);
                 res_columns[i++]->insert(node.host_ports.http_port);
-                res_columns[i++]->insert(node.host_ports.exchange_port);
-                res_columns[i++]->insert(node.host_ports.exchange_status_port);
                 res_columns[i++]->insert(node.vw_name);
                 res_columns[i++]->insert(node.worker_group_id);
                 res_columns[i++]->insert(node.query_num);

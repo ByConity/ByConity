@@ -31,7 +31,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
-#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerLeader.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <CloudServices/CnchBGThreadCommon.h>
@@ -1319,9 +1319,6 @@ void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
 void InterpreterSystemQuery::dumpCnchServerStatus()
 {
     auto context = getContext();
-    auto server_manager = context->getCnchServerManager();
-    if (server_manager)
-        server_manager->dumpServerStatus();
     auto topology_master = context->getCnchTopologyMaster();
     if (topology_master)
         topology_master->dumpStatus();

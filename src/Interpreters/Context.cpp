@@ -99,8 +99,9 @@
 #include <Interpreters/VirtualWarehouseQueue.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Interpreters/WorkerStatusManager.h>
-#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerLeader.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
+#include <MergeTreeCommon/CnchTopologyManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/GlobalDataManager.h>
 #include <Optimizer/OptimizerMetrics.h>
@@ -427,7 +428,8 @@ struct ContextSharedPart
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
     mutable std::shared_ptr<Catalog::Catalog> cnch_catalog;
-    mutable CnchServerManagerPtr server_manager;
+    mutable CnchServerLeaderPtr server_manager;
+    mutable CnchTopologyManagerPtr topology_manager;
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
@@ -594,6 +596,9 @@ struct ContextSharedPart
 
         if (server_manager)
             server_manager->shutDown();
+
+        if (topology_manager)
+            topology_manager->shutDown();
 
         if (topology_master)
             topology_master->shutDown();
@@ -3722,7 +3727,7 @@ HostWithPorts Context::getHostWithPorts() const
             id = host;
 
         return HostWithPorts{
-            std::move(host), getRPCPort(), getTCPPort(), getHTTPPort(), getExchangePort(), getExchangeStatusPort(), std::move(id)};
+            std::move(host), getRPCPort(), getTCPPort(), getHTTPPort(), std::move(id)};
     };
 
     static HostWithPorts cache = get_host_with_port();
@@ -5354,16 +5359,16 @@ DaemonManagerClientPtr Context::getDaemonManagerClient() const
     return shared->daemon_manager_pool->get();
 }
 
-void Context::setCnchServerManager(const Poco::Util::AbstractConfiguration & config)
+void Context::setCnchServerLeader([[maybe_unused]] const Poco::Util::AbstractConfiguration & configs)
 {
     auto lock = getLock(); // checked
     if (shared->server_manager)
         throw Exception("Server manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this(), config);
+    shared->server_manager = std::make_shared<CnchServerLeader>(shared_from_this());
 }
 
-std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
+std::shared_ptr<CnchServerLeader> Context::getCnchServerLeader() const
 {
     auto lock = getLock(); // checked
     if (!shared->server_manager)
@@ -5372,15 +5377,26 @@ std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
     return shared->server_manager;
 }
 
-void Context::updateServerVirtualWarehouses(const ConfigurationPtr & config)
+void Context::updateCnchTopologyManager(const Poco::Util::AbstractConfiguration & config)
 {
-    std::shared_ptr<CnchServerManager> server_manager;
+    /// For server, config.cnch_enable_server_topology_manager will control
+    /// whether to enable topology manager. (disabled by default)
+    if (getApplicationType() == ApplicationType::SERVER)
     {
-        auto lock = getLock(); // checked
-        server_manager = shared->server_manager;
+        auto lock = getLock();
+        if (config.getBool("cnch_enable_server_topology_manager", false))
+        {
+            if (!shared->topology_manager)
+                shared->topology_manager = std::make_shared<CnchTopologyManager>(shared_from_this(), config);
+            /// Always update server virtual warehouses.
+            shared->topology_manager->updateServerVirtualWarehouses(config);
+        }
+        else
+        {
+            /// If topology manager is disabled, we need to clear it.
+            shared->topology_manager = nullptr;
+        }
     }
-    if (server_manager)
-        server_manager->updateServerVirtualWarehouses(*config);
 }
 
 void Context::setCnchTopologyMaster()

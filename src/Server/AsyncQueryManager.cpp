@@ -9,7 +9,7 @@
 #include <IO/WriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
-#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerLeader.h>
 #include <Protos/cnch_common.pb.h>
 #include <Common/Configurations.h>
 #include <Common/setThreadName.h>

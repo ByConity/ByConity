@@ -174,17 +174,9 @@ class HostWithPorts
 {
 public:
     HostWithPorts() = default;
-    HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, [[maybe_unused]] uint16_t exchange_port_ = 0, [[maybe_unused]] uint16_t exchange_status_port_ = 0, std::string id_ = {})
-        : host{removeBracketsIfIpv6(host_)},
-            id{std::move(id_)},
-          rpc_port{rpc_port_},
-          tcp_port{tcp_port_},
-          http_port{http_port_},
-          exchange_port{rpc_port_},
-          exchange_status_port{rpc_port_}
+    HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, std::string id_ = {})
+        : host{removeBracketsIfIpv6(host_)}, id{std::move(id_)}, rpc_port{rpc_port_}, tcp_port{tcp_port_}, http_port{http_port_}
     {
-        (void)exchange_port_;
-        (void)exchange_status_port_;
     }
 
     std::string host;
@@ -192,11 +184,8 @@ public:
     uint16_t rpc_port{0};
     uint16_t tcp_port{0};
     uint16_t http_port{0};
-    uint16_t exchange_port{0};
-    uint16_t exchange_status_port{0};
     PairInt64 topology_version = PairInt64{0, 0};
     std::optional<String> real_id;
-public:
 
     bool empty() const { return host.empty() || (rpc_port == 0 && tcp_port == 0); }
 
@@ -206,7 +195,11 @@ public:
     std::string getExchangeAddress() const { return getRPCAddress(); }
     std::string getExchangeStatusAddress() const { return getRPCAddress(); }
 
+    /// This is only use for judging equality for workers
     bool operator<(const HostWithPorts & rhs) const { return id < rhs.getId(); }
+    /// This is only use for judging equality for servers.
+    /// Same with `HostWithPorts::isExactlySame`
+    bool lessThan(const HostWithPorts & rhs) const;
     const std::string & getHost() const { return host; }
     uint16_t getTCPPort() const { return tcp_port; }
     uint16_t getHTTPPort() const { return http_port; }
@@ -233,8 +226,7 @@ public:
         bool operator()(const HostWithPorts & lhs, const HostWithPorts & rhs) const
         {
             return lhs.id == rhs.id && isSameHost(lhs.host, rhs.host) && lhs.rpc_port == rhs.rpc_port && lhs.tcp_port == rhs.tcp_port
-                && lhs.http_port == rhs.http_port && lhs.exchange_port == rhs.exchange_port
-                && lhs.exchange_status_port == rhs.exchange_status_port;
+                && lhs.http_port == rhs.http_port;
         }
     };
 

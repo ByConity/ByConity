@@ -407,7 +407,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     if (worker_group_status && worker_group_status->needCheckHalfOpenWorker())
         handler->setNeedRecord();
-    
+
     std::vector<brpc::CallId> call_ids;
     call_ids.reserve(all_resources.size());
 
@@ -765,7 +765,7 @@ void CnchServerResource::initSourceTaskPayload(
     {
         bool reclustered = storage->isTableClustered(context);
         auto bucket_number = getBucketNumberOrInvalid(p->part_model_wrapper->bucketNumber(), reclustered);
-        auto addr = AddressInfo(host_with_ports.getHost(), host_with_ports.getTCPPort(), "", "", host_with_ports.exchange_port);
+        auto addr = AddressInfo(host_with_ports.getHost(), host_with_ports.getTCPPort(), "", "", host_with_ports.getRPCPort());
         source_task_payload[uuid][addr].part_num += 1;
         source_task_payload[uuid][addr].rows += p->rowExistsCount();
         source_task_payload[uuid][addr].visible_parts.push_back(p);

@@ -686,6 +686,7 @@
     ],
 
     "cloudfs": [
-        "50001_test_query_cache_with_non_transactional_optimizer"
+        "50001_test_query_cache_with_non_transactional_optimizer",
+        "50001_test_query_cache_non_transactional"
     ]
 }

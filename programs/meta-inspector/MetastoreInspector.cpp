@@ -163,11 +163,13 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
             std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
         else if (key.find("DLB_") != std::string::npos)
             std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
-        else 
+        else
             std::cout << metadata << std::endl;
     }
     else if (key.starts_with("MFSTS_"))
         std::cout << formatDataModel<DB::Protos::ManifestListModel>(metadata) << std::endl;
+    else if (key.starts_with("SERVERS_TOPOLOGY"))
+        std::cout << formatDataModel<DB::Protos::DataModelTopologyVersions>(metadata) << std::endl;
     else
         std::cout << metadata << std::endl;
 };
@@ -434,4 +436,3 @@ int mainEntryClickhouseMetaInspector(int argc, char ** argv)
         return 1;
     }
 }
-
