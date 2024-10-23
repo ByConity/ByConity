@@ -155,6 +155,8 @@ struct CacheHolder
     bool all_part_in_cache = false;
     // if ture, the original pipeline will be generated
     bool all_part_in_storage = false;
+    // ensure cache is fully written
+    bool early_finish = false;
 };
 using CacheHolderPtr = std::shared_ptr<DB::IntermediateResult::CacheHolder>;
 

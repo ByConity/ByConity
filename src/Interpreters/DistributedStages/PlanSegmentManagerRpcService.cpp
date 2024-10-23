@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -537,5 +538,17 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "executeQuery failed: {}", error_msg);
     }
+}
+
+void PlanSegmentManagerRpcService::sendPlanSegmentProfile(
+    ::google::protobuf::RpcController * /*controller*/,
+    const ::DB::Protos::PlanSegmentProfileRequest * request,
+    ::DB::Protos::PlanSegmentProfileResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    PlanSegmentProfilePtr profile = PlanSegmentProfile::fromProto(*request);
+    const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
+    scheduler->updateSegmentProfile(profile);
 }
 }

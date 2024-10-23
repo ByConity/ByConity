@@ -91,7 +91,13 @@ void TSOImpl::GetTimestamp(
 
         UInt64 cur_ts = ts.load(std::memory_order_acquire);
         if (ts_to_physical(cur_ts) == 0)
-            throw Exception("Timestamp has not been initialized in TSO yet. Timestamp will initialized in a few seconds. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+        {
+            //throw Exception("Timestamp has not been initialized in TSO yet. Timestamp will initialized in a few seconds. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+            //But we can not throw Exception because it may generate too many error logs to exhaust the cpu.
+            //Return I am not leader to avoid retry.
+            response->set_is_leader(false);
+            return;
+        }
         cur_ts = fetchAddLogical(1);
 
         response->set_timestamp(cur_ts);

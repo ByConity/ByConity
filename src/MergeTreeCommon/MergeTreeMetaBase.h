@@ -395,7 +395,7 @@ public:
 
     Block getSampleBlockWithVirtualColumns() const;
 
-    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+    Block getPartitionBlockWithVirtualColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
     /// Construct a block consisting only of possible virtual columns for part pruning.
     /// If one_part is true, fill in at most one part.
@@ -458,7 +458,8 @@ public:
         const SelectQueryInfo & query_info,
         std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
         const Names & column_names_to_return,
-        ContextPtr local_context) const;
+        ContextPtr local_context,
+        const bool & ignore_ttl = false) const;
 
     /**
      * @param parts input parts, must be sorted in PartComparator order

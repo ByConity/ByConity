@@ -47,6 +47,7 @@
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/AdditionalServices.h>
+#include <Common/SettingsChanges.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -80,6 +81,10 @@ class IPAddress;
 namespace DB::Statistics
 {
 struct StatisticsMemoryStore;
+}
+namespace DB::Statistics::AutoStats
+{
+class AutoStatisticsManager;
 }
 namespace zkutil
 {
@@ -127,6 +132,7 @@ class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
@@ -206,6 +212,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class CompressedDataIndexCache;
 class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
@@ -449,6 +456,7 @@ protected:
     CopyableAtomic<IResourceGroup *> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings; /// Setting for query execution.
+    SettingsChanges settings_changes; // query level or session level settings changes
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
@@ -958,6 +966,9 @@ public:
 
     Settings getSettings() const;
     void setSettings(const Settings & settings_);
+    void setSessionSettingsChanges(const SettingsChanges & settings_changes_) const { getSessionContext()->settings_changes = settings_changes_; }
+    void applySessionSettingsChanges() { applySettingsChanges(getSessionContext()->settings_changes); }
+    void clearSessionSettingsChanges() const { getSessionContext()->settings_changes.clear(); }
 
     /// Set settings by name.
     void setSetting(const StringRef & name, const String & value);

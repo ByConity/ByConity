@@ -5,6 +5,10 @@ logger:
   testlog: /var/log/byconity/test.log
   size: 1000M
   count: 10
+additional_services:
+  GIS: 1
+  VectorSearch: 1
+  FullTextSearch: 1
 http_port: 21557
 rpc_port: 30605
 tcp_port: 52145
@@ -14,6 +18,13 @@ exchange_status_port: 60611
 interserver_http_port: 30491
 mysql_port: 9004
 listen_host: "0.0.0.0"
+prometheus:
+  endpoint: "/metrics"
+  port: 0
+  metrics: true
+  events: true
+  asynchronous_metrics: true
+  part_metrics: false
 cnch_type: server
 max_connections: 4096
 keep_alive_timeout: 3

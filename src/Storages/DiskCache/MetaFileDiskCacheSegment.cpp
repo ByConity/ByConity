@@ -28,7 +28,7 @@
 namespace DB
 {
 ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_)
-    : IDiskCacheSegment(0, 0)
+    : IDiskCacheSegment(0, 0, SegmentType::CHECKSUMS_DATA)
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
@@ -54,12 +54,12 @@ void ChecksumsDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
     if (auto read_buffer = write_buffer.tryGetReadBuffer())
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size, preload_level > 0);
-        LOG_TRACE(disk_cache.getLogger(), "cached checksums file: {}, preload_level: {}", getSegmentName(), preload_level);
+        LOG_TRACE(disk_cache.getLogger(), "Cached checksums file: {}, preload_level: {}", getSegmentName(), preload_level);
     }
 }
 
 PrimaryIndexDiskCacheSegment::PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_)
-    : IDiskCacheSegment(0, 0)
+    : IDiskCacheSegment(0, 0, SegmentType::PRIMARY_INDEX)
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
@@ -104,12 +104,12 @@ void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
     if (auto read_buffer = write_buffer.tryGetReadBuffer())
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size, preload_level > 0);
-        LOG_TRACE(disk_cache.getLogger(), "cached primary index file: {}, preload_level: {}", getSegmentName(), preload_level);
+        LOG_TRACE(disk_cache.getLogger(), "Cached primary index file: {}, preload_level: {}", getSegmentName(), preload_level);
     }
 }
 
 MetaInfoDiskCacheSegment::MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_)
-    : IDiskCacheSegment(0, 0)
+    : IDiskCacheSegment(0, 0, SegmentType::META_INFO)
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
@@ -135,7 +135,7 @@ void MetaInfoDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
     if (auto read_buffer = write_buffer.tryGetReadBuffer())
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size, preload_level > 0);
-        LOG_TRACE(disk_cache.getLogger(), "cached meta_info file: {}, preload_level: {}", getSegmentName(), preload_level);
+        LOG_TRACE(disk_cache.getLogger(), "Cached meta_info file: {}, preload_level: {}", getSegmentName(), preload_level);
     }
 }
 

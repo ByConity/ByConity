@@ -251,7 +251,8 @@ PrunedPartitions CnchServerClient::fetchPartitions(
     const ConstStoragePtr & table,
     const SelectQueryInfo & query_info,
     const Names & column_names,
-    const TxnTimestamp & txn_id)
+    const TxnTimestamp & txn_id,
+    const bool & ignore_ttl)
 {
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
@@ -273,6 +274,7 @@ PrunedPartitions CnchServerClient::fetchPartitions(
         request.add_column_name_filter(name);
 
     request.set_txnid(txn_id.toUInt64());
+    request.set_ignore_ttl(ignore_ttl);
 
     stub->fetchPartitions(&cntl, &request, & response, nullptr);
 
@@ -767,7 +769,7 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
     RPCHelpers::checkResponse(response);
 }
 
-UInt64 CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan)
+void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
 {
     brpc::Controller cntl;
     Protos::CleanUndoBuffersReq request;
@@ -780,9 +782,6 @@ UInt64 CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record, 
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
-
-    clean_fs_lock_by_scan &= response.clean_fs_lock_by_scan();
-    return response.clean_size();
 }
 
 void CnchServerClient::acquireLock(const LockInfoPtr & lock)

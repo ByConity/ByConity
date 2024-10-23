@@ -27,7 +27,8 @@ public:
         bool check_columns_,
         const MergeTreeStreamSettings & stream_settings_,
         const Names & virt_column_names_ = {},
-        size_t part_index_in_query_ = 0);
+        size_t part_index_in_query_ = 0,
+        const MarkRangesFilterCallback & range_filter_callback_ = {});
 
     ~MergeTreeSelectProcessorLM() override = default;
 
@@ -48,6 +49,8 @@ protected:
     /// Data part will not be removed if the pointer owns it
     MergeTreeData::DataPartPtr data_part;
     ImmutableDeleteBitmapPtr delete_bitmap;
+
+    MarkRangesFilterCallback mark_ranges_filter_callback;
 
     /// Mark ranges we should read (in ascending order)
     MarkRanges all_mark_ranges;

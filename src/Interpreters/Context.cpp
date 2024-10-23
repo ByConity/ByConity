@@ -39,6 +39,7 @@
 #include <Access/SettingsProfile.h>
 #include <Access/SettingsProfilesInfo.h>
 #include <Access/User.h>
+#include <Access/AeolusAccessUtil.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
 #include <CloudServices/CnchMergeMutateThread.h>
@@ -195,7 +196,6 @@
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
-#include <Storages/StorageS3Settings.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
@@ -426,6 +426,7 @@ struct ContextSharedPart
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
+    mutable OnceFlag global_txn_committer_initialized;
     mutable GlobalTxnCommitterPtr global_txn_committer;
     mutable GlobalDataManagerPtr global_data_manager;
 
@@ -1826,21 +1827,12 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = getSettingsRef().access_table_names;
-    if (table_names.empty())
-    {
-        table_names = getSettingsRef().accessible_table_names;
-        if (table_names.empty())
-            return;
-    }
-    std::vector<String> tables;
-    boost::split(tables, table_names, boost::is_any_of(" ,"));
-    /// avoid check temporary table.
-    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+    /// avoid check temporary and system table.
+    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE || database_name == DatabaseCatalog::SYSTEM_DATABASE)
         return;
 
     String full_table_name = database_name.empty() ? table_name : database_name+"."+table_name;
-    if (std::find(tables.begin(), tables.end(), full_table_name) == tables.end())
+    if (!aeolusCheck(*this, full_table_name))
     {
         throw Exception("Access denied to " + full_table_name , ErrorCodes::DATABASE_ACCESS_DENIED);
     }
@@ -2216,7 +2208,9 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     }
 
     // skip if a previous setting change is in process
-    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending;
+    // skip if current and target are same
+    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending
+        && settings.dialect_type.value != SettingFieldDialectTypeTraits::fromString(*dialect_type_opt);
 
     if (apply_ansi_related_settings)
     {
@@ -2890,6 +2884,8 @@ void Context::dropMarkCache() const
 
 std::shared_ptr<CloudTableDefinitionCache> Context::tryGetCloudTableDefinitionCache() const
 {
+    if (hasSessionTimeZone())
+        return nullptr;
     callOnce(shared->cloud_table_definition_cache_initialized, [&] {
         const Poco::Util::AbstractConfiguration & config = getConfigRef();
         auto cache_size = config.getUInt(".cloud_table_definition_cache_size", 50000);
@@ -5229,9 +5225,9 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
 
 GlobalTxnCommitterPtr Context::getGlobalTxnCommitter() const
 {
-    auto lock = getLock(); // checked
-    if (!shared->global_txn_committer)
-        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(shared_from_this());
+    callOnce(shared->global_txn_committer_initialized, [&] {
+        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(getGlobalContext());
+    });
     return shared->global_txn_committer;
 }
 

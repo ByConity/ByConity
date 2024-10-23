@@ -86,6 +86,7 @@ TransformResult SemiJoinPushDown::transformImpl(PlanNodePtr node, const Captures
         step.getKeepLeftReadInOrder(),
         step.getLeftKeys(),
         step.getRightKeys(),
+        step.getKeyIdsNullSafe(),
         step.getFilter(),
         step.isHasUsing(),
         step.getRequireRightKeys(),
@@ -113,6 +114,7 @@ TransformResult SemiJoinPushDown::transformImpl(PlanNodePtr node, const Captures
         step.getKeepLeftReadInOrder(),
         step.getLeftKeys(),
         step.getRightKeys(),
+        step.getKeyIdsNullSafe(),
         step.getFilter(),
         step.isHasUsing(),
         step.getRequireRightKeys(),
@@ -181,6 +183,7 @@ TransformResult SemiJoinPushDownProjection::transformImpl(PlanNodePtr node, cons
         join_step->getKeepLeftReadInOrder(),
         mapper.map(join_step->getLeftKeys()),
         join_step->getRightKeys(),
+        join_step->getKeyIdsNullSafe(),
         mapper.map(join_step->getFilter()),
         join_step->isHasUsing(),
         join_step->getRequireRightKeys(),
@@ -193,7 +196,7 @@ TransformResult SemiJoinPushDownProjection::transformImpl(PlanNodePtr node, cons
         join_step->getRuntimeFilterBuilders(),
         join_step->getHints());
 
-    
+
     // create new projection (add remaining symbols form right side if join is any join)
     Assignments assignments;
     NameToType name_to_type;
@@ -271,6 +274,7 @@ TransformResult SemiJoinPushDownAggregate::transformImpl(PlanNodePtr node, const
         join_step->getKeepLeftReadInOrder(),
         join_step->getLeftKeys(),
         join_step->getRightKeys(),
+        join_step->getKeyIdsNullSafe(),
         join_step->getFilter(),
         join_step->isHasUsing(),
         join_step->getRequireRightKeys(),

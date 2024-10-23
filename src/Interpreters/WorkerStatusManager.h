@@ -218,9 +218,9 @@ struct WorkerStatus : public DB::WorkerNodeResourceData
     double scheduler_score{0};
 };
 
-using WorkerNodeSet = std::unordered_set<WorkerId, WorkerIdHash, WorkerIdEqual>;
+using WorkerNodeSet = std::unordered_set<WorkerId, WorkerIdHash>;
 using WorkerStatusPtr = std::shared_ptr<WorkerStatus>;
-using WorkerNodeStatusContainer = std::unordered_map<WorkerId, WorkerStatusPtr, WorkerIdHash, WorkerIdEqual>;
+using WorkerNodeStatusContainer = std::unordered_map<WorkerId, WorkerStatusPtr, WorkerIdHash>;
 
 struct WorkerStatusExtra
 {
@@ -283,7 +283,7 @@ private:
 };
 
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
-using UnhealthWorkerStatusMap = std::unordered_map<WorkerId, UnhealthWorkerStatus, WorkerIdHash, WorkerIdEqual>;
+using UnhealthWorkerStatusMap = std::unordered_map<WorkerId, UnhealthWorkerStatus, WorkerIdHash>;
 
 class WorkerStatusManager : public WithContext
 {
@@ -365,8 +365,8 @@ public:
     void shutdown();
 
 private:
-    ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash, WorkerIdEqual> global_extra_workers_status;
-    ThreadSafeMap<WorkerId, UnhealthWorkerStatus, WorkerIdHash, WorkerIdEqual> unhealth_workers_status;
+    ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash> global_extra_workers_status;
+    ThreadSafeMap<WorkerId, UnhealthWorkerStatus, WorkerIdHash> unhealth_workers_status;
     ThreadSafeMap<VWType, WorkerListPtr> vw_worker_list_map;
 
     AdaptiveSchedulerConfig adaptive_scheduler_config;

@@ -493,9 +493,9 @@ void TCPHandler::runImpl()
                 if (!state.plan_segment)
                 {
                     state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
-                    
+
                     if (OutfileTarget::checkOutfileWithTcpOnServer(query_context))
-                    {   
+                    {
                         sendEndOfStream();
                         return; // all data already outfile in executequery()
                     }
@@ -1443,8 +1443,6 @@ void TCPHandler::receiveQuery()
     Settings passed_settings;
     passed_settings.read(*in, settings_format);
 
-    adjustAccessTablesIfNeeded(query_context);
-
     /// Interserver secret.
     std::string received_hash;
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
@@ -1513,6 +1511,7 @@ void TCPHandler::receiveQuery()
         query_context->clampToSettingsConstraints(settings_changes);
     }
     query_context->applySettingsChanges(settings_changes, false);
+    query_context->setSessionSettingsChanges(settings_changes);
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
@@ -2113,6 +2112,13 @@ void TCPHandler::updateProgress(const Progress & value)
 void TCPHandler::sendProgress()
 {
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
+    LOG_DEBUG(
+        &Poco::Logger::get("debug"),
+        fmt::format(
+            "send progress rows:{} bytes:{} total_rows_to_read:{}",
+            increment.read_rows,
+            increment.read_bytes,
+            increment.total_rows_to_read));
     writeVarUInt(Protocol::Server::Progress, *out);
     increment.write(*out, client_tcp_protocol_version);
     out->next();

@@ -89,7 +89,8 @@ public:
         const ConstStoragePtr & table,
         const SelectQueryInfo & query_info,
         const Names & column_names,
-        const TxnTimestamp & txn_id);
+        const TxnTimestamp & txn_id,
+        const bool & ignore_ttl);
 
     void redirectCommitParts(
         const StoragePtr & table,
@@ -171,10 +172,8 @@ public:
      * @brief Clean undo buffers with the given txn (only) on target server.
      *
      * @param txn_record The transaction to which the Undo Buffer belongs.
-     * @param clean_fs_lock_by_scan If fs lock cleaning is needed.
-     * @return How many resources get cleaned.
      */
-    UInt64 cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan);
+    void cleanUndoBuffers(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
     bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
 

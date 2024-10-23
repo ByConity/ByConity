@@ -450,8 +450,9 @@ brpc::CallId CnchWorkerClient::sendResources(
     {
         auto current_wg = context->getCurrentWorkerGroup();
         auto * worker_info = request.mutable_worker_info();
-        // TODO: resource manager should gurantee the worker number and worker index are consistent
-        RPCHelpers::fillWorkerInfo(*worker_info, worker_id.id, current_wg->workerNum());
+        worker_info->set_worker_id(worker_id.id);
+        worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
+        worker_info->set_num_workers(current_wg->workerNum());
 
         // worker info validation
         if (worker_info->num_workers() <= worker_info->index())
@@ -461,7 +462,6 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    LOG_TRACE(log, "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms

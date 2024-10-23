@@ -45,7 +45,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_,
     size_t part_index_in_query_,
-    bool quiet)
+    const MarkRangesFilterCallback & range_filter_callback_)
     :
     MergeTreeBaseSelectProcessor{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
@@ -53,6 +53,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
     delete_bitmap{std::move(delete_bitmap_)},
+    mark_ranges_filter_callback(range_filter_callback_),
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
     check_columns(check_columns_)
@@ -63,10 +64,9 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
 
     size_t total_rows = data_part->index_granularity.getRowsCountInRanges(all_mark_ranges);
 
-    if (!quiet)
-        LOG_DEBUG(log, "Reading {} ranges from part {}, approx. {} rows starting from {}",
-            all_mark_ranges.size(), data_part->name, total_rows,
-            data_part->index_granularity.getMarkStartingRow(all_mark_ranges.front().begin));
+    LOG_DEBUG(log, "Reading {} ranges from part {}, approx. {} rows starting from {}",
+        all_mark_ranges.size(), data_part->name, total_rows,
+        data_part->index_granularity.getMarkStartingRow(all_mark_ranges.front().begin));
 
     addTotalRowsApprox(total_rows);
     ordered_names = header_without_virtual_columns.getNames();
@@ -76,6 +76,10 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
 bool MergeTreeSelectProcessor::getNewTask()
 try
 {
+    if (is_first_task && mark_ranges_filter_callback)
+    {
+        all_mark_ranges = mark_ranges_filter_callback(data_part, all_mark_ranges);
+    }
     /// Produce no more than one task
     if (!is_first_task || total_marks_count == 0)
     {

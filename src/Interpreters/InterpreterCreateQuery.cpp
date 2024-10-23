@@ -99,6 +99,8 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
+#include <IO/NullWriteBuffer.h>
+#include <IO/ReadBufferFromString.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
@@ -1671,7 +1673,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 
 BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
 {
-    /// If the query is a CREATE SELECT, insert the data into the table via INSERT INTO ... SELECT FROM
+    /// If the query is a CREATE SELECT, insert the data into the table via INSERT INTO ... SELECT
     if (create.select && !create.attach && !create.is_ordinary_view && !create.is_live_view
         && (!create.is_materialized_view || create.is_populate))
     {
@@ -1690,27 +1692,46 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
         }
         else
         {
-            /// reuse the query context for INSERT instead of creating a new context,
-            /// because we want the outermost executeQuery to finish the INSERT txn rather than the DDL txn
-            auto insert_context = getContext()->getQueryContext();
-            auto & coordinator = insert_context->getCnchTransactionCoordinator();
-            if (insert_context->getCurrentTransaction())
-            {
-                /// finish the last txn (for DDL) and create a new one for INSERT
-                insert_context->setCurrentTransaction(coordinator.createTransaction());
-            }
+            String insert_query_id = fmt::format("{}_insert", getContext()->getCurrentQueryId());
+            auto insert_context = Context::createCopy(getContext());
+            insert_context->makeSessionContext();
+            insert_context->makeQueryContext();
+            insert_context->setCurrentTransaction(nullptr, false);
+            insert_context->setCurrentVW(nullptr);
+            insert_context->setCurrentWorkerGroup(nullptr);
+            insert_context->setCurrentQueryId(insert_query_id);
+            if (!insert_context->getSettingsRef().enable_optimizer_for_create_select)
+                insert_context->setSetting("enable_optimizer", false);
 
-            bool is_internal = true;
-            // TODO @wangtao.2077: review this when internal queries are fully supported by optimizer
-            if (insert_context->getSettingsRef().enable_optimizer && insert_context->getSettingsRef().enable_optimizer_for_create_select)
-            {
-                /// optimizer doesn't support internal query
-                is_internal = false;
-                /// in order to add the insert query to processlist, need to allocate a new query id
-                insert_context->setCurrentQueryId("");
-            }
+            /// Execute INSERT in a separate thread so that it has a clean ThreadStatus attached to its local context
+            /// Pros: a) supports running INSERT in both optimizer and non-optimizer mode (not all inserts are supported by optimizer)
+            ///       b) ThreadStatus for the outer query won't get polutated
+            /// Cons: a) user facing query (CTAS) cannot get progress update
+            ///       b) cancel CTAS won't affect INSERT
+            ///       c) we'll have two process list items (CTAS & INSERT) for the query which might be confusing
+            std::exception_ptr exception;
+            auto thread = ThreadFromGlobalPool([insert_context = std::move(insert_context), &exception, &insert]() {
+                try
+                {
+                    CurrentThread::QueryScope query_scope {insert_context};
+                    ReadBufferFromOwnString in(insert->formatForErrorMessage());
+                    NullWriteBuffer out;
+                    executeQuery(in, out, /*allow_into_outfile=*/false, insert_context, /*set_result_details=*/{});
+                }
+                catch (...)
+                {
+                    exception = std::current_exception();
+                }
 
-            return executeQuery(insert->formatForErrorMessage(), insert_context, is_internal);
+            });
+            thread.join();
+
+            if (exception)
+                std::rethrow_exception(exception);
+
+            /// NOTE: cannot return BlockIO from the inner query because fields like process_list_entry
+            /// and finish_callback will be overwrite by the outer executeQuery, which leads to subtle bugs
+            return {};
         }
     }
 
@@ -1774,7 +1795,21 @@ BlockIO InterpreterCreateQuery::execute()
         return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
     }
 
-    getContext()->checkAccess(getRequiredAccess());
+    auto context = getContext();
+    context->checkAccess(getRequiredAccess());
+    if (create.is_dictionary && context->is_tenant_user())
+    {
+        if (create.dictionary)
+        {
+            auto& refresh_query = create.dictionary->clickhouse_query;
+            auto& invalidate_query = create.dictionary->clickhouse_invalidate_query;
+            if (!refresh_query.empty())
+                executeQuery("explain " + refresh_query, context, true);
+            if (!invalidate_query.empty())
+                executeQuery(invalidate_query, context, true);
+        }
+
+    }
 
     ASTQueryWithOutput::resetOutputASTIfExist(create);
 
@@ -1806,6 +1841,17 @@ AccessRightsElements InterpreterCreateQuery::getRequiredAccess() const
     else if (create.is_dictionary)
     {
         required_access.emplace_back(AccessType::CREATE_DICTIONARY, create.database, create.table);
+        if (create.dictionary)
+        {
+            auto & db = create.dictionary->clickhouse_db;
+            auto & tb = create.dictionary->clickhouse_tb;
+            if (!db.empty() && !tb.empty())
+            {
+                auto context = getContext();
+                if (context->is_tenant_user())
+                    required_access.emplace_back(AccessType::SELECT, db, tb);
+            }
+        }
     }
     else if (create.isView())
     {

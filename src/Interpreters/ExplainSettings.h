@@ -1,4 +1,5 @@
 #include <Parsers/ASTSetQuery.h>
+#include "common/types.h"
 
 
 namespace DB
@@ -31,6 +32,8 @@ struct QueryMetadataSettings
         {"format_json", format_json},
         {"ignore_format", ignore_format}
     };
+
+    std::unordered_map<std::string, std::reference_wrapper<UInt64>> uint_settings = {};
 };
 
 struct QueryPlanSettings
@@ -45,7 +48,12 @@ struct QueryPlanSettings
     bool pb_json = false;
     bool verbose = true;
     bool add_whitespace = true; // used to pretty print json
-    bool aggregate_profiles = true; 
+    bool aggregate_profiles = true;
+    bool pretty_num = true;
+    bool selected_parts = false;
+    bool segment_profile = false;
+
+    UInt64 segment_id = UINT64_MAX;
 
     constexpr static char name[] = "PLAN";
 
@@ -62,7 +70,11 @@ struct QueryPlanSettings
         {"add_whitespace", add_whitespace},
         {"aggregate_profiles", aggregate_profiles},
         {"verbose", verbose},
-    };
+        {"pretty_num", pretty_num},
+        {"selected_parts", selected_parts},
+        {"segment_profile", segment_profile}};
+
+    std::unordered_map<std::string, std::reference_wrapper<UInt64>> uint_settings = {{"segment_id", segment_id}};
 };
 
 struct QueryPipelineSettings
@@ -81,25 +93,39 @@ struct QueryPipelineSettings
             {"compact", compact},
             {"stats", stats}
     };
+
+    std::unordered_map<std::string, std::reference_wrapper<UInt64>> uint_settings = {};
 };
 
 template <typename Settings>
 struct ExplainSettings : public Settings
 {
     using Settings::boolean_settings;
+    using Settings::uint_settings;
 
     bool has(const std::string & name_) const
     {
-        return boolean_settings.count(name_) > 0;
+        return boolean_settings.count(name_) > 0 || uint_settings.count(name_) > 0;
     }
 
-    void setBooleanSetting(const std::string & name_, bool value)
+    bool setBooleanSetting(const std::string & name_, bool value)
     {
         auto it = boolean_settings.find(name_);
         if (it == boolean_settings.end())
-            throw Exception("Unknown setting for ExplainSettings: " + name_, ErrorCodes::LOGICAL_ERROR);
+            return false;
 
         it->second.get() = value;
+        return true;
+    }
+
+    bool setUIntSetting(const std::string & name_, UInt64 value)
+    {
+        auto it = uint_settings.find(name_);
+        if (it == uint_settings.end())
+            return false;
+
+        it->second.get() = value;
+        return true;
     }
 
     std::string getSettingsList() const
@@ -113,6 +139,13 @@ struct ExplainSettings : public Settings
             res += setting.first;
         }
 
+        for (const auto & setting : uint_settings)
+        {
+            if (!res.empty())
+                res += ", ";
+
+            res += setting.first;
+        }
         return res;
     }
 };
@@ -133,15 +166,24 @@ ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
                             "Supported settings: " + settings.getSettingsList(), ErrorCodes::UNKNOWN_SETTING);
 
         if (change.value.getType() != Field::Types::UInt64)
-            throw Exception("Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name +
-                            "\" only boolean settings are supported", ErrorCodes::INVALID_SETTING_VALUE);
+            throw Exception(
+                "Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name
+                    + "\" only boolean and UInt64 settings are supported",
+                ErrorCodes::INVALID_SETTING_VALUE);
 
         auto value = change.value.get<UInt64>();
-        if (value > 1)
-            throw Exception("Invalid value " + std::to_string(value) + " for setting \"" + change.name +
-                            "\". Only boolean settings are supported", ErrorCodes::INVALID_SETTING_VALUE);
 
-        settings.setBooleanSetting(change.name, value);
+        bool has_setting = false;
+        if (value < 2)
+            has_setting |= settings.setBooleanSetting(change.name, value);
+
+        if (!has_setting)
+            has_setting |= settings.setUIntSetting(change.name, value);
+
+        if (!has_setting)
+            throw Exception("Unknown setting for ExplainSettings: " + change.name, ErrorCodes::LOGICAL_ERROR);
+        // throw Exception("Invalid value " + std::to_string(value) + " for setting \"" + change.name +
+        //                 "\". Only boolean settings are supported", ErrorCodes::INVALID_SETTING_VALUE);
     }
 
     return settings;

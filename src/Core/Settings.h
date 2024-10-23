@@ -400,6 +400,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(Bool, log_segment_profiles, false, "Log profile of each segment info including runtime and planning information.", 0) \
+    M(Bool, report_segment_profiles, false, "Report plan segment profile to coordinator.", 0)\
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0) \
     M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0) \
     M(DistributedProductMode, \
@@ -920,6 +921,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
     M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
+    M(Bool, mutation_allow_modify_remove_nullable, false, "default not allow modify column from Nullable(xxx) to xxx", 0) \
     M(Bool, system_mutations_only_basic_info, false, "Only return basic information that stored in KV. It avoid acquiring merge thread of tables", 0) \
     M(Bool, enable_lightweight_delete, true, "Enable lightweight DELETE for mergetree tables.", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
@@ -1607,7 +1609,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
-    M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
     M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
@@ -1658,6 +1659,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
     M(Bool, enable_filtered_pk_selectivity, 1, "Enable the selectivity of filtered pk table", 0) \
+    M(Bool, execute_subquery_in_lambda, true, "Whether to execute subquery in lambda", 0) \
+    M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
+    M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
     \
     /** remote disk cache*/ \
     M(Bool, use_local_cache_for_remote_storage, true, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
@@ -2067,6 +2071,7 @@ enum PreloadLevelSettings : UInt64
     \
     /** End of gis related settings */ \
     \
+    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

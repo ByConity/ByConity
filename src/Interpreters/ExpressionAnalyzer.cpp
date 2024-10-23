@@ -789,7 +789,7 @@ void ExpressionAnalyzer::getRootActionsWithOwnBitmapInfo(const ASTPtr & ast, boo
     LogAST log;
     ActionsVisitor::Data visitor_data(getContext(), settings.size_limits_for_set, subquery_depth,
                                    sourceColumns(), std::move(actions), prepared_sets, subqueries_for_sets,
-                                   no_subqueries, false, only_consts, !isRemoteStorage(), getAggregationKeysInfo(), false, own_index_context);
+                                   no_subqueries, false, only_consts, !isRemoteStorage(), getAggregationKeysInfo(), false, own_index_context, metadata_snapshot);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }

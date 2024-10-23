@@ -57,6 +57,10 @@ TransformResult InnerJoinAssociate::transformImpl(PlanNodePtr node, const Captur
     auto * left_join_node = dynamic_cast<JoinNode *>(node->getChildren()[0].get());
     auto left_join_step = left_join_node->getStep();
 
+    // TODO
+    if (join_step->hasKeyIdNullSafe() || left_join_step->hasKeyIdNullSafe())
+        return {};
+
     auto a = left_join_node->getChildren()[0];
     auto b = left_join_node->getChildren()[1];
     auto c = node->getChildren()[1];
@@ -200,6 +204,7 @@ TransformResult InnerJoinAssociate::transformImpl(PlanNodePtr node, const Captur
         rule_context.context->getSettingsRef().optimize_read_in_order,
         bc_left_keys,
         bc_right_keys,
+        std::vector<bool>{},
         bc_join_filter);
     auto bc_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), bc_join_step, {b, c});
 
@@ -213,6 +218,7 @@ TransformResult InnerJoinAssociate::transformImpl(PlanNodePtr node, const Captur
         rule_context.context->getSettingsRef().optimize_read_in_order,
         top_left_keys,
         top_right_keys,
+        std::vector<bool>{},
         top_join_filter);
     auto top_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), top_join_step, {a, bc_node});
 

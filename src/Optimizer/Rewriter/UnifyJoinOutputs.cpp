@@ -160,6 +160,7 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
         step->getKeepLeftReadInOrder(),
         std::move(left_keys),
         std::move(right_keys),
+        std::vector<bool>{},
         step->getFilter(),
         step->isHasUsing(),
         step->getRequireRightKeys(),

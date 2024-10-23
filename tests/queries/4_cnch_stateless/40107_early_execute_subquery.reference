@@ -1,0 +1,27 @@
+-- { echo }
+set early_execute_scalar_subquery = 0, early_execute_in_subquery = 0;
+select (select dummy from system.one) as a from system.one;
+0
+select 1 in (select dummy from system.one) as a from system.one;
+0
+select 1 as a from system.one where (select dummy from system.one);
+select 1 as a from system.one where 1 in (select dummy from system.one);
+select (select dummy from system.one where 1 = 0) as a from system.one;
+\N
+select 1 in (select dummy from system.one where 1 = 0) as a from system.one;
+0
+select 1 as a from system.one where (select dummy from system.one where 1 = 0);
+select 1 as a from system.one where 1 in (select dummy from system.one where 1 = 0);
+set early_execute_scalar_subquery = 1, early_execute_in_subquery = 1;
+select (select dummy from system.one) as a from system.one;
+0
+select 1 in (select dummy from system.one) as a from system.one;
+0
+select 1 as a from system.one where (select dummy from system.one);
+select 1 as a from system.one where 1 in (select dummy from system.one);
+select (select dummy from system.one where 1 = 0) as a from system.one;
+\N
+select 1 in (select dummy from system.one where 1 = 0) as a from system.one;
+0
+select 1 as a from system.one where (select dummy from system.one where 1 = 0);
+select 1 as a from system.one where 1 in (select dummy from system.one where 1 = 0);

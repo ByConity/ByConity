@@ -14,6 +14,7 @@
  */
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/DistributedStages/MPPScheduler.h>
@@ -31,7 +32,7 @@
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/types.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
+#include "Interpreters/ProcessorProfile.h"
 
 namespace ProfileEvents
 {
@@ -92,7 +93,14 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         {
             server_resource->sendResources(query_context);
         }
-            
+
+    }
+    {
+        if (query_context->isExplainQuery() && query_context->getSettingsRef().report_segment_profiles)
+        {
+            std::unique_lock<bthread::Mutex> lock(segment_profile_mutex);
+            segment_profile_map[query_id];
+        }
     }
 
     auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();
@@ -132,6 +140,30 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     return dag_ptr->plan_segment_status_ptr;
 }
 
+static void OnCancelQueryCallback(
+    Protos::CancelQueryResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_client, String query_id)
+{
+    static auto * log = &Poco::Logger::get("SegmentScheduler");
+
+    std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+    std::unique_ptr<Protos::CancelQueryResponse> response_guard(response);
+
+    rpc_client->checkAliveWithController(*cntl);
+    if (cntl->Failed())
+    {
+        LOG_TRACE(
+            log,
+            "Send cancel query with id {} to {} failed, error: {}, msg: {}",
+            query_id,
+            butil::endpoint2str(cntl->remote_side()).c_str(),
+            cntl->ErrorText(),
+            response->message());
+    }
+    else
+    {
+        LOG_TRACE(log, "Send cancel query with id {} to {} success", query_id, butil::endpoint2str(cntl->remote_side()).c_str());
+    }
+}
 
 CancellationCode SegmentScheduler::cancelPlanSegmentsFromCoordinator(
     const String & query_id, const Int32 & code, const String & exception, ContextPtr query_context)
@@ -189,13 +221,16 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
 {
     String coordinator_addr = query_context->getHostWithPorts().getExchangeAddress();
     std::vector<brpc::CallId> call_ids;
-    call_ids.reserve(dag_ptr->plan_send_addresses.size());
-    auto handler = std::make_shared<ExceptionHandler>();
+    std::set<AddressInfo> plan_send_addresses;
+    {
+        std::unique_lock<bthread::Mutex> lock(dag_ptr->status_mutex);
+        plan_send_addresses = dag_ptr->plan_send_addresses;
+    }
     Protos::CancelQueryRequest request;
     request.set_query_id(query_id);
     request.set_coordinator_address(coordinator_addr);
 
-    for (const auto & addr : dag_ptr->plan_send_addresses)
+    for (const auto & addr : plan_send_addresses)
     {
         auto address = extractExchangeHostPort(addr);
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
@@ -205,29 +240,9 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
         Protos::CancelQueryResponse * response = new Protos::CancelQueryResponse();
         request.set_query_id(query_id);
         request.set_coordinator_address(coordinator_addr);
-        manager.cancelQuery(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
-        LOG_INFO(
-            log,
-            "Cancel plan segment query_id-{} on host-{}",
-            query_id,
-            extractExchangeHostPort(addr));
+        manager.cancelQuery(cntl, &request, response, brpc::NewCallback(OnCancelQueryCallback, response, cntl, rpc_client, query_id));
+        LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}", query_id, extractExchangeHostPort(addr));
     }
-
-    if (query_context->getSettingsRef().enable_wait_cancel_rpc)
-    {
-        for (auto & call_id : call_ids)
-            brpc::Join(call_id);
-
-        try
-        {
-            handler->throwIfException();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "cancelWorkerPlanSegments");
-        }
-    }
-
 }
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)
@@ -244,8 +259,15 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     }
 
     {
-        std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+        std::unique_lock<bthread::Mutex> lock(segment_profile_mutex);
 
+        auto seg_profile_map_ite = segment_profile_map.find(query_id);
+        if (seg_profile_map_ite != segment_profile_map.end())
+            segment_profile_map.erase(seg_profile_map_ite);
+    }
+
+    {
+        std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
         auto seg_status_map_ite = segment_status_map.find(query_id);
         if (seg_status_map_ite != segment_status_map.end())
             segment_status_map.erase(seg_status_map_ite);
@@ -320,6 +342,31 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     status->message = segment_status.message;
     status->code = segment_status.code;
+}
+
+
+void SegmentScheduler::updateSegmentProfile(PlanSegmentProfilePtr & segment_profile)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_profile_mutex);
+    auto segment_profile_iter = segment_profile_map.find(segment_profile->query_id);
+    if (segment_profile_iter == segment_profile_map.end())
+        return;
+
+    PlanSegmentProfilePtr profile = segment_profile;
+    segment_profile_iter->second[segment_profile->segment_id].emplace_back(profile);
+}
+
+std::unordered_map<size_t, PlanSegmentProfiles> SegmentScheduler::getSegmentsProfile(const String & query_id)
+{
+    std::unordered_map<size_t, PlanSegmentProfiles> res;
+    {
+        std::unique_lock<bthread::Mutex> lock(segment_profile_mutex);
+        auto segment_profile_iter = segment_profile_map.find(query_id);
+        if (segment_profile_iter == segment_profile_map.end())
+            return res;
+        res = segment_profile_iter->second;
+    }
+    return res;
 }
 
 void SegmentScheduler::checkQueryCpuTime(const String & query_id)
@@ -433,6 +480,30 @@ void SegmentScheduler::updateReceivedSegmentStatusCounter(
             bsp_scheduler_map_iterator->second->updateSegmentStatusCounter(segment_id, parallel_index, status);
         }
     }
+}
+
+bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto all_segments_iterator = query_map.find(query_id);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
+        return true;
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+        return false;
+    if (all_segments_iterator == query_map.end())
+        return true;
+    auto dag_ptr = all_segments_iterator->second;
+    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
+    for (auto & parallel : dag_ptr->segment_parallel_size_map)
+    {
+        if (parallel.first == 0)
+            continue;
+
+        if (query_status_received_counter_map[query_id][parallel.first].size() < parallel.second)
+            return false;
+    }
+    return true;
 }
 
 void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)

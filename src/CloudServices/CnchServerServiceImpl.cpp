@@ -745,15 +745,49 @@ void CnchServerServiceImpl::fetchPartitions(
             ASTPtr query_ptr = deserializeAST(rb);
             /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
             {
-                ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
-                if (!select_query)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
-                select_query->replaceDatabaseAndTable(request->database(), request->table());
+                StoragePtr storage = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp::maxTS());
+
+                auto calculated_host
+                    = gc->getCnchTopologyMaster()
+                          ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true)
+                          .getRPCAddress();
+
+                if (request->remote_host() != calculated_host)
+                    throw Exception(
+                        "Fetch partitions failed because of inconsistent view of topology in remote server, remote_host: "
+                            + request->remote_host() + ", calculated_host: " + calculated_host,
+                        ErrorCodes::LOGICAL_ERROR);
+
+                Names column_names;
+                for (const auto & name : request->column_name_filter())
+                    column_names.push_back(name);
+                auto session_context = Context::createCopy(gc);
+                session_context->setCurrentDatabase(request->database());
+                ReadBufferFromString rb(request->predicate());
+                ASTPtr query_ptr = deserializeAST(rb);
+                /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+                {
+                    ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
+                    if (!select_query)
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
+                    select_query->replaceDatabaseAndTable(request->database(), request->table());
+                }
+                SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
+
+                session_context->setTemporaryTransaction(
+                    TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
+                auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(
+                    session_context, storage, query_info, column_names, request->has_ignore_ttl() && request->ignore_ttl());
+
+                response->set_total_size(required_partitions.total_partition_number);
+                auto & mutable_partitions = *response->mutable_partitions();
+                for (auto & partition : required_partitions.partitions)
+                    *mutable_partitions.Add() = std::move(partition);
             }
             SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
-            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
+            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names, request->has_ignore_ttl() && request->ignore_ttl());
 
             response->set_total_size(required_partitions.total_partition_number);
             auto & mutable_partitions = *response->mutable_partitions();
@@ -951,10 +985,7 @@ void CnchServerServiceImpl::cleanUndoBuffers(
 
         try
         {
-            /// Will be re-init in side the `cleanUndoBuffers`.
-            bool clean_fs_lock_by_scan = false;
-            response->set_clean_size(txn_cleaner.cleanUndoBuffers(txn_record, clean_fs_lock_by_scan));
-            response->set_clean_fs_lock_by_scan(clean_fs_lock_by_scan) ;
+            txn_cleaner.cleanUndoBuffers(txn_record );
         }
         catch (...)
         {

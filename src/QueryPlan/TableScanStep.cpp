@@ -58,6 +58,7 @@
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageSnapshot.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <fmt/format.h>
 #include <Common/FieldVisitorToString.h>
@@ -1326,7 +1327,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             }
         }
         // flag = Output
-        auto pipe = storage->read(
+        QueryPlan storage_plan;
+        storage->read(
+            storage_plan,
             getRequiredColumns(),
             storage_snapshot,
             query_info,
@@ -1334,6 +1337,23 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             QueryProcessingStage::Enum::FetchColumns,
             max_block_size,
             max_streams);
+        auto pipe = storage_plan.convertToPipe(
+            QueryPlanOptimizationSettings::fromContext(build_context.context),
+            BuildQueryPipelineSettings::fromContext(build_context.context));
+
+        {
+            for (auto & node : storage_plan.getNodes())
+            {
+                auto & att_descs = node.step->getAttributeDescriptions();
+                if (att_descs.empty())
+                    continue;
+                for (auto & desc : att_descs)
+                {
+                    if (!attribute_descriptions.contains(desc.first))
+                        attribute_descriptions.emplace(desc.first, desc.second);
+                }
+            }
+        }
 
         if (pipe.getCacheHolder())
             pipeline.addCacheHolder(pipe.getCacheHolder());
@@ -1623,6 +1643,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             step_desc << plan_element.part_group.partsNum() << " parts from raw data";
     }
     setStepDescription(step_desc.str());
+    RuntimeAttributeDescription tablescan_desc;
+    tablescan_desc.description = step_desc.str();
+    attribute_descriptions.emplace("TableScanDescription", tablescan_desc);
 
     LOG_DEBUG(log, "init pipeline total run time: {} ms, table scan descriptiion: {}", total_watch.elapsedMillisecondsAsDouble(), step_desc.str());
 }
@@ -1767,6 +1790,13 @@ void TableScanStep::allocate(ContextPtr context)
     query_info = fillQueryInfo(context);
     original_table = storage_id.table_name;
     storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
+    size_t shards = context->tryGetCurrentWorkerGroup() ? context->getCurrentWorkerGroup()->getShardsInfo().size() : 1;
+    if (shards > 1 && !context->getSettingsRef().enable_final_sample)
+    {
+        ASTSelectQuery * select = query_info.query->as<ASTSelectQuery>();
+        if (select && select->sampleSize())
+            query_info.query = rewriteSampleForDistributedTable(query_info.query, shards);
+    }
 
     // update query info
     if (query_info.query)
@@ -2055,4 +2085,5 @@ void TableScanStep::fillQueryInfoV2(ContextPtr context)
     /// 4. build index context
     query_info.index_context = std::make_shared<MergeTreeIndexContext>();
 }
+
 }

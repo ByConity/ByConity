@@ -804,8 +804,6 @@ void HTTPHandler::processQuery(
         });
     };
 
-    adjustAccessTablesIfNeeded(context);
-
     /// While still no data has been sent, we will report about query execution progress by sending HTTP headers.
     if (settings.send_progress_in_http_headers)
         append_callback([&used_output] (const Progress & progress) { used_output.out->onProgress(progress); });

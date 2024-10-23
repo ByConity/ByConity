@@ -81,6 +81,7 @@ size_t CacheParamBuilder::computeJoinHash(std::shared_ptr<JoinStep> join_step)
         join_step->getKeepLeftReadInOrder(),
         join_step->getLeftKeys(),
         join_step->getRightKeys(),
+        join_step->getKeyIdsNullSafe(),
         join_step->getFilter(),
         join_step->isHasUsing(),
         join_step->getRequireRightKeys(),

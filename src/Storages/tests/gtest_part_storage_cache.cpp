@@ -126,22 +126,22 @@ TEST_F(CacheManagerTest, GetTableFromCache)
     auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
 
     // get storage and insert storage into cache
-    cache_manager->insertStorageCache(storage->getStorageID(), storage, commit_ts, current_topology_version);
+    cache_manager->insertStorageCache(storage->getStorageID(), storage, commit_ts, current_topology_version, *getContext().context);
 
     // get storage from cache
-    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version);
+    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version, *getContext().context);
 
     EXPECT_NE(storage_from_cache, nullptr);
     EXPECT_EQ(storage->getStorageID(), storage_from_cache->getStorageID());
 
     // mock topology change
     auto new_topology_version = PairInt64{1, 2};
-    auto storage_from_invilid_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), new_topology_version);
+    auto storage_from_invilid_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), new_topology_version, *getContext().context);
 
     EXPECT_EQ(storage_from_invilid_cache, nullptr);
 
-    EXPECT_NE(cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version), nullptr);
-    EXPECT_EQ(cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version)->getStorageUUID(), storage->getStorageUUID());
+    EXPECT_NE(cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version, *getContext().context), nullptr);
+    EXPECT_EQ(cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version, *getContext().context)->getStorageUUID(), storage->getStorageUUID());
 
     cache_manager->shutDown();
 }
@@ -164,7 +164,7 @@ TEST_F(CacheManagerTest, GetTableWithTSFromCache)
     auto get_storage_from_cache_with_ts = [&cache_manager](const UUID & uuid, const PairInt64 & topology_version, const TxnTimestamp & ts)
     {
         StoragePtr res;
-        auto cached = cache_manager->getStorageFromCache(uuid, topology_version);
+        auto cached = cache_manager->getStorageFromCache(uuid, topology_version, *getContext().context);
         if (cached && cached->commit_time <= ts)
             res = cached;
         return res;
@@ -175,7 +175,7 @@ TEST_F(CacheManagerTest, GetTableWithTSFromCache)
     auto entry = cache_manager->getTableMeta(storage_v1->getStorageUUID());
 
     // insert storage v1 into cache
-    cache_manager->insertStorageCache(storage_v1->getStorageID(), storage_v1, ts_1, current_topology_version);
+    cache_manager->insertStorageCache(storage_v1->getStorageID(), storage_v1, ts_1, current_topology_version, *getContext().context);
 
     StoragePtr storage_from_cache;
     // try get storage v1 from cache
@@ -185,7 +185,7 @@ TEST_F(CacheManagerTest, GetTableWithTSFromCache)
     EXPECT_EQ(column_size, 1);
 
     // insert storage v2 into cache
-    cache_manager->insertStorageCache(storage_v2->getStorageID(), storage_v2, ts_2, current_topology_version);
+    cache_manager->insertStorageCache(storage_v2->getStorageID(), storage_v2, ts_2, current_topology_version, *getContext().context);
     // mock get storage with an earier ts.
     storage_from_cache = get_storage_from_cache_with_ts(storage_v2->getStorageUUID(), current_topology_version, ts_1);
     EXPECT_EQ(storage_from_cache, nullptr);
@@ -223,13 +223,13 @@ TEST_F(CacheManagerTest, AlterTableContention)
     String alter_query_t2 = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32, extra_int Int32) "
                             "ENGINE=CnchMergeTree order by id";
     StoragePtr storage_t2 = CacheTestMock::createTable(alter_query_t2, context);
-    cache_manager->insertStorageCache(storage_t2->getStorageID(), storage_t2, ts_t2, topology_version);
+    cache_manager->insertStorageCache(storage_t2->getStorageID(), storage_t2, ts_t2, topology_version, *getContext().context);
 
     //T3: try insert old storage which get from metastore at T1 into cache
-    cache_manager->insertStorageCache(storage_from_metastore->getStorageID(), storage_from_metastore, ts_commit, topology_version);
+    cache_manager->insertStorageCache(storage_from_metastore->getStorageID(), storage_from_metastore, ts_commit, topology_version, *getContext().context);
 
     //T4: get storate from cache. It should be new altered storage
-    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), topology_version);
+    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), topology_version, *getContext().context);
 
     EXPECT_NE(storage_from_cache, nullptr);
     IStorage::ColumnSizeByName column_sizes = storage_from_cache->getColumnSizes();
@@ -266,20 +266,20 @@ TEST_F(CacheManagerTest, RejectCacheOldStorageTest)
     storage->commit_time = TxnTimestamp{ts_commit};
     storage->latest_version = TxnTimestamp{ts_latest};
 
-    cache_manager->insertStorageCache(storage->getStorageID(), storage, ts_commit, current_topology_version);
+    cache_manager->insertStorageCache(storage->getStorageID(), storage, ts_commit, current_topology_version, *getContext().context);
 
     // get storate from cache. It should get nothing
-    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version);
+    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version, *getContext().context);
     EXPECT_EQ(storage_from_cache, nullptr);
 
     // update storage commit ts to latest. mock get latest storage from metastore.
     storage->commit_time = TxnTimestamp{ts_latest};
 
     // storage cache accept the new storage with latest commit ts
-    cache_manager->insertStorageCache(storage->getStorageID(), storage, storage->commit_time, current_topology_version);
+    cache_manager->insertStorageCache(storage->getStorageID(), storage, storage->commit_time, current_topology_version, *getContext().context);
 
     // now should get storage from cache
-    auto storage_from_cache_2 = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version);
+    auto storage_from_cache_2 = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version, *getContext().context);
 
     EXPECT_NE(storage_from_cache_2, nullptr);
 

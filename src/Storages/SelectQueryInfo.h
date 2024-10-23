@@ -78,6 +78,9 @@ using ClusterPtr = std::shared_ptr<Cluster>;
 struct MergeTreeDataSelectAnalysisResult;
 using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelectAnalysisResult>;
 
+class ReadFromMergeTree;
+//struct ReadFromMergeTree::IndexStat;
+
 struct PrewhereInfo
 {
     /// Actions which are executed in order to alias columns are used for prewhere actions.
@@ -283,4 +286,7 @@ const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
 TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info);
+
+ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_size);
+
 }

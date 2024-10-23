@@ -20,6 +20,8 @@
 #include <Analyzers/ResolvedWindow.h>
 #include <Analyzers/Scope.h>
 #include <Analyzers/SubColumnID.h>
+#include <Core/Block.h>
+#include <Interpreters/Set.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/Utils.h>
@@ -68,12 +70,14 @@ struct JoinEqualityCondition
     ASTPtr right_ast;
     DataTypePtr left_coercion;
     DataTypePtr right_coercion;
+    bool null_safe;
 
-    JoinEqualityCondition(ASTPtr left_ast_, ASTPtr right_ast_, DataTypePtr left_coercion_, DataTypePtr right_coercion_)
+    JoinEqualityCondition(ASTPtr left_ast_, ASTPtr right_ast_, DataTypePtr left_coercion_, DataTypePtr right_coercion_, bool null_safe_)
         : left_ast(std::move(left_ast_))
         , right_ast(std::move(right_ast_))
         , left_coercion(std::move(left_coercion_))
         , right_coercion(std::move(right_coercion_))
+        , null_safe(null_safe_)
     {}
 };
 
@@ -468,6 +472,12 @@ struct Analysis
 
     std::unordered_map<String, std::vector<String>> function_arguments;
     void addUsedFunctionArgument(const String & func_name, ColumnsWithTypeAndName & processed_arguments);
+
+    std::map<String, Block> executed_scalar_subqueries;
+    const Block & getScalarSubqueryResult(const ASTPtr & subquery, ContextPtr context);
+
+    std::map<String, SetPtr> executed_in_subqueries;
+    SetPtr getInSubqueryResult(const ASTPtr & subquery, ContextPtr context);
 };
 
 }

@@ -784,9 +784,12 @@ void QueryPipeline::setWriteCacheComplete(const ContextPtr & context)
     if (!pipe.holder.cache_holder)
         return;
 
+    if (pipe.holder.cache_holder->early_finish)
+        return;
+
     auto cache = context->getIntermediateResultCache();
     auto & write_cache = pipe.holder.cache_holder->write_cache;
-    for (auto cache_key : write_cache)
+    for (const auto & cache_key : write_cache)
         cache->setComplete(cache_key);
     write_cache.clear();
 }
@@ -798,7 +801,7 @@ void QueryPipeline::clearUncompletedCache(const ContextPtr & context)
 
     auto cache = context->getIntermediateResultCache();
     auto & write_cache = pipe.holder.cache_holder->write_cache;
-    for (auto cache_key : write_cache)
+    for (const auto & cache_key : write_cache)
         cache->eraseUncompletedCache(cache_key);
 }
 

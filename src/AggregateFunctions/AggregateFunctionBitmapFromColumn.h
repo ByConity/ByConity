@@ -39,7 +39,8 @@ struct AggregateFunctionBitMapFromColumnData
 {
     // Switch to ordinary Allocator after 4096 bytes to avoid fragmentation and trash in Arena
     using Allocator = MixedAlignedArenaAllocator<alignof(UInt64), 4096>;
-    using Array = PODArray<UInt64, 4098, Allocator>;
+    /// to reduce memory allocation, initial size is set to 128
+    using Array = PODArray<UInt64, 128, Allocator>;
 
     Array value;
     BitMap64 bitmap;
@@ -77,7 +78,7 @@ public:
     {
         auto & cur_value = this->data(place).value;
         auto & cur_bitmap = this->data(place).bitmap;
-        auto & rhs_value = this->data(rhs).value;
+        const auto & rhs_value = this->data(rhs).value;
         auto & rhs_bitmap = const_cast<BitMap64 &>(this->data(rhs).bitmap);
 
         if (!cur_value.empty())
@@ -130,7 +131,7 @@ public:
             buf.read(bitmap_chars.data(), bytes);
 
             auto & bitmap = this->data(place).bitmap;
-            bitmap.read(bitmap_chars.data(), bytes);
+            bitmap = roaring::Roaring64Map::readSafe(bitmap_chars.data(), bytes);
         }
     }
 

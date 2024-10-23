@@ -181,8 +181,7 @@ UInt64 TransactionCleaner::cleanUndoBuffersWithDispatch(
             if (callee || visit.contains(rpc_address))
                 continue;
             LOG_DEBUG(log, "Forward clean task for txn {} to server {} table_uuid: {}", txn_record.txnID().toUInt64(), rpc_address, uuid);
-            task_cleaned_size
-                += global_context.getCnchServerClientPool().get(rpc_address)->cleanUndoBuffers(txn_record, clean_fs_lock_by_scan);
+            global_context.getCnchServerClientPool().get(rpc_address)->cleanUndoBuffers(txn_record);
             /// We have dispatched a rpc call.
             dispatched = true;
             /// Mark this server visited.
@@ -230,24 +229,29 @@ UInt64 TransactionCleaner::cleanUndoBuffersWithDispatch(
     return task_cleaned_size;
 }
 
-UInt64 TransactionCleaner::cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan)
+void TransactionCleaner::cleanUndoBuffers(const TransactionRecord & txn_record)
 {
-    LOG_DEBUG(log, "Start to clean the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
-    const auto & global_context = *getContext();
-    auto catalog = global_context.getCnchCatalog();
-    clean_fs_lock_by_scan = global_context.getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
+    scheduleTask(
+        [this, txn_record, &global_context = *getContext()] {
+            LOG_DEBUG(log, "Start to clean the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
+            auto catalog = global_context.getCnchCatalog();
+            bool clean_fs_lock_by_scan = global_context.getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
 
-    std::vector<String> deleted_keys;
-    bool dispatched = false;
-    size_t cleaned_size = cleanUndoBuffersWithDispatch(txn_record, true, clean_fs_lock_by_scan, deleted_keys, dispatched);
+            std::vector<String> deleted_keys;
+            bool dispatched = false;
+            TxnCleanTask & task = getCleanTask(txn_record.txnID());
+            task.undo_size.fetch_add(cleanUndoBuffersWithDispatch(txn_record, true, clean_fs_lock_by_scan, deleted_keys, dispatched));
 
-    /// A callee will never dispatch calls.
-    assert(dispatched == false);
+            /// A callee will never dispatch calls.
+            assert(dispatched == false);
 
-    catalog->clearUndoBuffersByKeys(txn_record.txnID(), deleted_keys);
+            catalog->clearUndoBuffersByKeys(txn_record.txnID(), deleted_keys);
 
-    LOG_DEBUG(log, "Finish cleaning the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
-    return cleaned_size;
+            LOG_DEBUG(log, "Finish cleaning the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
+        },
+        CleanTaskPriority::HIGH,
+        txn_record.txnID(),
+        CnchTransactionStatus::Finished);
 }
 
 void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
@@ -327,8 +331,8 @@ void TransactionCleaner::finalize()
         shutdown = true;
     }
 
-    server_thread_pool->wait();
-    dm_thread_pool->wait();
+    high_priority_pool->wait();
+    low_priority_pool->wait();
 }
 
 void TransactionCleaner::removeTask(const TxnTimestamp & txn_id)

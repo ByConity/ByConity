@@ -88,7 +88,35 @@ LargeKVWrapperPtr tryGetLargeKVWrapper(
     const size_t max_allowed_kv_size = metastore->getMaxKVSize();
     size_t value_size = value.size();
 
-    if (value_size > max_allowed_kv_size)
+    auto transform_expected_value = [&]()
+    {
+        Protos::DataModelLargeKVMeta expected_large_kv_model;
+        expected_large_kv_model.set_uuid(getUUIDForLargeKV(key, expected));
+        expected_large_kv_model.set_subkv_number(1 + ((expected.size() - 1) / max_allowed_kv_size));
+        expected_large_kv_model.set_value_size(expected.size());
+
+        return MAGIC_NUMBER + expected_large_kv_model.SerializeAsString();
+    };
+
+    bool current_value_is_large_kv_format = false;
+
+    if (!expected.empty() && expected.size() < max_allowed_kv_size)
+    {
+        // If expected value is not empty, we need to get current value of the key to decide if we should build
+        // large KV format expected value:
+        // If the current value is large KV format, we should serialize current expected value as large KV format too.
+        // Otherwise, just keep it as it is.
+        String current_value;
+        metastore->get(key, current_value);
+        Protos::DataModelLargeKVMeta large_kv_data;
+        if (tryParseLargeKVMetaModel(current_value, large_kv_data))
+            current_value_is_large_kv_format = true;
+    }
+
+    size_t expected_value_size = current_value_is_large_kv_format ? 0 : expected.size();
+
+    // Both the expected value and the insert value are need to be take into account.
+    if (value_size + expected_value_size > max_allowed_kv_size)
     {
         String large_kv_id = getUUIDForLargeKV(key, value);
 
@@ -116,15 +144,8 @@ LargeKVWrapperPtr tryGetLargeKVWrapper(
         if (!expected.empty())
         {
             // if expected value size exceed max kv size, construct DataModelLargeKVMeta to perform CAS.
-            if (expected.size() > max_allowed_kv_size)
-            {
-                Protos::DataModelLargeKVMeta expected_large_kv_model;
-                expected_large_kv_model.set_uuid(getUUIDForLargeKV(key, expected));
-                expected_large_kv_model.set_subkv_number(1 + ((expected.size() - 1) / max_allowed_kv_size));
-                expected_large_kv_model.set_value_size(expected.size());
-
-                base_req.expected_value = MAGIC_NUMBER + expected_large_kv_model.SerializeAsString();
-            }
+            if (expected.size() >= max_allowed_kv_size || current_value_is_large_kv_format)
+                base_req.expected_value = transform_expected_value();
             else
                 base_req.expected_value = expected;
         }
@@ -139,7 +160,13 @@ LargeKVWrapperPtr tryGetLargeKVWrapper(
         SinglePutRequest base_req(key, value);
         base_req.if_not_exists = if_not_exists;
         if (!expected.empty())
-            base_req.expected_value = expected;
+        {
+            if (current_value_is_large_kv_format)
+                base_req.expected_value = transform_expected_value();
+            else
+                base_req.expected_value = expected;
+        }
+
         LargeKVWrapperPtr wrapper = std::make_shared<LargeKVWrapper>(std::move(base_req));
         return wrapper;
     }

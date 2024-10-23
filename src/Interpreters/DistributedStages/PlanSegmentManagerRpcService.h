@@ -125,8 +125,14 @@ public:
         ::DB::Protos::SendProgressResponse * response,
         ::google::protobuf::Closure * done) override;
 
+    void sendPlanSegmentProfile(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::PlanSegmentProfileRequest * request,
+        ::DB::Protos::PlanSegmentProfileResponse * /*response*/,
+        ::google::protobuf::Closure * done) override;
 
 private:
+
     ContextMutablePtr context;
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     Poco::Logger * log;

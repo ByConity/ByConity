@@ -849,6 +849,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, ColumnPruningCo
         step->getKeepLeftReadInOrder(),
         step->getLeftKeys(),
         step->getRightKeys(),
+        step->getKeyIdsNullSafe(),
         step->getFilter(),
         step->isHasUsing(),
         step->getRequireRightKeys(),

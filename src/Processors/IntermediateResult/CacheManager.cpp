@@ -169,9 +169,7 @@ void CacheManager::setComplete(const CacheKey & key)
     {
         auto empty_key = key.cloneWithoutOwnerInfo();
         value = tryGetUncompletedCache(empty_key);
-        if (value)
-            eraseUncompletedCache(empty_key);
-        else
+        if (!value)
             modifyKeyStateToRefused(key);
     }
     if (value)

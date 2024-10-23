@@ -1,0 +1,2 @@
+GRANT SENSITIVE SHOW ON `1234.test`.* TO `1234.test_user_01074`
+GRANT SHOW ON `1234.test`.* TO `1234.test_user_01074`

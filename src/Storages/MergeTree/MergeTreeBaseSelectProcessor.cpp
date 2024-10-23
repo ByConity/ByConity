@@ -75,9 +75,20 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
 {
     header_without_virtual_columns = getPort().getHeader();
 
+    /// Reverse order is to minimize reallocations when removing columns from the block
     for (auto it = virt_column_names.rbegin(); it != virt_column_names.rend(); ++it)
-        if (header_without_virtual_columns.has(*it))
-            header_without_virtual_columns.erase(*it);
+    {
+        if (*it == "_part_offset")
+        {
+            non_const_virtual_column_names.emplace_back(*it);
+        }
+        else
+        {
+            /// Remove virtual columns that are going to be filled with const values
+            if (header_without_virtual_columns.has(*it))
+                header_without_virtual_columns.erase(*it);
+        }
+    }
 
     if (prewhere_info)
     {
@@ -146,23 +157,23 @@ void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & cu
     {
         if (reader->getColumns().empty() && !reader->hasBitmapIndexReader())
         {
-            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, true, filtered_ratio_to_use_skip_read);
+            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, true, non_const_virtual_column_names, filtered_ratio_to_use_skip_read);
         }
         else
         {
             MergeTreeRangeReader * pre_reader_ptr = nullptr;
             if (pre_reader != nullptr)
             {
-                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, false, filtered_ratio_to_use_skip_read);
+                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, false, non_const_virtual_column_names, filtered_ratio_to_use_skip_read);
                 pre_reader_ptr = &current_task.pre_range_reader;
             }
 
-            current_task.range_reader = MergeTreeRangeReader(reader.get(), pre_reader_ptr, nullptr, task->delete_bitmap, true, filtered_ratio_to_use_skip_read);
+            current_task.range_reader = MergeTreeRangeReader(reader.get(), pre_reader_ptr, nullptr, task->delete_bitmap, true, non_const_virtual_column_names, filtered_ratio_to_use_skip_read);
         }
     }
     else
     {
-        current_task.range_reader = MergeTreeRangeReader(reader.get(), nullptr, nullptr, task->delete_bitmap, true, filtered_ratio_to_use_skip_read);
+        current_task.range_reader = MergeTreeRangeReader(reader.get(), nullptr, nullptr, task->delete_bitmap, true, non_const_virtual_column_names, filtered_ratio_to_use_skip_read);
     }
 }
 

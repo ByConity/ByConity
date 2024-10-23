@@ -113,6 +113,8 @@ public:
     CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;
     CnchWorkerClientPtr doGetWorkerClient(const HostWithPorts & host_ports) const;
 
+    size_t getWorkerIndex(const String & worker_id) const;
+
     std::optional<size_t> indexOf(const HostWithPorts & host_ports) const
     {
         for (size_t i = 0, size = hosts.size(); i < size; i++)

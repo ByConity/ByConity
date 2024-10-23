@@ -14,6 +14,7 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Columns/ColumnString.h>
 #include <Core/Names.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 #include <common/map.h>
 #include <mutex>
@@ -68,6 +69,7 @@ void StorageSystemDictionaries::fillData(MutableColumns & res_columns, ContextPt
     if (!check_access_for_dictionaries)
         return;
 
+    const String tenant_id = context->getTenantId();
     for (const auto & load_result : external_dictionaries.getLoadResults())
     {
         const auto dict_ptr = std::dynamic_pointer_cast<const IDictionary>(load_result.object);
@@ -82,11 +84,14 @@ void StorageSystemDictionaries::fillData(MutableColumns & res_columns, ContextPt
             dict_id.table_name = load_result.name;
 
         String db_or_tag = dict_id.database_name.empty() ? IDictionary::NO_DATABASE_TAG : dict_id.database_name;
+
+        if (!tenant_id.empty() && !startsWith(db_or_tag, tenant_id + "."))
+            continue;
         if (!access->isGranted(AccessType::SHOW_DICTIONARIES, db_or_tag, dict_id.table_name))
             continue;
 
         size_t i = 0;
-        res_columns[i++]->insert(dict_id.database_name);
+        res_columns[i++]->insert(getOriginalEntityName(dict_id.database_name, tenant_id));
         res_columns[i++]->insert(dict_id.table_name);
         res_columns[i++]->insert(dict_id.uuid);
         res_columns[i++]->insert(static_cast<Int8>(load_result.status));

@@ -167,7 +167,7 @@ protected:
     {
         process(ast.children[0]);
         auto subquery = ast.children[1];
-        process(subquery->children[0]);
+        process(subquery->as<ASTSubquery &>().children[0]);
     }
 
 public:

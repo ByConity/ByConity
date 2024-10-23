@@ -358,6 +358,7 @@ TxnTimestamp CnchServerTransaction::commit()
 
     TxnTimestamp commit_ts = global_context->getTimestamp();
     int retry = MAX_RETRY;
+    bool bitengine_dict_related{false};
     do
     {
         try
@@ -368,6 +369,11 @@ TxnTimestamp CnchServerTransaction::commit()
                 bool success = getContext()->getGlobalTxnCommitter()->commit(shared_from_this());
                 if (success)
                 {
+                    TransactionRecord updated_record = getTransactionRecord();
+                    updated_record.setStatus(CnchTransactionStatus::Finished)
+                                .setCommitTs(commit_ts)
+                                .setMainTableUUID(getMainTableUUID());
+                    txn_record = std::move(updated_record);
                     ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
 
@@ -375,6 +381,7 @@ TxnTimestamp CnchServerTransaction::commit()
                 }
                 else
                 {
+                    setStatus(CnchTransactionStatus::Aborted);
                     throw Exception("Fail to commit txn " + txn_record.txnID().toString() + " by using GlobalTxnCommitter.", ErrorCodes::CNCH_TRANSACTION_COMMIT_ERROR);
                 }
             }

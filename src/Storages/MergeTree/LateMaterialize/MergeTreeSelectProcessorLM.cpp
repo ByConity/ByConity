@@ -24,7 +24,8 @@ MergeTreeSelectProcessorLM::MergeTreeSelectProcessorLM(
     bool check_columns_,
     const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_,
-    size_t part_index_in_query_)
+    size_t part_index_in_query_,
+    const MarkRangesFilterCallback & range_filter_callback_)
     :
     MergeTreeBaseSelectProcessorLM{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
@@ -32,6 +33,7 @@ MergeTreeSelectProcessorLM::MergeTreeSelectProcessorLM(
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
     delete_bitmap{std::move(delete_bitmap_)},
+    mark_ranges_filter_callback(range_filter_callback_),
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
     check_columns(check_columns_)
@@ -61,6 +63,11 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
             range_readers.clear();
             data_part.reset();
             return false;
+        }
+
+        if (mark_ranges_filter_callback)
+        {
+            all_mark_ranges = mark_ranges_filter_callback(data_part, all_mark_ranges);
         }
 
         auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
