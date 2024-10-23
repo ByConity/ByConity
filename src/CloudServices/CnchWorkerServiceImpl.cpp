@@ -84,6 +84,12 @@ namespace ProfileEvents
 extern const Event PreloadExecTotalOps;
 }
 
+namespace CurrentMetrics
+{
+    extern const Metric WorkerServicePoolTask;
+    extern const Metric WorkerServicePoolPendingTask;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -101,8 +107,19 @@ namespace ErrorCodes
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
     : WithMutableContext(context_->getGlobalContext())
     , log(getLogger("CnchWorkerService"))
-    , thread_pool(getNumberOfPhysicalCPUCores() * 4, getNumberOfPhysicalCPUCores() * 2, getNumberOfPhysicalCPUCores() * 8)
 {
+    size_t thread_pool_size = getContext()->getConfigRef().getUInt("worker_service_thread_pool_size", 0);
+    if (!thread_pool_size)
+    {
+        thread_pool_size = getNumberOfPhysicalCPUCores() * 4;
+        LOG_INFO(log, "worker_service_thread_pool_size is not set, use default value {} based on available CPU cores", thread_pool_size);
+    }
+    if (thread_pool_size > 5000)
+    {
+        LOG_INFO(log, "Lowering worker_service_thread_pool_size to 5000, current value: {}", thread_pool_size);
+        thread_pool_size = 5000;
+    }
+    thread_pool = std::make_unique<ThreadPool>(thread_pool_size, thread_pool_size / 2, thread_pool_size * 2);
 }
 
 CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
@@ -110,7 +127,7 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
     try
     {
         LOG_TRACE(log, "Waiting local thread pool finishing");
-        thread_pool.wait();
+        thread_pool->wait();
     }
     catch (...)
     {
@@ -121,10 +138,12 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
 #define THREADPOOL_SCHEDULE(func) \
     try \
     { \
-        thread_pool.scheduleOrThrowOnError(std::move(func)); \
+        CurrentMetrics::add(CurrentMetrics::WorkerServicePoolPendingTask); \
+        thread_pool->scheduleOrThrowOnError(std::move(func)); \
     } \
     catch (...) \
     { \
+        CurrentMetrics::sub(CurrentMetrics::WorkerServicePoolPendingTask); \
         tryLogCurrentException(log, __PRETTY_FUNCTION__); \
         RPCHelpers::handleException(response->mutable_exception()); \
         done->Run(); \
@@ -132,6 +151,8 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
 
 #define SUBMIT_THREADPOOL(...) \
     auto _func = [=, this] { \
+        CurrentMetrics::sub(CurrentMetrics::WorkerServicePoolPendingTask); \
+        CurrentMetrics::Increment metric_increment{CurrentMetrics::WorkerServicePoolTask}; \
         brpc::ClosureGuard done_guard(done); \
         try \
         { \

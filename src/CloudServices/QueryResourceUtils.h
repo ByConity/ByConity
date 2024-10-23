@@ -1,6 +1,7 @@
 #pragma once
 #include <CloudServices/CnchServerResource.h>
 #include <CloudServices/CnchWorkerResource.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/ColumnsDescription.h>
@@ -34,12 +35,43 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
 {
     static LoggerPtr log = getLogger("WorkerResource");
     LOG_TRACE(log, "Receiving resources for Session: {}", query_resource.txn_id());
+
+    struct Stats
+    {
+        UInt64 init_us;
+        UInt64 ddl;
+        UInt64 ddl_us;
+        UInt64 parts;
+        UInt64 vparts;
+        UInt64 lakeparts;
+        UInt64 files;
+        UInt64 load_us;
+        String toString() const
+        {
+            WriteBufferFromOwnString buf;
+            buf << "init in " << init_us << ", " << ddl << " ddl in " << ddl_us;
+            buf << ", load ";
+            if (parts)
+                buf << parts << " parts ";
+            if (vparts)
+                buf << vparts << " vparts ";
+            if (lakeparts)
+                buf << lakeparts << " lakeparts ";
+            if (files)
+                buf << files << " files ";
+            buf << "in " << load_us;
+            return buf.str();
+        }
+    };
+    Stats stats{};
+
     Stopwatch watch;
     auto session = context->acquireNamedCnchSession(query_resource.txn_id(), query_resource.timeout(), false);
     auto session_context = session->context;
     session_context->setTemporaryTransaction(query_resource.txn_id(), query_resource.primary_txn_id());
     if (query_resource.has_session_timezone())
         session_context->setSetting("session_timezone", query_resource.session_timezone());
+    stats.init_us = watch.elapsedMicroseconds();
 
     CurrentThread::QueryScope query_scope(session_context);
     auto worker_resource = session_context->getCnchWorkerResource();
@@ -72,15 +104,13 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
                 object_columns);
         }
         create_timer.stop();
-        LOG_INFO(
-            log,
-            "Prepared {} tables for session {} in {} us",
-            query_resource.create_queries_size() + query_resource.cacheable_create_queries_size(),
-            query_resource.txn_id(),
-            create_timer.elapsedMicroseconds());
-        ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, create_timer.elapsedMicroseconds());
+        stats.ddl = query_resource.create_queries_size() + query_resource.cacheable_create_queries_size();
+        stats.ddl_us = create_timer.elapsedMicroseconds();
+        LOG_DEBUG(log, "Prepared {} tables for {} in {} us", stats.ddl, query_resource.txn_id(), stats.ddl_us);
+        ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, stats.ddl_us);
     }
 
+    Stopwatch load_timer;
     bool lazy_load_parts = query_resource.has_lazy_load_data_parts() && query_resource.lazy_load_data_parts();
     for (const auto & data : query_resource.data_parts())
     {
@@ -126,6 +156,7 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
                     }
                 }
 
+                stats.parts += server_parts_size;
                 cloud_merge_tree->receiveDataParts(std::move(server_parts));
 
                 LOG_DEBUG(
@@ -161,17 +192,18 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
                     }
                 }
 
-                    cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
+                stats.vparts += virtual_parts_size;
+                cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
 
-                    LOG_DEBUG(
-                        log,
-                        "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
-                        virtual_parts_size,
-                        cloud_merge_tree->getStorageID().getNameForLogs(),
-                        query_resource.txn_id(),
-                        query_resource.disk_cache_mode(),
-                        is_dict_table,
-                        lazy_load_parts);
+                LOG_DEBUG(
+                    log,
+                    "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
+                    virtual_parts_size,
+                    cloud_merge_tree->getStorageID().getNameForLogs(),
+                    query_resource.txn_id(),
+                    query_resource.disk_cache_mode(),
+                    is_dict_table,
+                    lazy_load_parts);
             }
 
             std::set<Int64> required_bucket_numbers;
@@ -200,11 +232,13 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
         {
             auto settings = hive_table->getSettings();
             auto lake_scan_infos = ILakeScanInfo::deserialize(data.lake_scan_info_parts(), context, storage->getInMemoryMetadataPtr(), *settings);
+            stats.lakeparts += lake_scan_infos.size();
             hive_table->loadLakeScanInfos(lake_scan_infos);
         }
         else if (auto * cloud_file_table = dynamic_cast<IStorageCloudFile *>(storage.get()))
         {
             auto data_parts = createCnchFileDataParts(session_context, data.file_parts());
+            stats.files += data_parts.size();
             cloud_file_table->loadDataParts(data_parts);
 
             LOG_DEBUG(
@@ -216,6 +250,7 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
         else
             throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
     }
+    stats.load_us += load_timer.elapsedMicroseconds();
 
     std::unordered_map<String, UInt64> udf_infos;
     for (const auto & udf_info : query_resource.udf_infos())
@@ -225,7 +260,7 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
     }
 
     watch.stop();
-    LOG_INFO(log, "Load all resources for session {} in {} us.", query_resource.txn_id(), watch.elapsedMicroseconds());
+    LOG_INFO(log, "Received all resources for {} in {} us: {}", query_resource.txn_id(), watch.elapsedMicroseconds(), stats.toString());
     ProfileEvents::increment(ProfileEvents::QueryLoadResourcesMicroseconds, watch.elapsedMicroseconds());
 }
 

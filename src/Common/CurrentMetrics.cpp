@@ -179,6 +179,9 @@
     M(StorageMemoryRows, "Memory table input rows") \
     M(StorageMemoryBytes, "Memory table input bytes") \
 \
+    M(WorkerServicePoolTask, "Number of active tasks in worker service thread pool.") \
+    M(WorkerServicePoolPendingTask, "Number of pending tasks in worker service thread pool.") \
+\
     M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
 \
     M(CnchTxnActiveTransactions, "Number of active transactions") \
