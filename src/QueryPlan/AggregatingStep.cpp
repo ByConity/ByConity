@@ -196,6 +196,19 @@ appendGroupingColumns(Block block, const GroupingSetsParamsList & grouping_set_p
     return res;
 }
 
+Block generateOutputHeader(const Block & input_header)
+{
+    return appendGroupingSetColumn(input_header);
+}
+
+Block AggregatingStep::appendGroupingColumn(Block block, bool has_grouping)
+{
+    if (!has_grouping)
+        return block;
+
+    return generateOutputHeader(block);
+}
+
 Aggregator::Params
 AggregatingStep::createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys, bool overflow_row)
 {

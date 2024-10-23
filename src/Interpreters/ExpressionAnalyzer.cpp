@@ -37,9 +37,10 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionsConversion.h>
 
+#include <Interpreters/Aggregator.h>
 #include <Interpreters/ArrayJoinAction.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ConcurrentHashJoin.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DictionaryReader.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -54,6 +55,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/replaceForPositionalArguments.h>
 
+#include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ExpressionStep.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -2110,7 +2112,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
     bool finalized = false;
     size_t where_step_num = 0;
 
-    auto finalize_chain = [&](ExpressionActionsChain & chain) {
+    auto finalize_chain = [&](ExpressionActionsChain & chain) -> ColumnsWithTypeAndName {
         chain.finalize();
 
         if (!finalized)
@@ -2119,9 +2121,9 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             finalized = true;
         }
 
-        // fmt::print("After finallize ---------- \n{}\n", chain.dumpChain());
-
+        auto res = chain.getLastStep().getResultColumns();
         chain.clear();
+        return res;
     };
 
     if (storage)
@@ -2270,7 +2272,56 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
             before_aggregation = chain.getLastActions();
 
-            finalize_chain(chain);
+            auto columns_before_aggregation = finalize_chain(chain);
+
+            /// Here we want to check that columns after aggregation have the same type as
+            /// were promised in query_analyzer.aggregated_columns
+            /// Ideally, they should be equal. In practice, this may be not true.
+            /// As an example, we don't build sets for IN inside ExpressionAnalysis::analyzeAggregation,
+            /// so that constant folding for expression (1 in 1) will not work. This may change the return type
+            /// for functions with LowCardinality argument: function "substr(toLowCardinality('abc'), 1 IN 1)"
+            /// should usually return LowCardinality(String) when (1 IN 1) is constant, but without built set
+            /// for (1 IN 1) constant is not propagated and "substr" returns String type.
+            /// See 02503_in_lc_const_args_bug.sql
+            ///
+            /// As a temporary solution, we add converting actions to the next chain.
+            /// Hopefully, later we can
+            /// * use a new analyzer where this issue is absent
+            /// * or remove ExpressionActionsChain completely and re-implement its logic on top of the query plan
+            {
+                for (auto & col : columns_before_aggregation)
+                    if (!col.column)
+                        col.column = col.type->createColumn();
+
+                Block header_before_aggregation(std::move(columns_before_aggregation));
+
+                auto names = query_analyzer.aggregationKeys().getNames();
+                ColumnNumbers keys;
+                for (const auto & name : names)
+                    keys.push_back(header_before_aggregation.getPositionByName(name));
+                const auto & aggregates = query_analyzer.aggregates();
+
+                bool has_grouping = query_analyzer.group_by_kind != GroupByKind::ORDINARY;
+                auto actual_header = Aggregator::Params::getHeader(header_before_aggregation, {}, keys, aggregates, /*final*/ true);
+                actual_header = AggregatingStep::appendGroupingColumn(std::move(actual_header), has_grouping);
+
+                Block expected_header;
+                for (const auto & expected : query_analyzer.aggregated_columns)
+                    expected_header.insert(ColumnWithTypeAndName(expected.type, expected.name));
+
+                if (!blocksHaveEqualStructure(actual_header, expected_header))
+                {
+                    auto converting = ActionsDAG::makeConvertingActions(
+                        actual_header.getColumnsWithTypeAndName(),
+                        expected_header.getColumnsWithTypeAndName(),
+                        ActionsDAG::MatchColumnsMode::Name,
+                        true);
+
+                    auto & step = chain.lastStep(query_analyzer.aggregated_columns);
+                    auto & actions = step.actions();
+                    actions = ActionsDAG::merge(std::move(*actions), std::move(*converting));
+                }
+            }
 
             if (query_analyzer.appendHaving(chain, only_types || !second_stage))
             {
