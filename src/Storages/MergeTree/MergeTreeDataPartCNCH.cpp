@@ -1406,29 +1406,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
         }
     }
 
-<<<<<<< HEAD
-=======
-    if (storage.getSettings()->enable_nexus_fs)
-    {
-        auto nexus_fs = Context::getGlobalContextInstance()->getNexusFS();
-        if (nexus_fs)
-        {
-            // ByteS3 or ByteHDFS, mvcc data part must have the same disk type as the source part
-            auto disk = volume->getDisk();
-            auto read_settings = storage.getContext()->getReadSettings();
-            read_settings.enable_nexus_fs = false;
-
-            for (const auto & [file_name, offsets_and_sizes]: nexus_fs_preloads)
-            {
-                auto source_buffer = disk->readFile(file_name, read_settings);
-                nexus_fs->preload(source_buffer->getFileName(), offsets_and_sizes, source_buffer);
-            }
-
-            // TODO: ChecksumsDiskCacheSegment and PrimaryIndexDiskCacheSegment?
-        }
-    }
-
->>>>>>> fa06d5f763 (Merge 'cnch_gwmh_fix_partial_update' into 'cnch-dev')
     String last_exception{};
     std::unordered_map<String, UInt64> segments_map;
     int real_cache_segments_count = 0;
