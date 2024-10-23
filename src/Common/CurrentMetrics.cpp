@@ -217,7 +217,10 @@
     M(IOSchRawRequests, "RawRequests in deadline scheduler") \
 \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
-    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight")
+    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
+\
+    M(ActiveCnchSession, "Number of Cnch session in active") \
+    M(ActiveHttpSession, "Number of Cnch session in active") \
 
 namespace CurrentMetrics
 {
