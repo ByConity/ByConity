@@ -3,12 +3,10 @@
 #--------------------------------------------
 # this case is for guranteeing the byteyard dependent metrics
 #--------------------------------------------
+
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
-# export CLICKHOUSE_PURE_URL="127.0.0.1:38123/"
-# export CLICKHOUSE_CLIENT="./build/programs/clickhouse-client --port 39123"
-# export CLICKHOUSE_CURL="curl"
 ####
 echo cnch_profile_events_labelled_query_total
 $CLICKHOUSE_CLIENT --query="CREATE DATABASE IF NOT EXISTS test_metrics";
