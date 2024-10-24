@@ -200,6 +200,7 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         if ((enable_sender_metrics || enable_receiver_metrics) && query_exchange_log)
         {
             QueryExchangeLogElement element;
+            element.txn_id = context->getCurrentTransactionID();
             element.initial_query_id = context->getInitialQueryId();
             element.exchange_id = data_key->exchange_id;
             element.partition_id = data_key->partition_id;

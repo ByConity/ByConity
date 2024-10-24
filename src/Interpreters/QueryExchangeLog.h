@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <limits>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/SystemLog.h>
 
@@ -27,6 +28,7 @@ namespace DB
 {
 struct QueryExchangeLogElement
 {
+    UInt64 txn_id{std::numeric_limits<UInt64>::max()};
     String initial_query_id{"-1"};
     UInt64 exchange_id{std::numeric_limits<UInt64>::max()};
     UInt64 partition_id{std::numeric_limits<UInt64>::max()};

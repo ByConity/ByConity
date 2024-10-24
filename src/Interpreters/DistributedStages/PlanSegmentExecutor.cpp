@@ -106,6 +106,7 @@ namespace ErrorCodes
 void PlanSegmentExecutor::prepareSegmentInfo() const
 {
     query_log_element->client_info = context->getClientInfo();
+    query_log_element->txn_id = context->getCurrentTransactionID();
     query_log_element->segment_id = plan_segment->getPlanSegmentId();
     query_log_element->segment_parallel = plan_segment->getParallelSize();
     query_log_element->segment_parallel_index = plan_segment_instance->info.parallel_id;
@@ -167,6 +168,7 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
                 for (const auto & [uuid, stat] : plan_segment_instance->info.source_task_stats)
                 {
                     QueryExchangeLogElement element;
+                    element.txn_id = context->getCurrentTransactionID();
                     element.initial_query_id = context->getInitialQueryId();
                     element.parallel_index = plan_segment_instance->info.parallel_id;
                     element.read_segment = plan_segment->getPlanSegmentId();

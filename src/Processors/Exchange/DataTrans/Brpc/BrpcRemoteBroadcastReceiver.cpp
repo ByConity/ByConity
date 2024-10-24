@@ -100,6 +100,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         if (!enable_receiver_metrics || !query_exchange_log)
             return;
         QueryExchangeLogElement element;
+        element.txn_id = context->getCurrentTransactionID();
         element.initial_query_id = initial_query_id;
         element.exchange_id = trans_key->exchange_id;
         element.partition_id = trans_key->partition_id;
