@@ -231,7 +231,7 @@ struct StorageInMemoryMetadata
     NameSet getFuncColumnNames() const
     {
         if (hasUniqueKey())
-            return {DELETE_FLAG_COLUMN_NAME, UPDATE_COLUMNS, DEDUP_SORT_COLUMN};
+            return {DELETE_FLAG_COLUMN_NAME};
         else
             return {};
     }

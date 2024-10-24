@@ -88,6 +88,7 @@ DiskByteHDFS::DiskByteHDFS(const String & disk_name_, const String & hdfs_base_p
 {
     pread_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, true);
     read_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, false);
+    log = &Poco::Logger::get("DiskByteHDFS");
 }
 
 const String & DiskByteHDFS::getName() const
@@ -241,7 +242,6 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(const String & path, const WriteSettings & settings)
 {
-    assertNotReadonly();
     if (unlikely(settings.remote_fs_write_failed_injection != 0))
     {
         if (settings.remote_fs_write_failed_injection == -1)

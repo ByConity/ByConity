@@ -615,15 +615,6 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
         res = checksums_ptr;
     }
 
-    /// XXX: Currently, the checksum of a part depends on the remote load, which is unreasonable.
-    /// The mutation in the file of the memory part object may not correct.
-    /// Here we do special processing for partial update
-    if (needPartialUpdateProcess())
-    {
-        for (auto & file : res->files)
-            file.second.mutation = parent_part ? parent_part->info.mutation : info.mutation;
-    }
-
     return res;
 }
 
@@ -817,7 +808,7 @@ void IMergeTreeDataPart::restoreMvccColumns()
 {
     if (prev_part == nullptr)
         return;
-    
+
     IMergeTreeDataPart * mutable_prev_part = const_cast<IMergeTreeDataPart *>(prev_part.get());
     mutable_prev_part->restoreMvccColumns();
 
@@ -830,7 +821,7 @@ void IMergeTreeDataPart::restoreMvccColumns()
     {
         if (current_columns.contains(column.name))
             continue;
-        
+
         /// Files will be removed from checksums if column is dropped.
         bool all_files_deleted = true;
         auto check_file_deleted = [&](const String & file_name)
@@ -2563,7 +2554,7 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
         flags |= IMergeTreeDataPart::LOW_PRIORITY_FLAG;
     writeIntBinary(flags, buf);
 
-    /// WARNING: For CNCH, bytes_on_disk is always 0. Keep it here for compatibility. 
+    /// WARNING: For CNCH, bytes_on_disk is always 0. Keep it here for compatibility.
     /// We can only get the value of bytes_on_disk after the whole data file wrote to vfs.
     /// So actually we have no way to store correct bytes_on_disk when writing part.
     /// It's corrected when loading part. See MergeTreeDataPartCNCH::loadMetaInfoFromBuffer and MergeTreeDataPartCNCH::loadChecksumsFromRemote.

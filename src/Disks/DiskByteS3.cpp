@@ -143,7 +143,8 @@ DiskByteS3::DiskByteS3(const String& name_, const String& root_prefix_, const St
         disk_id(next_disk_id.fetch_add(1)), name(name_), root_prefix(root_prefix_),
         s3_util(client_, bucket_, true), reader_opts(std::make_shared<S3RemoteFSReaderOpts>(client_, bucket_)),
         reserved_bytes(0), reservation_count(0),
-        min_upload_part_size(min_upload_part_size_), max_single_part_upload_size(max_single_part_upload_size_)
+        min_upload_part_size(min_upload_part_size_), max_single_part_upload_size(max_single_part_upload_size_),
+        log(&Poco::Logger::get(name))
 {
 }
 
@@ -252,8 +253,6 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & path, const WriteSettings & settings)
 {
-    assertNotReadonly();
-
     if (unlikely(settings.remote_fs_write_failed_injection != 0))
     {
         if (settings.remote_fs_write_failed_injection == -1)

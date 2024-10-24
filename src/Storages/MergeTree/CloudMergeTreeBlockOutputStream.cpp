@@ -556,6 +556,39 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     cnch_lock->unlock();
 }
 
+
+namespace
+{
+    struct BlockUniqueKeyComparator
+    {
+        const ColumnsWithTypeAndName & keys;
+        explicit BlockUniqueKeyComparator(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
+
+        bool operator()(size_t lhs, size_t rhs) const
+        {
+            for (const auto & key : keys)
+                if (key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1))
+                    return false;
+            return true;
+        }
+    };
+
+    struct BlockUniqueKeyHasher
+    {
+        const ColumnsWithTypeAndName & keys;
+        explicit BlockUniqueKeyHasher(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
+
+        size_t operator()(size_t rowid) const
+        {
+            size_t hash_value{0};
+            std::hash<std::string_view> hash_function;
+            for (const auto & key : keys)
+                hash_value ^= hash_function(key.column.get()->getDataAt(rowid).toView());
+            return hash_value;
+        }
+    };
+}
+
 CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::dedupWithUniqueKey(const Block & block)
 {
     if (!metadata_snapshot->hasUniqueKey())

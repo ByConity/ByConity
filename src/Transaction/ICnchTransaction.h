@@ -175,26 +175,11 @@ public:
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-<<<<<<< HEAD
-=======
-    void setBitEngineDictTableMeta(StorageID & storage_id, TxnTimestamp version, const std::map<Int64, String> & dict_bucket_versions_)
-    {
-        dict_table_id = storage_id;
-        latest_version = version;
-        dict_bucket_versions = dict_bucket_versions_;
-    }
-
-    std::tuple<StorageID, TxnTimestamp, std::map<Int64, String>> getBitEngineDictTableMeta()
-    {
-        return std::make_tuple(dict_table_id, latest_version, dict_bucket_versions);
-    }
-
     virtual UInt32 getDedupImplVersion(ContextPtr /*local_context*/)
     {
         throw Exception("getDedupImplVersion is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
->>>>>>> 5342307b51 (Merge 'fix_compatible-bug4cnch-dev' into 'cnch-dev')
     // void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
     // const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
