@@ -202,6 +202,12 @@ void CnchServerServiceImpl::commitParts(
 
                 cnch_writer.commitPreparedCnchParts(
                     DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts), dedup_mode});
+
+                // If main table uuid is not set, set it. Otherwise, skip it
+                if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
+                    cnch_txn->setMainTableUUID(cnch->getCnchStorageUUID());
+
+                rsp->set_dedup_impl_version(cnch_txn->getDedupImplVersion(rpc_context));
             }
             catch (...)
             {
@@ -1091,6 +1097,19 @@ void CnchServerServiceImpl::getServerStartTime(
 {
     brpc::ClosureGuard done_guard(done);
     response->set_server_start_time(server_start_time);
+}
+
+void CnchServerServiceImpl::getDedupImplVersion(
+    google::protobuf::RpcController *,
+    const Protos::GetDedupImplVersionReq * request,
+    Protos::GetDedupImplVersionResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    auto cnch_txn = getContext()->getCnchTransactionCoordinator().getTransaction(request->txn_id());
+    if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
+        cnch_txn->setMainTableUUID(RPCHelpers::createUUID(request->uuid()));
+    response->set_version(cnch_txn->getDedupImplVersion(getContext()));
 }
 
 // About Auto Statistics

@@ -36,6 +36,16 @@ namespace ErrorCodes
 
 IMPLEMENT_SETTINGS_TRAITS(KafkaSettingsTraits, LIST_OF_KAFKA_SETTINGS)
 
+bool KafkaSettings::isFormatFactorySetting(const String & name)
+{
+#define CHECKFORMATSETTING(TYPE, NAME, DEFAULT, DESCRIPTION, FLAGS) \
+    if (name == #NAME) return true;
+
+    FORMAT_FACTORY_SETTINGS(CHECKFORMATSETTING)
+    else return false;
+#undef CHECKFORMATSETTING
+}
+
 void KafkaSettings::applyKafkaSettingChanges(const SettingsChanges & changes)
 {
     for (const auto & setting : changes)

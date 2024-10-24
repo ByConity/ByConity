@@ -1378,7 +1378,7 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTSystemQuery & query, C
         });
     }
 
-    MergeTreeDataDeduper deduper(*this, local_context);
+    MergeTreeDataDeduper deduper(*this, local_context, CnchDedupHelper::DedupMode::UPSERT);
     LocalDeleteBitmaps bitmaps_to_dump
         = deduper.repairParts(txn->getTransactionID(), CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts));
 

@@ -41,6 +41,18 @@ bool isReadOnlyTransaction(const DB::IAST * ast)
     return query_type == ResourceSelectCase::QueryType::SELECT || query_type == ResourceSelectCase::QueryType::OTHER;
 }
 
+void ICnchTransaction::setMainTableUUID(const UUID & uuid)
+{
+    auto lock = getLock();
+    main_table_uuid = uuid;
+}
+
+UUID ICnchTransaction::getMainTableUUID() const
+{
+    auto lock = getLock();
+    return main_table_uuid;
+}
+
 CnchTransactionStatus ICnchTransaction::getStatus() const
 {
     auto lock = getLock();

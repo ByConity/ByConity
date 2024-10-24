@@ -1,3 +1,10 @@
+test dedup in write suffix stage
+2020-10-29 23:40:00	10001	Beijing	男装	5	500
+2020-10-29 23:40:00	10002	Beijing	男装	2	200
+2020-10-29 23:50:00	10003	Beijing	男装	2	200
+2020-10-29 23:50:00	10004	Beijing	男装	2	200
+
+test dedup in txn commit stage
 2020-10-29 23:40:00	10001	Beijing	男装	5	500
 2020-10-29 23:40:00	10002	Beijing	男装	2	200
 2020-10-29 23:50:00	10003	Beijing	男装	2	200

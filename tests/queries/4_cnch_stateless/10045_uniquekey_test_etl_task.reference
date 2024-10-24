@@ -1,0 +1,7 @@
+test dedup in write suffix stage
+1000	499500	3872050
+1000	499500	3872050
+
+test dedup in txn commit stage
+1000	499500	3872050
+1000	499500	3872050

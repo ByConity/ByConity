@@ -27,6 +27,8 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
 #include <common/scope_guard_safe.h>
+#include <Core/SettingsEnums.h>
+#include <Core/UUID.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <Interpreters/VirtualWarehousePool.h>
@@ -239,6 +241,11 @@ void CnchServerTransaction::precommit()
 
 void CnchServerTransaction::executeDedupStage()
 {
+    auto local_dedup_impl_version = getDedupImplVersion(getContext());
+    LOG_TRACE(log, "Dedup impl version: {}, txn id: {}", local_dedup_impl_version, getTransactionID().toUInt64());
+    if (static_cast<DedupImplVersion>(local_dedup_impl_version) != DedupImplVersion::DEDUP_IN_TXN_COMMIT)
+        return;
+
     auto expected_value = false;
     if (!dedup_stage_flag.compare_exchange_strong(expected_value, true))
         throw Exception(
@@ -358,7 +365,6 @@ TxnTimestamp CnchServerTransaction::commit()
 
     TxnTimestamp commit_ts = global_context->getTimestamp();
     int retry = MAX_RETRY;
-    bool bitengine_dict_related{false};
     do
     {
         try
@@ -760,4 +766,29 @@ void CnchServerTransaction::incrementModifiedCount(const Statistics::AutoStats::
     auto lock = getLock();
     modified_counter.merge(new_counts);
 }
+
+UInt32 CnchServerTransaction::getDedupImplVersion(ContextPtr local_context)
+{
+    auto lock = getLock();
+    if (dedup_impl_version != 0)
+        return dedup_impl_version;
+
+    if (main_table_uuid != UUIDHelpers::Nil)
+    {
+        auto catalog = getContext()->getCnchCatalog();
+        TxnTimestamp ts = getContext()->getTimestamp();
+        auto table = catalog->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(main_table_uuid), ts);
+        if (!table)
+            throw Exception(ErrorCodes::ABORTED, "Table {} has been dropped", UUIDHelpers::UUIDToString(main_table_uuid));
+        auto cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);
+        if (!cnch_table)
+            dedup_impl_version = 1; /// DEDUP_IN_WRITE_SUFFIX
+        else
+            dedup_impl_version = static_cast<UInt32>(cnch_table->getSettings()->dedup_impl_version.value);
+    }
+    else
+        dedup_impl_version = 1;
+    return dedup_impl_version;
+}
+
 }

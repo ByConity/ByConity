@@ -29,6 +29,7 @@ namespace ErrorCodes
     extern const int CNCH_TRANSACTION_ABORTED;
     extern const int CNCH_TRANSACTION_PRECOMMIT_ERROR;
     extern const int BRPC_TIMEOUT;
+    extern const int BRPC_NO_METHOD;
 }
 
 CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, CnchServerClientPtr client)
@@ -172,6 +173,59 @@ TxnTimestamp CnchWorkerTransaction::rollback()
     }
 
     return ts;
+}
+
+UInt32 CnchWorkerTransaction::getDedupImplVersion(ContextPtr local_context)
+{
+    {
+        auto lock = getLock();
+        if (dedup_impl_version != 0)
+            return dedup_impl_version;
+    }
+
+    auto dedup_impl_version_tmp = getDedupImplVersionFromServer(local_context);
+    LOG_DEBUG(log, "Dedup impl version from server is {}, txn id: {}", dedup_impl_version_tmp, getTransactionID());
+    auto lock = getLock();
+    dedup_impl_version = dedup_impl_version_tmp;
+    return dedup_impl_version;
+}
+
+void CnchWorkerTransaction::setDedupImplVersion(const UInt32 & dedup_impl_version_)
+{
+    auto lock = getLock();
+    if (dedup_impl_version == 0)
+    {
+        dedup_impl_version = dedup_impl_version_;
+        LOG_TRACE(log, "Set dedup impl version to {}, txn id: {}", dedup_impl_version, getTransactionID());
+    }
+}
+
+UInt32 CnchWorkerTransaction::getDedupImplVersionFromServer(ContextPtr local_context)
+{
+    CnchServerClientPtr target_server_client;
+    try
+    {
+        if (tryGetServerClient())
+            target_server_client = getServerClient();
+        else if (const auto & client_info = local_context->getClientInfo(); client_info.rpc_port)
+        {
+            /// case: "insert select/infile" forward to worker
+            server_client = local_context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
+        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Server with transaction {} is unknown", getTransactionID().toString());
+
+        return server_client->getDedupImplVersion(getTransactionID(), getMainTableUUID());
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::BRPC_NO_METHOD)
+        {
+            LOG_DEBUG(log, "Method getDedupImplVersion doesn't exist in server, just dedup in write suffix.");
+            return 1; /// In this case, server only support dedup in write suffix, just return 1
+        }
+        throw;
+    }
 }
 
 TxnTimestamp CnchWorkerTransaction::commitV2()

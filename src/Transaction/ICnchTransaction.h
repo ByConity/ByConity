@@ -34,7 +34,7 @@
 #include <Common/TypePromotion.h>
 #include <Common/serverLocality.h>
 #include <common/logger_useful.h>
-#include "Transaction/LockRequest.h"
+#include <Transaction/LockRequest.h>
 #include <bthread/recursive_mutex.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Protos/data_models.pb.h>
@@ -111,8 +111,9 @@ public:
 
     bool isSecondary() { return txn_record.isSecondary(); }
 
-    void setMainTableUUID(const UUID & uuid) { main_table_uuid = uuid; }
-    UUID getMainTableUUID() const { return main_table_uuid; }
+    void setMainTableUUID(const UUID & uuid);
+
+    UUID getMainTableUUID() const;
 
     void setKafkaTpl(const String & consumer_group, const cppkafka::TopicPartitionList & tpl);
     void getKafkaTpl(String & consumer_group, cppkafka::TopicPartitionList & tpl) const;
@@ -172,6 +173,11 @@ public:
     virtual size_t getKafkaConsumerIndex() const
     {
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual UInt32 getDedupImplVersion(ContextPtr /*local_context*/)
+    {
+        throw Exception("getDedupImplVersion is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     // void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
@@ -268,6 +274,8 @@ protected:
 
     std::vector<TransFunction> extern_commit_functions;
 
+    /// Unique table related
+    UInt32 dedup_impl_version = 0;
 
 private:
     String creator;

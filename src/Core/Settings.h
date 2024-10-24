@@ -1149,11 +1149,14 @@ enum PreloadLevelSettings : UInt64
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
     M(Bool, enable_implicit_arg_type_convert, false, "Eable implicit type conversion for functions", 0) \
     M(Bool, exception_on_unsupported_mysql_syntax, true, "Whether throws exceptions on currently unsupported mysql syntax such as auto_increment", 0) \
+    M(Bool, only_full_group_by, true, "If the ONLY_FULL_GROUP_BY is enabled (which it is by default), rejects queries for which the select list, HAVING condition, or ORDER BY list refer to nonaggregated columns that are neither named in the GROUP BY clause nor are functionally dependent on them.", 0) \
     M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
     M(Bool, date_format_clickhouse, false, "use date_format as a clickhouse function instead of hive", 0) \
+    M(Bool, datetime_format_mysql_protocol, false, "In mysql protocol, outputs datetime with precision similar to mysql", 0) \
+    M(Bool, datetime_format_mysql_definition, false, "In mysql dialect, whether create table with timestamp/datetime uses datetime64(3)", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
@@ -1303,6 +1306,8 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
     M(UInt64, max_dedup_retry_time, 1, "Dedup task retry num", 0) \
+    M(Bool, insert_if_not_exists, false, "Valid for partial update using update set statements, insert will be performed when no row exists if enabled", 0) \
+    M(Bool, optimize_unique_table_write, false, "Remove gather stage and support parallel insert for unique table ETL task", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
@@ -2072,7 +2077,8 @@ enum PreloadLevelSettings : UInt64
     /** End of gis related settings */ \
     \
     M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
-
+    M(Int64, remote_fs_read_failed_injection, 0, "inject read error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay read ms", 0) \
+    M(Int64, remote_fs_write_failed_injection, 0, "inject write error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay write ms", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

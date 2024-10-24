@@ -39,7 +39,7 @@ struct DumpedData
     MutableMergeTreeDataPartsCNCHVector staged_parts;
     CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
-    bool isEmpty();
+    bool isEmpty() const;
     void extend(DumpedData && data);
 };
 
@@ -95,6 +95,13 @@ public:
         dedup_mode = dedup_mode_;
         res.dedup_mode = dedup_mode;
     }
+
+    CnchDedupHelper::DedupMode getDedupMode() const
+    {
+        return dedup_mode;
+    }
+
+    bool isNeedDedupStage() const { return dedup_mode != CnchDedupHelper::DedupMode::APPEND; }
 
     DumpedData res;
 

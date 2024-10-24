@@ -173,7 +173,7 @@ public:
     virtual bool supportsReplication() const { return false; }
 
     /// Returns true if the storage supports parallel insert.
-    virtual bool supportsParallelInsert() const { return false; }
+    virtual bool supportsParallelInsert(ContextPtr /*local_context*/) const { return false; }
 
     /// Return true if the storage use MAP flattened model. i.e. MergeTree for now
     virtual bool supportsMapImplicitColumn() const { return false; }

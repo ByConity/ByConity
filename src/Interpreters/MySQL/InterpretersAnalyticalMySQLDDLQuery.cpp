@@ -56,7 +56,7 @@ namespace ErrorCodes
 namespace MySQLInterpreter
 {
 
-static NamesAndTypesList getColumnsList(const ASTExpressionList * columns_definition)
+static NamesAndTypesList getColumnsList(const ASTExpressionList * columns_definition, ContextPtr context)
 {
     NamesAndTypesList columns_name_and_type;
     for (const auto & declare_column_ast : columns_definition->children)
@@ -77,19 +77,12 @@ static NamesAndTypesList getColumnsList(const ASTExpressionList * columns_defini
 
             if (type_name_upper.find("TIMESTAMP") != String::npos || type_name_upper.find("DATETIME") != String::npos)
             {
-                if (type_name_upper.find("DATETIME64") == String::npos)
+                if (!data_type_function->arguments || data_type_function->arguments->children.empty())
                 {
                     data_type_function->name = "DATETIME64";
                     auto arguments = std::make_shared<ASTExpressionList>();
-                    arguments->children.push_back(std::make_shared<ASTLiteral>(UInt8(DataTypeDateTime64::default_scale)));
-                    if (data_type_function->arguments && !data_type_function->arguments->children.empty()) {
-                        auto &args = data_type_function->arguments->children;
-                        arguments->children.insert(arguments->children.end(), args.begin(), args.end());
-                    }
-                    if (type_name_upper.find("DateTimeWithoutTz") != String::npos)
-                    {
-                        arguments->children.push_back(std::make_shared<ASTLiteral>("UTC"));
-                    }
+                    UInt8 scale = context->getSettingsRef().datetime_format_mysql_definition ? 0 : DataTypeDateTime64::default_scale;
+                    arguments->children.push_back(std::make_shared<ASTLiteral>(scale));
                     data_type_function->arguments = arguments;
                 }
             }
@@ -326,6 +319,23 @@ static ASTPtr getOrderByPolicy(
     }
 
     return order_by_expression;
+}
+
+static ASTPtr getPartitionPolicy(const NamesAndTypesList & partition_keys)
+{
+    for (const auto & partition_key : partition_keys)
+    {
+        DataTypePtr type = partition_key.type;
+        WhichDataType which(type);
+
+        if (which.isDate() || which.isDate32() || which.isDateTime() || which.isDateTime64())
+        {
+            /// In any case, date or datetime is always the best partitioning key
+            return makeASTFunction("toYYYYMM", std::make_shared<ASTIdentifier>(partition_key.name));
+        }
+    }
+
+    return nullptr;
 }
 
 namespace
@@ -572,7 +582,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
     // table
     if (has_table_definition)
     {
-        NamesAndTypesList columns_name_and_type = getColumnsList(create_defines->columns);
+        NamesAndTypesList columns_name_and_type = getColumnsList(create_defines->columns, context);
         const auto & [primary_keys, unique_keys, keys, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
 
         setNotNullModifier(create_defines->columns, primary_keys);
@@ -591,6 +601,9 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         {
             storage->set(storage->unique_key, unique_key_expression);
         }
+
+        if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
+            storage->set(storage->partition_by, partition_expression);
 
         rewritten_query->set(rewritten_query->columns_list, create_query.columns_list->clone());
         rewritten_query->columns_list->mysql_indices = nullptr;

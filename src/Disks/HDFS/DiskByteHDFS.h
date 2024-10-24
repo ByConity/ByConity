@@ -113,6 +113,8 @@ private:
     std::shared_ptr<HDFSRemoteFSReaderOpts> read_reader_opts;
 
     HDFSFileSystem hdfs_fs;
+
+    Poco::Logger * log;
 };
 
 class DiskByteHDFSReservation: public IReservation

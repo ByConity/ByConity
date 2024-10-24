@@ -24,6 +24,7 @@
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -545,9 +546,15 @@ PropertySets DeterminerVisitor::visitFillingStep(const FillingStep &, Determiner
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
-PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep &, DeterminerContext &)
+PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep & step, DeterminerContext & context)
 {
     auto node = Partitioning{Partitioning::Handle::FIXED_ARBITRARY};
+    const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(step.getTarget()->getStorage().get());
+    if (cnch_table && !cnch_table->supportsWriteInWorkers(context.getContext()))
+    {
+        // unique table can't support do TableWrite in many workers.
+        node = Partitioning{Partitioning::Handle::SINGLE};
+    }
     node.setComponent(Partitioning::Component::WORKER);
     return {{Property{node}}};
 }

@@ -3,6 +3,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include "Common/assert_cast.h"
 #include "Core/MySQL/IMySQLWritePacket.h"
 #include "DataTypes/DataTypeLowCardinality.h"
@@ -41,10 +42,14 @@ ResultSetRow::ResultSetRow(const Serializations & serializations, const DataType
             ColumnPtr col = columns[i]->convertToFullIfNeeded();
             if (col->isNullable())
                 col = assert_cast<const ColumnNullable &>(*col).getNestedColumnPtr();
-            auto components = MySQLUtils::getNormalizedDateTime64Components(data_type, col, row_num);
+            const auto * date_time_type = typeid_cast<const DataTypeDateTime64 *>(data_type.get());
+            auto context = CurrentThread::get().getQueryContext();
+            bool keep_scale = context && context->getSettingsRef().datetime_format_mysql_protocol && date_time_type->getScale() < 6;
+            UInt32 scale = keep_scale ? date_time_type->getScale() : 6;
+            auto components = MySQLUtils::getNormalizedDateTime64Components(data_type, col, row_num, !keep_scale);
             writeDateTimeText<'-', ':', ' '>(LocalDateTime(components.whole, DateLUT::instance(getDateTimeTimezone(*data_type))), ostr);
-            ostr.write('.');
-            writeDateTime64FractionalText<DateTime64>(components.fractional, 6, ostr);
+            if (scale > 0) ostr.write('.');
+            writeDateTime64FractionalText<DateTime64>(components.fractional, scale, ostr);
             payload_size += getLengthEncodedStringSize(ostr.str());
             serialized.push_back(std::move(ostr.str()));
         }

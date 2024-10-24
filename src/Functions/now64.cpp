@@ -155,6 +155,7 @@ public:
 REGISTER_FUNCTION(Now64)
 {
     factory.registerFunction<Now64OverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("CURRENT_TIMESTAMP", Now64OverloadResolver::name, FunctionFactory::CaseInsensitive);
 }
 
 }

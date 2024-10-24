@@ -36,6 +36,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <Common/ErrorCodes.h>
 #include <common/logger_useful.h>
+#include <Core/ColumnWithTypeAndName.h>
 
 namespace DB
 {
@@ -181,7 +182,6 @@ JoinPtr JoinStep::makeJoin(
             if (consumer)
                 consumer->fixParallel(ConcurrentHashJoin::toPowerOfTwo(std::min<size_t>(num_streams, 256)));
             return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
-
         }
         else if (join_algorithm == JoinAlgorithm::GRACE_HASH && GraceHashJoin::isSupported(table_join) && allow_grace_hash_join)
         {
@@ -326,9 +326,35 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         if (filter && !PredicateUtils::isTruePredicate(filter))
         {
             Names output;
-            auto header = input_streams[0].header;
+
+            bool has_outer_join_semantic = settings.context->getSettingsRef().join_use_nulls && 
+                (isAny(getStrictness()) || isAll(getStrictness()) || getStrictness() == ASTTableJoin::Strictness::RightAny || isAsof(getStrictness()));
+            bool make_nullable_for_left = has_outer_join_semantic && isRightOrFull(getKind());
+            bool make_nullable_for_right = has_outer_join_semantic && isLeftOrFull(getKind());
+
+            Block header;
+            for (const auto & col : input_streams[0].header)
+            {
+                if (make_nullable_for_left && JoinCommon::canBecomeNullable(col.type))
+                {
+                    header.insert(ColumnWithTypeAndName{col.column, JoinCommon::convertTypeToNullable(col.type), col.name});
+                }
+                else
+                {
+                    header.insert(col);
+                }
+            }
             for (const auto & col : input_streams[1].header)
-                header.insert(col);
+            {
+                if (make_nullable_for_right && JoinCommon::canBecomeNullable(col.type))
+                {
+                    header.insert(ColumnWithTypeAndName{col.column, JoinCommon::convertTypeToNullable(col.type), col.name});
+                }
+                else
+                {
+                    header.insert(col);
+                }
+            }
             for (const auto & item : header)
                 output.emplace_back(item.name);
             output.emplace_back(filter->getColumnName());

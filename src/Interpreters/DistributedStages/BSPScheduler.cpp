@@ -181,6 +181,13 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
     {
         if (auto step = std::dynamic_pointer_cast<TableWriteStep>(node.step))
         {
+            if (auto cnch_table = std::dynamic_pointer_cast<MergeTreeMetaBase>(step->getTarget()->getStorage()))
+            {
+                auto txn = query_context->getCurrentTransaction();
+                /// Unique table with can't support retry in non-append write mode when dedup in write suffix stage
+                if (cnch_table->commitTxnInWriteSuffixStage(txn->getDedupImplVersion(query_context), query_context))
+                    return false;
+            }
             is_table_write = true;
         }
         else if (node.step->getType() == IQueryPlanStep::Type::TableFinish)

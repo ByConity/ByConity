@@ -150,6 +150,7 @@ private:
 
     UInt64 min_upload_part_size;
     UInt64 max_single_part_upload_size;
+    Poco::Logger * log;
 };
 
 using DiskByteS3Ptr = std::shared_ptr<DiskByteS3>;
