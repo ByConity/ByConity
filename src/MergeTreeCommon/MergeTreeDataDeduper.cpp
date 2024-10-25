@@ -357,8 +357,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     txn_id.toUInt64());
                 if (base_bitmap)
                 {
-                    UInt64 bitmap_version = new_parts[i - visible_parts.size()]->getDeleteBitmapVersion();
-                    if (bitmap_version == txn_id.toUInt64())
+                    if (new_parts[i - visible_parts.size()]->delete_flag)
                     {
                         LOG_TRACE(
                             log,

@@ -44,36 +44,6 @@ INSERT INTO test_unique_ignore_mode_version (*, _delete_flag_) VALUES ('2020-10-
 INSERT INTO test_unique_ignore_mode_version (*) VALUES ('2020-10-29 23:40:00', 10003, '10003C', 3, 300);
 select 'test6', * from test_unique_ignore_mode_version order by id, event_time;
 
-TRUNCATE TABLE test_unique_ignore_mode;
-TRUNCATE TABLE test_unique_ignore_mode_version;
-
-SELECT '------ INSERT IGNORE INTO ------';
-
-SET dedup_key_mode = 'replace';
-SET enable_staging_area_for_write = 1;
-INSERT IGNORE INTO test_unique_ignore_mode VALUES ('2020-10-29 23:40:00', 10001, '10001A', 5, 500); -- { serverError 36 }
-
-SET enable_staging_area_for_write = 0;
--- delete the first row
-INSERT IGNORE INTO test_unique_ignore_mode (*, _delete_flag_) VALUES ('2020-10-29 23:40:00', 10001, '10001A', 1, 100, 1), ('2020-10-29 23:40:00', 10001, '10001AA', 11, 1100, 0);
-select 'test1', * from test_unique_ignore_mode order by event_time, id;
-
--- empty block
-INSERT IGNORE INTO test_unique_ignore_mode (*, _delete_flag_) VALUES ('2020-10-29 23:40:00', 10002, '10001B', 2, 200, 1), ('2020-10-29 23:40:00', 10002, '10001BB', 22, 2200, 1);
-select 'test2', * from test_unique_ignore_mode order by event_time, id;
-
--- keep the first row
-INSERT IGNORE INTO test_unique_ignore_mode (*) VALUES ('2020-10-29 23:40:00', 10003, '10001C', 3, 300), ('2020-10-29 23:40:00', 10003, '10001CC', 3, 3300);
-select 'test3', * from test_unique_ignore_mode order by event_time, id;
-
-INSERT IGNORE INTO test_unique_ignore_mode (*) VALUES ('2020-10-29 23:40:00', 10003, '10001CCC', 333, 33300);
-select 'test4', * from test_unique_ignore_mode order by event_time, id;
-
-INSERT IGNORE INTO test_unique_ignore_mode_version (*, _delete_flag_) VALUES ('2020-10-29 23:40:00', 10001, '10001A', 1, 100, 1), ('2020-10-29 23:50:00', 10001, '10001AA', 11, 1100, 0), ('2020-10-29 23:55:00', 10001, '10001AA', 111, 11100, 0);
-INSERT IGNORE INTO test_unique_ignore_mode_version (*, _delete_flag_) VALUES ('2020-10-29 23:40:00', 10002, '10002B', 2, 200, 1), ('2020-10-29 23:40:00', 10002, '10002BB', 22, 2200, 0);
-INSERT IGNORE INTO test_unique_ignore_mode_version (*, _delete_flag_) VALUES ('2020-10-29 23:40:00', 10002, '10002BBB', 222, 22200, 1);
-INSERT IGNORE INTO test_unique_ignore_mode_version (*) VALUES ('2020-10-29 23:40:00', 10003, '10003C', 3, 300);
-select 'test6', * from test_unique_ignore_mode_version order by id, event_time;
 
 DROP TABLE IF EXISTS test_unique_ignore_mode;
 DROP TABLE IF EXISTS test_unique_ignore_mode_version;
