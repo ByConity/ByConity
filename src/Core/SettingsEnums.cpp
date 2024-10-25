@@ -226,6 +226,11 @@ IMPLEMENT_SETTING_ENUM(
     {{"replace", DedupKeyMode::REPLACE}, {"append", DedupKeyMode::APPEND}, {"throw", DedupKeyMode::THROW}, {"ignore", DedupKeyMode::IGNORE}})
 
 IMPLEMENT_SETTING_ENUM(
+    DedupImplVersion,
+    ErrorCodes::BAD_ARGUMENTS,
+    {{"dedup_in_write_suffix", DedupImplVersion::DEDUP_IN_WRITE_SUFFIX}, {"dedup_in_txn_commit", DedupImplVersion::DEDUP_IN_TXN_COMMIT}})
+
+IMPLEMENT_SETTING_ENUM(
     RefreshViewTaskStatus,
     ErrorCodes::BAD_ARGUMENTS,
     {

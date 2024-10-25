@@ -820,6 +820,9 @@ InterserverIOHandler & Context::getInterserverIOHandler()
 ReadSettings Context::getReadSettings() const
 {
     ReadSettings res;
+
+    res.remote_fs_read_failed_injection = settings.remote_fs_read_failed_injection;
+
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.remote_read_log = settings.enable_remote_read_log ? getRemoteReadLog().get() : nullptr;

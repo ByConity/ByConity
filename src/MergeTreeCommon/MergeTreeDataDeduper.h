@@ -38,7 +38,7 @@ public:
     MergeTreeDataDeduper(
         const MergeTreeMetaBase & data_,
         ContextPtr context_,
-        const CnchDedupHelper::DedupMode & dedup_mode_ = CnchDedupHelper::DedupMode::UPSERT);
+        const CnchDedupHelper::DedupMode & dedup_mode_);
 
     /// Remove duplicate keys among visible, staged, and uncommitted parts.
     /// Assumes that

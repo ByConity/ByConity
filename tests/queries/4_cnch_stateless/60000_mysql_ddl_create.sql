@@ -7,6 +7,8 @@ DROP TABLE IF EXISTS mysql_create_ddl4;
 DROP TABLE IF EXISTS mysql_create_ddl5;
 DROP TABLE IF EXISTS mysql_create_ddl6;
 DROP TABLE IF EXISTS mysql_create_ddl7;
+DROP TABLE IF EXISTS mysql_create_ddl8;
+DROP TABLE IF EXISTS mysql_create_ddl9;
 DROP TABLE IF EXISTS test_create_table_unique1;
 DROP TABLE IF EXISTS test_create_table_unique2;
 CREATE TABLE mysql_create_ddl1
@@ -81,7 +83,27 @@ CREATE TABLE mysql_create_ddl6
     `val2` varchar NOT NULL DEFAULT 'a',
     PRIMARY KEY(id, id2)
 ) INDEX_ALL='Y' ENGINE='OSS' BLOCK_SIZE=8192 TABLE_PROPERTIES='{"accessid":"******","skip_header_line_count":"1","endpoint":"","accesskey":"******","delimiter":";","url":""}';
-
+set datetime_format_mysql_definition = 1;
+create table mysql_create_ddl8(
+    id Int,
+    dt timestamp DEFAULT CURRENT_TIMESTAMP,
+    dt2 timestamp(1) DEFAULT CURRENT_TIMESTAMP,
+    dt3 timestamp('UTC') DEFAULT CURRENT_TIMESTAMP(),
+    dt4 datetime64(2) DEFAULT CURRENT_TIMESTAMP(2),
+    dt5 datetime(3) DEFAULT CURRENT_TIMESTAMP(8),
+    dt6 datetime(4) DEFAULT CURRENT_TIMESTAMP(4),
+    dt7 datetime(5) DEFAULT CURRENT_TIMESTAMP(8),
+    dt8 datetime(6) DEFAULT CURRENT_TIMESTAMP(2),
+    dt9 datetime(7) DEFAULT CURRENT_TIMESTAMP(9),
+    dt10 datetime(8) DEFAULT CURRENT_TIMESTAMP(4),
+    dt11 datetime(9) DEFAULT CURRENT_TIMESTAMP(5),
+    primary key(id, dt, dt2)
+);
+-- not verify results since now() is changing
+-- timestamp(8) DEFAULT CURRENT_TIMESTAMP throws error in mysql
+insert into mysql_create_ddl8(id) values (1);
+set datetime_format_mysql_definition = 0;
+create table mysql_create_ddl9(id Int, dt timestamp, dt2 timestamp(8), dt3 timestamp('UTC'), dt4 datetime64(2), dt5 datetime(5), dt6 datetime,  primary key(id, dt, dt2));
 describe table mysql_create_ddl1;
 show create table mysql_create_ddl1;
 describe table mysql_create_ddl2;
@@ -94,6 +116,10 @@ describe table mysql_create_ddl5;
 show create table mysql_create_ddl5;
 describe table mysql_create_ddl6;
 show create table mysql_create_ddl6;
+describe table mysql_create_ddl8;
+show create table mysql_create_ddl8;
+describe table mysql_create_ddl9;
+show create table mysql_create_ddl9;
 
 DROP TABLE mysql_create_ddl1;
 DROP TABLE mysql_create_ddl2;
@@ -101,6 +127,7 @@ DROP TABLE mysql_create_ddl3;
 DROP TABLE mysql_create_ddl4;
 DROP TABLE mysql_create_ddl5;
 DROP TABLE mysql_create_ddl6;
+DROP TABLE mysql_create_ddl8;
 
 CREATE TABLE test_create_table_unique1
 (

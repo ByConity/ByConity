@@ -385,6 +385,12 @@ public:
         Protos::notifyTableCreatedResp * response,
         google::protobuf::Closure * done) override;
 
+    void getDedupImplVersion(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetDedupImplVersionReq * request,
+        Protos::GetDedupImplVersionResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

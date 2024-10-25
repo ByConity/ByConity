@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <Core/Defines.h>
 #include <Core/SettingsEnums.h>
+#include <common/types.h>
 #include <Common/Throttler.h>
 
 namespace DB
@@ -120,6 +121,8 @@ struct ReadSettings
     size_t filtered_ratio_to_use_skip_read = 0;
     /// Monitoring
     bool for_disk_s3 = false; // to choose which profile events should be incremented
+
+    Int64 remote_fs_read_failed_injection = 0;
 
     void adjustBufferSize(size_t size)
     {

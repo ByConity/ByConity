@@ -114,16 +114,12 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     bool kafka_table_is_active = tableIsActive();
 
     const String full_name = getStorageID().getNameForLogs();
-    if (kafka_table_is_active)
-    {
-        LOG_TRACE(log, "Stop consumption before altering table {}", full_name);
-        daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
-    }
 
     SCOPE_EXIT({
         if (kafka_table_is_active)
         {
-            LOG_TRACE(log, "Restart consumption no matter if ALTER succ for table {}", full_name);
+            usleep(500 * 1000);
+            LOG_DEBUG(log, "Restart consumption no matter if ALTER succ for table {}", full_name);
             try
             {
                 daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start, local_context->getCurrentQueryId());
@@ -135,8 +131,15 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
         }
     });
 
+    if (kafka_table_is_active)
+    {
+        LOG_DEBUG(log, "Stop consumption before altering table {}", full_name);
+        /// RPC timeout may occur here; remember to restart consume if needs to
+        daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
+    }
+
     /// start alter
-    LOG_TRACE(log, "Start altering table {}", full_name);
+    LOG_DEBUG(log, "Start altering table {}", full_name);
 
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
@@ -200,10 +203,7 @@ bool StorageCnchKafka::tableIsActive() const
 {
     auto catalog = getGlobalContext()->getCnchCatalog();
     std::optional<CnchBGThreadStatus> thread_status = catalog->getBGJobStatus(getStorageUUID(), CnchBGThreadType::Consumer);
-    if ((!thread_status) ||
-        (*thread_status == CnchBGThreadStatus::Running))
-        return true;
-    return false;
+    return (!thread_status) || (*thread_status == CnchBGThreadStatus::Running);
 }
 
 /// TODO: merge logic of `checkDependencies` in KafkaConsumeManager

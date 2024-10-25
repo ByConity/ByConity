@@ -121,7 +121,7 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
 
-    bool supportsParallelInsert() const override { return true; }
+    bool supportsParallelInsert(ContextPtr /*local_context*/) const override { return true; }
     std::optional<UInt64> totalBytes(const Settings &) const override;
 
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
