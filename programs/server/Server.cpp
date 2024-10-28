@@ -1373,8 +1373,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setHdfsConnectionParams(hdfs_params);
 
     // pre lookup and cache consult result to avoid the overhead of lookupNNProxy
-    if (!hdfs_nnproxy.empty())
+    if (!hdfs_nnproxy.empty() && hdfs_params.conn_type == HDFSConnectionParams::CONN_NNPROXY)
         lookupNNProxy(hdfs_nnproxy);
+    
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
     global_context->setVETosConnectParams(vetos_params);

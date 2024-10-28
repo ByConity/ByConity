@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <random>
-#include <consul/bridge.h>
 #include "common/types.h"
 #include <Common/formatIPv6.h>
 #include <Common/filesystemHelpers.h>
