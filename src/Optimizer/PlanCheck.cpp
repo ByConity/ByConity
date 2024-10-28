@@ -122,11 +122,10 @@ Void TableScanChecker::visitPlanNode(PlanNodeBase & node, ContextMutablePtr & co
 Void TableScanChecker::visitTableScanNode(TableScanNode & node, ContextMutablePtr & context)
 {
     auto & step = node.getStep();
-    if (!context->getSettingsRef().allow_map_access_without_key && step->getStorage() && step->getStorage()->supportsMapImplicitColumn())
+    auto storage = step->getStorage();
+    if (!context->getSettingsRef().allow_map_access_without_key && storage && storage->supportsMapImplicitColumn())
     {
-        if (!step->getStorageSnapshot())
-            throw Exception("StorageSnapshot is nullptr in TableScan", ErrorCodes::LOGICAL_ERROR);
-        Block header = step->getStorageSnapshot()->getSampleBlockForColumns(step->getRequiredColumns());
+        Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)->getSampleBlockForColumns(step->getRequiredColumns());
         for (auto & col : header)
         {
             if (col.type->isByteMap())

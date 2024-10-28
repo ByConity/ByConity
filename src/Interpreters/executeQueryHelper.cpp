@@ -117,7 +117,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
                     if (std::any_of(db_and_tables.begin(), db_and_tables.end(), [&](const auto & ele){return ele.database == database_name && ele.table == table_name;}))
                     {
                         LOG_DEBUG(
-                            getLogger("executeQuery"),
+                            &Poco::Logger::get("executeQuery"),
                             "Get explicit main table `{}.{}` for current select query from settings.",
                             database_name,
                             table_name);
@@ -126,7 +126,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
                     else
                     {
                         LOG_WARNING(
-                            getLogger("executeQuery"),
+                            &Poco::Logger::get("executeQuery"),
                             "Ignore main table settings because `{}.{}` is not in the select query.",
                             database_name,
                             table_name);
@@ -166,7 +166,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
             if (main_storage)
             {
                 LOG_DEBUG(
-                    getLogger("executeQuery"),
+                    &Poco::Logger::get("executeQuery"),
                     "Get main table `{}.{}` for current select query.",
                     main_storage->getDatabaseName(),
                     main_storage->getTableName());

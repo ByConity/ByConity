@@ -50,7 +50,6 @@ public:
     static std::vector<RulePtr> crossJoinToUnion();
     static std::vector<RulePtr> sumIfToCountIf();
     static std::vector<RulePtr> extractBitmapImplicitFilterRules();
-    static std::vector<RulePtr> addRepartitionColumn();
     static std::vector<RulePtr> joinUsingToJoinOn();
 };
 

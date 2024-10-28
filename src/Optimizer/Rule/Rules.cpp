@@ -240,11 +240,6 @@ std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
     return {std::make_shared<ExtractBitmapImplicitFilter>()};
 }
 
-std::vector<RulePtr> Rules::addRepartitionColumn()
-{
-    return {std::make_shared<AddRepartitionColumn>()};
-}
-
 std::vector<RulePtr> Rules::joinUsingToJoinOn()
 {
     return {std::make_shared<JoinUsingToJoinOn>()};
