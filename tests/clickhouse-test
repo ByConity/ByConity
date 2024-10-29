@@ -1457,6 +1457,8 @@ if __name__ == '__main__':
                 args.client += ' --database=' + os.getenv("CLICKHOUSE_DATABASE")
             else:
                 args.client += ' --database="' + args.tenant_id + "\`" + os.getenv("CLICKHOUSE_DATABASE") + '"'
+        if os.getenv("CLICKHOUSE_PASSWORD"):
+            args.client += ' --password=' + os.getenv("CLICKHOUSE_PASSWORD")
 
     if args.client_option:
         # Set options for client

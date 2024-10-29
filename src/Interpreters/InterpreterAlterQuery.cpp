@@ -158,6 +158,19 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 
     if (!mutation_commands.empty())
     {
+        /// TODO: zuochuang.zema, zhangsiqi.awesome we need a detailed description about alter commands and mutation commands.
+        /// Precheck: if some alter commands will be converted to mutation commands later, it means the txn will generate two mutation entries.
+        /// Just reject such queries.
+        if (!alter_commands.empty())
+        {
+            auto metadata = table->getInMemoryMetadataPtr();
+            auto mutation_commands_in_alter = alter_commands.getMutationCommands(*metadata, false, getContext());
+            if (!mutation_commands_in_alter.empty())
+            {
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot execute mutation commands and alter commands in single query");
+            }
+        }
+
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());

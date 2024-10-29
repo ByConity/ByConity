@@ -29,9 +29,9 @@ Projection Est. 100 rows
                            │     │  └─ TableScan tpch100.partsupp Est. 80000000 rows
                            │     │           Where: Runtime Filters: {ps_partkey, ps_suppkey}
                            │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                           │     └─ Projection Est. 59933 rows
+                           │     └─ Projection Est. 59934 rows
                            │        │     Expressions: [p_mfgr, p_partkey]
-                           │        └─ Filter Est. 59933 rows
+                           │        └─ Filter Est. 59934 rows
                            │           │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS')
                            │           └─ TableScan tpch100.part Est. 20000000 rows
                            │                    Where: (p_size = 15) AND (p_type LIKE '%BRASS')

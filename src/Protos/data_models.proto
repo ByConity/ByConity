@@ -771,6 +771,7 @@ message DataModelAccessEntity
     optional string create_sql = 2; // contains CREATE and GRANT queries of the entity
     optional uint64 commit_time = 3;
     optional UUID uuid = 4;
+    optional string sensitive_sql = 5; // contains GRANT queries that explicitly state the resource
 }
 
 message DataModelSensitiveDatabase

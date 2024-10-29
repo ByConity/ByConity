@@ -65,7 +65,7 @@ ORDER BY c_custkey
 CLUSTER BY c_custkey INTO 3 BUCKETS;
 
 create table orders (
-        o_orderkey       Int32 NOT NULL,
+        o_orderkey       Int64 NOT NULL,
         o_custkey        Int32 NOT NULL,
         o_orderstatus    FixedString(1) NOT NULL,
         o_totalprice     Decimal(15,2)  NOT NULL,
@@ -79,7 +79,7 @@ ORDER BY o_orderkey
 CLUSTER BY o_orderkey INTO 3 BUCKETS;
 
 create table lineitem (
-        l_orderkey    Int32 NOT NULL,
+        l_orderkey    Int64 NOT NULL,
         l_partkey     Int32 NOT NULL,
         l_suppkey     Int32 NOT NULL,
         l_linenumber  Int32 NOT NULL,

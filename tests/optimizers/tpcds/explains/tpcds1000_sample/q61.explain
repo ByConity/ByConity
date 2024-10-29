@@ -48,10 +48,10 @@ Projection Est. 1 rows
             │           │           │  │  │  │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
             │           │           │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk, ss_store_sk}
             │           │           │  │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_promo_sk, ss_ext_sales_price]
-            │           │           │  │  │  └─ Broadcast Exchange Est. 29 rows
-            │           │           │  │  │     └─ Projection Est. 29 rows
+            │           │           │  │  │  └─ Broadcast Exchange Est. 30 rows
+            │           │           │  │  │     └─ Projection Est. 30 rows
             │           │           │  │  │        │     Expressions: [d_date_sk]
-            │           │           │  │  │        └─ Filter Est. 29 rows
+            │           │           │  │  │        └─ Filter Est. 30 rows
             │           │           │  │  │           │     Condition: (d_year = 1998) AND (d_moy = 11)
             │           │           │  │  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
             │           │           │  │  │                    Where: (d_year = 1998) AND (d_moy = 11)
@@ -79,11 +79,11 @@ Projection Est. 1 rows
             │           │                    └─ TableScan tpcds1000_sample.store Est. 1002 rows
             │           │                             Where: s_gmt_offset = -5.
             │           │                             Outputs: [s_store_sk, s_gmt_offset]
-            │           └─ Repartition Exchange Est. 2189168 rows
+            │           └─ Repartition Exchange Est. 2189169 rows
             │              │     Partition by: {ca_address_sk}
-            │              └─ Projection Est. 2189168 rows
+            │              └─ Projection Est. 2189169 rows
             │                 │     Expressions: [ca_address_sk]
-            │                 └─ Filter Est. 2189168 rows
+            │                 └─ Filter Est. 2189169 rows
             │                    │     Condition: ca_gmt_offset = -5.
             │                    └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
             │                             Where: ca_gmt_offset = -5.
@@ -125,10 +125,10 @@ Projection Est. 1 rows
                            │           │  │  │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                            │           │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_store_sk}
                            │           │  │  │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk, ss_customer_sk_1:=ss_customer_sk, ss_store_sk_1:=ss_store_sk, ss_ext_sales_price_1:=ss_ext_sales_price
-                           │           │  │  └─ Broadcast Exchange Est. 29 rows
-                           │           │  │     └─ Projection Est. 29 rows
+                           │           │  │  └─ Broadcast Exchange Est. 30 rows
+                           │           │  │     └─ Projection Est. 30 rows
                            │           │  │        │     Expressions: [d_date_sk_1]
-                           │           │  │        └─ Filter Est. 29 rows
+                           │           │  │        └─ Filter Est. 30 rows
                            │           │  │           │     Condition: (d_moy_1 = 11) AND (d_year_1 = 1998)
                            │           │  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                            │           │  │                    Where: (d_moy = 11) AND (d_year = 1998)
@@ -148,11 +148,11 @@ Projection Est. 1 rows
                            │                    └─ TableScan tpcds1000_sample.store Est. 1002 rows
                            │                             Where: s_gmt_offset = -5.
                            │                             Outputs: s_store_sk_1:=s_store_sk, s_gmt_offset_1:=s_gmt_offset
-                           └─ Repartition Exchange Est. 2189168 rows
+                           └─ Repartition Exchange Est. 2189169 rows
                               │     Partition by: {ca_address_sk_1}
-                              └─ Projection Est. 2189168 rows
+                              └─ Projection Est. 2189169 rows
                                  │     Expressions: [ca_address_sk_1]
-                                 └─ Filter Est. 2189168 rows
+                                 └─ Filter Est. 2189169 rows
                                     │     Condition: ca_gmt_offset_1 = -5.
                                     └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
                                              Where: ca_gmt_offset = -5.

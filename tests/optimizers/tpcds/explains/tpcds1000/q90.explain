@@ -14,7 +14,7 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Filter Est. 103266 rows
+            │        └─ Filter Est. 103267 rows
             │           │     Condition: (ws_sold_time_sk = t_time_sk) AND (ws_ship_hdemo_sk = hd_demo_sk) AND (ws_web_page_sk = wp_web_page_sk) AND (t_hour >= 8) AND (t_hour <= cast(9, 'UInt16')) AND (hd_dep_count = 6) AND (wp_char_count >= 5000) AND (wp_char_count <= 5200)
             │           └─ Buffer Est. 413066 rows
             │              └─ CTERef[1] Est. 413066 rows
@@ -24,7 +24,7 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Filter Est. 103266 rows
+                        └─ Filter Est. 103267 rows
                            │     Condition: (ws_sold_time_sk_1 = t_time_sk_1) AND (ws_ship_hdemo_sk_1 = hd_demo_sk_1) AND (ws_web_page_sk_1 = wp_web_page_sk_1) AND (t_hour_1 >= 19) AND (t_hour_1 <= cast(20, 'UInt16')) AND (hd_dep_count_1 = 6) AND (wp_char_count_1 >= 5000) AND (wp_char_count_1 <= 5200)
                            └─ Buffer Est. 413066 rows
                               └─ CTERef[1] Est. 413066 rows
@@ -44,8 +44,8 @@ CTEDef [1]
    │     │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
    │     │  │           Where: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
    │     │  │           Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
-   │     │  └─ Broadcast Exchange Est. 60 rows
-   │     │     └─ Filter Est. 60 rows
+   │     │  └─ Broadcast Exchange Est. 61 rows
+   │     │     └─ Filter Est. 61 rows
    │     │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
    │     │        └─ TableScan tpcds1000.web_page Est. 3000 rows
    │     │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)

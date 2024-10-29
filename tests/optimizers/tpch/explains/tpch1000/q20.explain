@@ -8,9 +8,9 @@ Projection Est. 400000 rows
          └─ Right Semi Join Est. 400000 rows
             │     Condition: l_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
-            ├─ Repartition Exchange Est. 546147096 rows
+            ├─ Repartition Exchange Est. 136536774 rows
             │  │     Partition by: {l_suppkey}
-            │  └─ Left Semi (PARALLEL_HASH) Join Est. 546147096 rows
+            │  └─ Left Semi (PARALLEL_HASH) Join Est. 136536774 rows
             │     │     Condition: l_partkey == p_partkey
             │     │     Runtime Filters Builder: {p_partkey}
             │     ├─ Repartition Exchange Est. 910245131 rows

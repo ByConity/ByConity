@@ -1,9 +1,8 @@
 CREATE DATABASE IF NOT EXISTS test;
-USE test;
 
-DROP TABLE IF EXISTS test.aeolus_data_table_8_1014318_prod;
+DROP TABLE IF EXISTS aeolus_data_table_8_1014318_prod;
 
-CREATE TABLE test.aeolus_data_table_8_1014318_prod
+CREATE TABLE aeolus_data_table_8_1014318_prod
 (`row_id_kmtq3k` Int64,
  `p_date` Date,
  `c2_work_order` Nullable(Int64),
@@ -482,7 +481,7 @@ FROM
                                 )
                             ) AS _e5841b5283
                         FROM
-                            test.`aeolus_data_table_8_1014318_prod`
+                            `aeolus_data_table_8_1014318_prod`
                         WHERE
                             (
                                 (
@@ -503,4 +502,4 @@ FROM
     ) AS table_1700023778093_1d
 LIMIT 1000;
 
-DROP TABLE IF EXISTS test.aeolus_data_table_8_1014318_prod;
+DROP TABLE IF EXISTS aeolus_data_table_8_1014318_prod;

@@ -1477,6 +1477,13 @@ String StepPrinter::printJoinStep(const JoinStep & step)
         details << "isOrdered:" << step.isOrdered() << "|";
     }
 
+    if (step.isHasUsing())
+    {
+        auto require_right_keys = step.getRequireRightKeys();
+        auto using_str = require_right_keys ? fmt::format("{}", fmt::join(*require_right_keys, ",")) : "nullopt";
+        details << "hasUsing:" << using_str << "|";
+    }
+
     if (!step.getRuntimeFilterBuilders().empty())
     {
         details << "Runtime Filters \\n";

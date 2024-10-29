@@ -35,13 +35,13 @@ Projection
                      │                             │     Runtime Filters Builder: {d_date_sk}
                      │                             ├─ Inner Join
                      │                             │  │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                     │                             │  │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
+                     │                             │  │     Runtime Filters Builder: {wr_order_number}
                      │                             │  ├─ Projection
                      │                             │  │  │     Expressions: [ws_item_sk, ws_net_paid, ws_order_number, ws_quantity, ws_sold_date_sk]
                      │                             │  │  └─ Filter
-                     │                             │  │     │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                             │  │     │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_order_number, ws_sold_date_sk}
                      │                             │  │     └─ TableScan tpcds1000.web_sales
-                     │                             │  │              Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                             │  │              Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_order_number, ws_sold_date_sk}
                      │                             │  │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_net_paid, ws_net_profit]
                      │                             │  └─ Filter
                      │                             │     │     Condition: wr_return_amt > 10000.
@@ -77,13 +77,13 @@ Projection
                      │                             │     Runtime Filters Builder: {d_date_sk_1}
                      │                             ├─ Inner Join
                      │                             │  │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                     │                             │  │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
+                     │                             │  │     Runtime Filters Builder: {cr_order_number}
                      │                             │  ├─ Projection
                      │                             │  │  │     Expressions: [cs_item_sk, cs_net_paid, cs_order_number, cs_quantity, cs_sold_date_sk]
                      │                             │  │  └─ Filter
-                     │                             │  │     │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                             │  │     │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_order_number, cs_sold_date_sk}
                      │                             │  │     └─ TableScan tpcds1000.catalog_sales
-                     │                             │  │              Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                             │  │              Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_order_number, cs_sold_date_sk}
                      │                             │  │              Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_net_paid, cs_net_profit]
                      │                             │  └─ Filter
                      │                             │     │     Condition: cr_return_amount > 10000.
@@ -119,13 +119,13 @@ Projection
                                                    │     Runtime Filters Builder: {d_date_sk_2}
                                                    ├─ Inner Join
                                                    │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                                                   │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
+                                                   │  │     Runtime Filters Builder: {sr_ticket_number}
                                                    │  ├─ Projection
                                                    │  │  │     Expressions: [ss_item_sk, ss_net_paid, ss_quantity, ss_sold_date_sk, ss_ticket_number]
                                                    │  │  └─ Filter
-                                                   │  │     │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                   │  │     │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
                                                    │  │     └─ TableScan tpcds1000.store_sales
-                                                   │  │              Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                   │  │              Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
                                                    │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_net_paid, ss_net_profit]
                                                    │  └─ Filter
                                                    │     │     Condition: sr_return_amt > 10000.
@@ -140,4 +140,4 @@ Projection
                                                             └─ TableScan tpcds1000.date_dim
                                                                      Where: (d_year = 2001) AND (d_moy = 12)
                                                                      Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-note: Runtime Filter is applied for 9 times.
+note: Runtime Filter is applied for 6 times.

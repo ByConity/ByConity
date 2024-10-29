@@ -19,26 +19,26 @@ Projection Est. 100 rows
                │     │  │     Partition by: {ss_item_sk}
                │     │  └─ Inner Join Est. ? rows
                │     │     │     Condition: expr#rank() OVER (ORDER BY rank_col DESC) == expr#rank() OVER (ORDER BY rank_col ASC)
-               │     │     ├─ Repartition Exchange Est. 32 rows
+               │     │     ├─ Repartition Exchange Est. 17273 rows
                │     │     │  │     Partition by: {expr#rank() OVER (ORDER BY rank_col DESC)}
-               │     │     │  └─ Projection Est. 32 rows
+               │     │     │  └─ Projection Est. 17273 rows
                │     │     │     │     Expressions: [expr#rank() OVER (ORDER BY rank_col DESC), ss_item_sk_1]
-               │     │     │     └─ Filter Est. 32 rows
+               │     │     │     └─ Filter Est. 17273 rows
                │     │     │        │     Condition: `expr#rank() OVER (ORDER BY rank_col DESC)` < 11
-               │     │     │        └─ Window Est. 131 rows
-               │     │     │           └─ Gather Exchange Est. 131 rows
-               │     │     │              └─ Buffer Est. 131 rows
-               │     │     │                 └─ CTERef[1] Est. 131 rows
-               │     │     └─ Repartition Exchange Est. 32 rows
+               │     │     │        └─ Window Est. 69091 rows
+               │     │     │           └─ Gather Exchange Est. 69091 rows
+               │     │     │              └─ Buffer Est. 69091 rows
+               │     │     │                 └─ CTERef[1] Est. 69091 rows
+               │     │     └─ Repartition Exchange Est. 17273 rows
                │     │        │     Partition by: {expr#rank() OVER (ORDER BY rank_col ASC)}
-               │     │        └─ Projection Est. 32 rows
+               │     │        └─ Projection Est. 17273 rows
                │     │           │     Expressions: [expr#rank() OVER (ORDER BY rank_col ASC), ss_item_sk]
-               │     │           └─ Filter Est. 32 rows
+               │     │           └─ Filter Est. 17273 rows
                │     │              │     Condition: `expr#rank() OVER (ORDER BY rank_col ASC)` < 11
-               │     │              └─ Window Est. 131 rows
-               │     │                 └─ Gather Exchange Est. 131 rows
-               │     │                    └─ Buffer Est. 131 rows
-               │     │                       └─ CTERef[1] Est. 131 rows
+               │     │              └─ Window Est. 69091 rows
+               │     │                 └─ Gather Exchange Est. 69091 rows
+               │     │                    └─ Buffer Est. 69091 rows
+               │     │                       └─ CTERef[1] Est. 69091 rows
                │     └─ Repartition Exchange Est. 300000 rows
                │        │     Partition by: {i_item_sk}
                │        └─ TableScan tpcds1000_sample.item Est. 300000 rows
@@ -48,10 +48,10 @@ Projection Est. 100 rows
                   └─ TableScan tpcds1000_sample.item Est. 300000 rows
                            Outputs: i_item_sk_1:=i_item_sk, i_product_name_1:=i_product_name
 CTEDef [1]
-   Inner Join Est. 131 rows
+   Inner Join Est. 69091 rows
    │     Condition: 
    │     Filter: `expr#avg(ss_net_profit)` > ('0.9' * `expr#avg(ss_net_profit)_1`)
-   ├─ Aggregating Est. 263 rows
+   ├─ Aggregating Est. 138182 rows
    │  │     Group by: {ss_item_sk}
    │  │     Aggregates: expr#avg(ss_net_profit):=AggNull(avg)(ss_net_profit)
    │  └─ Projection Est. 5491605 rows

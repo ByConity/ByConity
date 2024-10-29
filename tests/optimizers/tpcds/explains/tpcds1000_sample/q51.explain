@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 2948303090 rows
+      └─ Gather Exchange Est. 2948303091 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
             │     Limit: 100
-            └─ Filter Est. 2948303090 rows
+            └─ Filter Est. 2948303091 rows
                │     Condition: `expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` > `expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
                └─ Window Est. 11793212362 rows
                   └─ Repartition Exchange Est. 11793212362 rows

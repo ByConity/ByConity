@@ -67,6 +67,7 @@ public:
 
 private:
     StoragePtr getTable(ASTInsertQuery & query);
+    StoragePtr tryGetTableInWorkerResource(const StorageID & table_id);
     Block getSampleBlock(const ASTInsertQuery & query, const StoragePtr & table, const StorageMetadataPtr & metadata_snapshot) const;
 
     ASTPtr query_ptr;

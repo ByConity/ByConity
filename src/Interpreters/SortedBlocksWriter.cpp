@@ -2,7 +2,7 @@
 #include <Interpreters/SortedBlocksWriter.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <DataStreams/TemporaryFileStream.h>
+#include <DataStreams/TemporaryFileStreamLegacy.h>
 #include <DataStreams/materializeBlock.h>
 #include <Disks/IVolume.h>
 
@@ -22,7 +22,7 @@ std::unique_ptr<TemporaryFile> flushToFile(const String & tmp_path, const Block 
     auto tmp_file = createTemporaryFile(tmp_path);
 
     std::atomic<bool> is_cancelled{false};
-    TemporaryFileStream::write(tmp_file->path(), header, stream, &is_cancelled, codec);
+    TemporaryFileStreamLegacy::write(tmp_file->path(), header, stream, &is_cancelled, codec);
     if (is_cancelled)
         throw Exception("Cannot flush MergeJoin data on disk. No space at " + tmp_path, ErrorCodes::NOT_ENOUGH_SPACE);
 

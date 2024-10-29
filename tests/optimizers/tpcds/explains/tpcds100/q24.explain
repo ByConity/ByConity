@@ -1,25 +1,25 @@
-Projection Est. 1360 rows
+Projection Est. 107554 rows
 │     Expressions: c_first_name:=c_first_name_1, c_last_name:=c_last_name_1, paid:=`expr#sum(netpaid)`, s_store_name:=s_store_name_1
-└─ Sorting Est. 1360 rows
+└─ Sorting Est. 107554 rows
    │     Order by: {c_last_name_1 ASC NULLS LAST, c_first_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST}
-   └─ Gather Exchange Est. 1360 rows
-      └─ Sorting Est. 1360 rows
+   └─ Gather Exchange Est. 107554 rows
+      └─ Sorting Est. 107554 rows
          │     Order by: {c_last_name_1 ASC NULLS LAST, c_first_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST}
-         └─ Inner Join Est. 1360 rows
+         └─ Inner Join Est. 107554 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)` > `expr#multiply('0.05', avg(netpaid))`
-            ├─ MergingAggregated Est. 2721 rows
-            │  └─ Repartition Exchange Est. 362812 rows
+            ├─ MergingAggregated Est. 215107 rows
+            │  └─ Repartition Exchange Est. 4947458 rows
             │     │     Partition by: {c_last_name_1, c_first_name_1, s_store_name_1}
-            │     └─ Aggregating Est. 362812 rows
+            │     └─ Aggregating Est. 4947458 rows
             │        │     Group by: {c_last_name_1, c_first_name_1, s_store_name_1}
             │        │     Aggregates: expr#sum(netpaid):=AggNull(sum)(expr#sum(ss_net_paid)_1)
-            │        └─ Projection Est. 4947457 rows
+            │        └─ Projection Est. 4947458 rows
             │           │     Expressions: [c_first_name_1, c_last_name_1, expr#sum(ss_net_paid)_1, s_store_name_1]
-            │           └─ Filter Est. 4947457 rows
+            │           └─ Filter Est. 4947458 rows
             │              │     Condition: i_color_1 = 'peach'
-            │              └─ Buffer Est. 19789831 rows
-            │                 └─ CTERef[0] Est. 19789831 rows
+            │              └─ Buffer Est. 19789832 rows
+            │                 └─ CTERef[0] Est. 19789832 rows
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply('0.05', avg(netpaid)):='0.05' * `expr#avg(netpaid)`
@@ -28,10 +28,10 @@ Projection Est. 1360 rows
                         └─ Aggregating Est. 1 rows
                            │     Group by: {}
                            │     Aggregates: expr#avg(netpaid):=AggNull(avg)(expr#sum(ss_net_paid)_2)
-                           └─ Buffer Est. 19789831 rows
-                              └─ CTERef[0] Est. 19789831 rows
+                           └─ Buffer Est. 19789832 rows
+                              └─ CTERef[0] Est. 19789832 rows
 CTEDef [0]
-   MergingAggregated Est. 19789831 rows
+   MergingAggregated Est. 19789832 rows
    └─ Repartition Exchange Est. 19790089 rows
       │     Partition by: {c_last_name, c_first_name, s_store_name, ca_state, s_state, i_color, i_current_price, i_manager_id, i_units, i_size}
       └─ Aggregating Est. 19790089 rows
@@ -80,28 +80,28 @@ CTEDef [0]
                               Outputs: [ca_address_sk, ca_state, ca_zip, ca_country]
 note: Runtime Filter is applied for 1 times.
 note: CTE(Common Table Expression) is applied for 2 times.
-Projection Est. 1360 rows
+Projection Est. 107554 rows
 │     Expressions: c_first_name:=c_first_name_6, c_last_name:=c_last_name_6, paid:=`expr#sum(netpaid)_1`, s_store_name:=s_store_name_6
-└─ Sorting Est. 1360 rows
+└─ Sorting Est. 107554 rows
    │     Order by: {c_last_name_6 ASC NULLS LAST, c_first_name_6 ASC NULLS LAST, s_store_name_6 ASC NULLS LAST}
-   └─ Gather Exchange Est. 1360 rows
-      └─ Sorting Est. 1360 rows
+   └─ Gather Exchange Est. 107554 rows
+      └─ Sorting Est. 107554 rows
          │     Order by: {c_last_name_6 ASC NULLS LAST, c_first_name_6 ASC NULLS LAST, s_store_name_6 ASC NULLS LAST}
-         └─ Inner Join Est. 1360 rows
+         └─ Inner Join Est. 107554 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)_1` > `expr#multiply('0.05', avg(netpaid))_1`
-            ├─ MergingAggregated Est. 2721 rows
-            │  └─ Repartition Exchange Est. 362812 rows
+            ├─ MergingAggregated Est. 215107 rows
+            │  └─ Repartition Exchange Est. 4947458 rows
             │     │     Partition by: {c_last_name_6, c_first_name_6, s_store_name_6}
-            │     └─ Aggregating Est. 362812 rows
+            │     └─ Aggregating Est. 4947458 rows
             │        │     Group by: {c_last_name_6, c_first_name_6, s_store_name_6}
             │        │     Aggregates: expr#sum(netpaid)_1:=AggNull(sum)(expr#sum(ss_net_paid)_6)
-            │        └─ Projection Est. 4947457 rows
+            │        └─ Projection Est. 4947458 rows
             │           │     Expressions: [c_first_name_6, c_last_name_6, expr#sum(ss_net_paid)_6, s_store_name_6]
-            │           └─ Filter Est. 4947457 rows
+            │           └─ Filter Est. 4947458 rows
             │              │     Condition: i_color_6 = 'saddle'
-            │              └─ Buffer Est. 19789831 rows
-            │                 └─ CTERef[0] Est. 19789831 rows
+            │              └─ Buffer Est. 19789832 rows
+            │                 └─ CTERef[0] Est. 19789832 rows
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply('0.05', avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
@@ -110,10 +110,10 @@ Projection Est. 1360 rows
                         └─ Aggregating Est. 1 rows
                            │     Group by: {}
                            │     Aggregates: expr#avg(netpaid)_1:=AggNull(avg)(expr#sum(ss_net_paid)_7)
-                           └─ Buffer Est. 19789831 rows
-                              └─ CTERef[0] Est. 19789831 rows
+                           └─ Buffer Est. 19789832 rows
+                              └─ CTERef[0] Est. 19789832 rows
 CTEDef [0]
-   MergingAggregated Est. 19789831 rows
+   MergingAggregated Est. 19789832 rows
    └─ Repartition Exchange Est. 19790089 rows
       │     Partition by: {c_last_name_5, c_first_name_5, s_store_name_5, ca_state_5, s_state_5, i_color_5, i_current_price_5, i_manager_id_5, i_units_5, i_size_5}
       └─ Aggregating Est. 19790089 rows

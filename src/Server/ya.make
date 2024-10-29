@@ -32,6 +32,7 @@ SRCS(
     PrometheusRequestHandler.cpp
     ProtocolServerAdapter.cpp
     ReplicasStatusHandler.cpp
+    APIRequestHandler.cpp
     StaticRequestHandler.cpp
     TCPHandler.cpp
     WebUIRequestHandler.cpp

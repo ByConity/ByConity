@@ -7,11 +7,11 @@ Projection Est. 100 rows
       └─ Sorting Est. 100 rows
          │     Order by: {c_customer_id ASC NULLS LAST}
          │     Limit: 100
-         └─ Gather Exchange Est. 5486130 rows
+         └─ Gather Exchange Est. 5294149 rows
             └─ Sorting Est. 100 rows
                │     Order by: {c_customer_id ASC NULLS LAST}
                │     Limit: 100
-               └─ Inner Join Est. 5486130 rows
+               └─ Inner Join Est. 5294149 rows
                   │     Condition: sr_cdemo_sk == c_current_cdemo_sk
                   │     Runtime Filters Builder: {c_current_cdemo_sk}
                   ├─ Filter Est. 287999764 rows
@@ -19,13 +19,13 @@ Projection Est. 100 rows
                   │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
                   │           Where: Runtime Filters: {sr_cdemo_sk}
                   │           Outputs: [sr_cdemo_sk]
-                  └─ Broadcast Exchange Est. 36492 rows
-                     └─ Inner Join Est. 36492 rows
+                  └─ Broadcast Exchange Est. 35215 rows
+                     └─ Inner Join Est. 35215 rows
                         │     Condition: c_current_hdemo_sk == hd_demo_sk
                         │     Runtime Filters Builder: {hd_demo_sk}
-                        ├─ Repartition Exchange Est. 121643 rows
+                        ├─ Repartition Exchange Est. 117386 rows
                         │  │     Partition by: {c_current_hdemo_sk}
-                        │  └─ Inner Join Est. 121643 rows
+                        │  └─ Inner Join Est. 117386 rows
                         │     │     Condition: c_current_addr_sk == ca_address_sk
                         │     │     Runtime Filters Builder: {ca_address_sk}
                         │     ├─ Filter Est. 11580105 rows

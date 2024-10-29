@@ -29,7 +29,7 @@ Projection Est. 100 rows
                         │        │     └─ Aggregating Est. 501 rows
                         │        │        │     Group by: {ss_store_sk}
                         │        │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
-                        │        │        └─ Inner Join Est. 45839569 rows
+                        │        │        └─ Inner Join Est. 43752523 rows
                         │        │           │     Condition: ss_sold_date_sk == d_date_sk
                         │        │           │     Runtime Filters Builder: {d_date_sk}
                         │        │           ├─ Filter Est. 2750374164 rows
@@ -51,7 +51,7 @@ Projection Est. 100 rows
                         │              └─ Aggregating Est. 501 rows
                         │                 │     Group by: {sr_store_sk}
                         │                 │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt), expr#sum(sr_net_loss):=AggNull(sum)(sr_net_loss)
-                        │                 └─ Inner Join Est. 4171619 rows
+                        │                 └─ Inner Join Est. 4023748 rows
                         │                    │     Condition: sr_returned_date_sk == d_date_sk_1
                         │                    │     Runtime Filters Builder: {d_date_sk_1}
                         │                    ├─ Filter Est. 277916179 rows
@@ -134,7 +134,7 @@ Projection Est. 100 rows
                                  │     └─ Aggregating Est. 3000 rows
                                  │        │     Group by: {ws_web_page_sk}
                                  │        │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
-                                 │        └─ Inner Join Est. 11457034 rows
+                                 │        └─ Inner Join Est. 11450749 rows
                                  │           │     Condition: ws_sold_date_sk == d_date_sk_4
                                  │           │     Runtime Filters Builder: {d_date_sk_4}
                                  │           ├─ Filter Est. 719817809 rows
@@ -156,7 +156,7 @@ Projection Est. 100 rows
                                        └─ Aggregating Est. 3000 rows
                                           │     Group by: {wr_web_page_sk}
                                           │     Aggregates: expr#sum(wr_return_amt):=AggNull(sum)(wr_return_amt), expr#sum(wr_net_loss):=AggNull(sum)(wr_net_loss)
-                                          └─ Inner Join Est. 956782 rows
+                                          └─ Inner Join Est. 913392 rows
                                              │     Condition: wr_returned_date_sk == d_date_sk_5
                                              │     Runtime Filters Builder: {d_date_sk_5}
                                              ├─ Filter Est. 68756379 rows

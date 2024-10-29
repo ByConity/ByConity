@@ -1,18 +1,18 @@
-Projection Est. 13 rows
+Projection Est. 100 rows
 │     Expressions: [ca_state, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_gender, cd_marital_status], avg(cd_dep_college_count):=`expr#avg(cd_dep_college_count)`, avg(cd_dep_count):=`expr#avg(cd_dep_count)`, avg(cd_dep_employed_count):=`expr#avg(cd_dep_employed_count)`, cnt1:=`expr#count()`, cnt2:=`expr#count()`, cnt3:=`expr#count()`, max(cd_dep_college_count):=`expr#max(cd_dep_college_count)`, max(cd_dep_count):=`expr#max(cd_dep_count)`, max(cd_dep_employed_count):=`expr#max(cd_dep_employed_count)`, min(cd_dep_college_count):=`expr#min(cd_dep_college_count)`, min(cd_dep_count):=`expr#min(cd_dep_count)`, min(cd_dep_employed_count):=`expr#min(cd_dep_employed_count)`
-└─ Limit Est. 13 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. 13 rows
+   └─ Sorting Est. 100 rows
       │     Order by: {ca_state ASC NULLS LAST, cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_dep_count ASC NULLS LAST, cd_dep_employed_count ASC NULLS LAST, cd_dep_college_count ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 13 rows
-         └─ Sorting Est. 13 rows
+      └─ Gather Exchange Est. 105319 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {ca_state ASC NULLS LAST, cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_dep_count ASC NULLS LAST, cd_dep_employed_count ASC NULLS LAST, cd_dep_college_count ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 13 rows
-               └─ Repartition Exchange Est. 13 rows
+            └─ MergingAggregated Est. 105319 rows
+               └─ Repartition Exchange Est. 105319 rows
                   │     Partition by: {ca_state, cd_gender, cd_marital_status, cd_dep_count, cd_dep_employed_count, cd_dep_college_count}
-                  └─ Aggregating Est. 13 rows
+                  └─ Aggregating Est. 105319 rows
                      │     Group by: {ca_state, cd_gender, cd_marital_status, cd_dep_count, cd_dep_employed_count, cd_dep_college_count}
                      │     Aggregates: expr#count():=AggNull(count)(), expr#min(cd_dep_count):=AggNull(min)(cd_dep_count), expr#max(cd_dep_count):=AggNull(max)(cd_dep_count), expr#avg(cd_dep_count):=AggNull(avg)(cd_dep_count), expr#min(cd_dep_employed_count):=AggNull(min)(cd_dep_employed_count), expr#max(cd_dep_employed_count):=AggNull(max)(cd_dep_employed_count), expr#avg(cd_dep_employed_count):=AggNull(avg)(cd_dep_employed_count), expr#min(cd_dep_college_count):=AggNull(min)(cd_dep_college_count), expr#max(cd_dep_college_count):=AggNull(max)(cd_dep_college_count), expr#avg(cd_dep_college_count):=AggNull(avg)(cd_dep_college_count)
                      └─ Projection Est. 3000000 rows

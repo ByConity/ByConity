@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_customer_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 2156292 rows
+      └─ Gather Exchange Est. 2156293 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner (PARALLEL_HASH) Join Est. 2156292 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 2147436 rows
                │     Condition: c_customer_sk == sr_customer_sk_3
                │     Runtime Filters Builder: {sr_customer_sk_3}
                ├─ Repartition Exchange Est. 12000000 rows
@@ -19,9 +19,9 @@ Projection Est. 100 rows
                │     └─ TableScan tpcds1000.customer Est. 12000000 rows
                │              Where: Runtime Filters: {c_customer_sk}
                │              Outputs: [c_customer_sk, c_customer_id]
-               └─ Repartition Exchange Est. 2147435 rows
+               └─ Repartition Exchange Est. 2147436 rows
                   │     Partition by: {sr_customer_sk_3}
-                  └─ Inner Join Est. 2147435 rows
+                  └─ Inner Join Est. 2147436 rows
                      │     Condition: sr_store_sk_3 == s_store_sk
                      │     Filter: `expr#sum(sr_return_amt)_3` > (`expr#avg(ctr_total_return)_1` * '1.2')
                      ├─ MergingAggregated Est. 4294871 rows

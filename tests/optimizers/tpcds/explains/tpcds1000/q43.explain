@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1169 rows
+      └─ Gather Exchange Est. 4337 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)) ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 1169 rows
-               └─ Repartition Exchange Est. 1169 rows
+            └─ MergingAggregated Est. 4337 rows
+               └─ Repartition Exchange Est. 4337 rows
                   │     Partition by: {s_store_name, s_store_id}
-                  └─ Aggregating Est. 1169 rows
+                  └─ Aggregating Est. 4337 rows
                      │     Group by: {s_store_name, s_store_id}
                      │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))
                      └─ Projection Est. 299248853 rows

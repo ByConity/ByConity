@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1005563 rows
+      └─ Gather Exchange Est. 1005564 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 1005563 rows
+            └─ Inner Join Est. 1005564 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Filter: ca_city_1 != ca_city
                │     Runtime Filters Builder: {c_current_addr_sk}

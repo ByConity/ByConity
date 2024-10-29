@@ -27,46 +27,46 @@ Projection
                            └─ CTERef[1]
 CTEDef [1]
    Projection
-   │     Expressions: [d_week_seq_2, d_year], d_week_seq_1:=d_week_seq_2, expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3`
+   │     Expressions: [d_year], d_week_seq_1:=d_week_seq_5, d_week_seq_2:=d_week_seq_5, expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3`
    └─ Inner Join
-      │     Condition: d_week_seq_2 == d_week_seq_5
-      ├─ Buffer
-      │  └─ CTERef[2]
-      └─ MergingAggregated
-         └─ Repartition Exchange
-            │     Partition by: {d_week_seq_5}
-            └─ Aggregating
-               │     Group by: {d_week_seq_5}
-               │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1)
-               └─ Projection
-                  │     Expressions: [d_week_seq_5], expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Friday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Monday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Saturday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Sunday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Thursday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Tuesday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Wednesday', ws_ext_sales_price_3, NULL)
-                  └─ Inner Join
-                     │     Condition: ws_sold_date_sk_3 == d_date_sk_1
-                     │     Runtime Filters Builder: {d_date_sk_1}
-                     ├─ Union
-                     │  │     OutputToInputs: ws_ext_sales_price_3 = [ws_ext_sales_price_2,cs_ext_sales_price_1], ws_sold_date_sk_3 = [ws_sold_date_sk_2,cs_sold_date_sk_1]
-                     │  ├─ Filter
-                     │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_2}
-                     │  │  └─ TableScan tpcds1000.web_sales
-                     │  │           Where: Runtime Filters: {ws_sold_date_sk}
-                     │  │           Outputs: ws_sold_date_sk_2:=ws_sold_date_sk, ws_ext_sales_price_2:=ws_ext_sales_price
-                     │  └─ Filter
-                     │     │     Condition: Runtime Filters: {cs_sold_date_sk_1}
-                     │     └─ TableScan tpcds1000.catalog_sales
-                     │              Where: Runtime Filters: {cs_sold_date_sk}
-                     │              Outputs: cs_sold_date_sk_1:=cs_sold_date_sk, cs_ext_sales_price_1:=cs_ext_sales_price
-                     └─ Broadcast Exchange
-                        └─ Left Semi Join
-                           │     Condition: d_week_seq_5 == d_week_seq_2
-                           │     Runtime Filters Builder: {d_week_seq_2}
-                           ├─ Filter
-                           │  │     Condition: Runtime Filters: {d_week_seq_5}
-                           │  └─ TableScan tpcds1000.date_dim
-                           │           Where: Runtime Filters: {d_week_seq}
-                           │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_5:=d_week_seq, d_day_name_1:=d_day_name
-                           └─ Broadcast Exchange
-                              └─ Buffer
-                                 └─ CTERef[2]
+      │     Condition: d_week_seq_5 == d_week_seq_2
+      ├─ MergingAggregated
+      │  └─ Repartition Exchange
+      │     │     Partition by: {d_week_seq_5}
+      │     └─ Aggregating
+      │        │     Group by: {d_week_seq_5}
+      │        │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1)
+      │        └─ Projection
+      │           │     Expressions: [d_week_seq_5], expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Friday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Monday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Saturday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Sunday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Thursday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Tuesday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Wednesday', ws_ext_sales_price_3, NULL)
+      │           └─ Inner Join
+      │              │     Condition: ws_sold_date_sk_3 == d_date_sk_1
+      │              │     Runtime Filters Builder: {d_date_sk_1}
+      │              ├─ Union
+      │              │  │     OutputToInputs: ws_ext_sales_price_3 = [ws_ext_sales_price_2,cs_ext_sales_price_1], ws_sold_date_sk_3 = [ws_sold_date_sk_2,cs_sold_date_sk_1]
+      │              │  ├─ Filter
+      │              │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_2}
+      │              │  │  └─ TableScan tpcds1000.web_sales
+      │              │  │           Where: Runtime Filters: {ws_sold_date_sk}
+      │              │  │           Outputs: ws_sold_date_sk_2:=ws_sold_date_sk, ws_ext_sales_price_2:=ws_ext_sales_price
+      │              │  └─ Filter
+      │              │     │     Condition: Runtime Filters: {cs_sold_date_sk_1}
+      │              │     └─ TableScan tpcds1000.catalog_sales
+      │              │              Where: Runtime Filters: {cs_sold_date_sk}
+      │              │              Outputs: cs_sold_date_sk_1:=cs_sold_date_sk, cs_ext_sales_price_1:=cs_ext_sales_price
+      │              └─ Broadcast Exchange
+      │                 └─ Left Semi Join
+      │                    │     Condition: d_week_seq_5 == d_week_seq_2
+      │                    │     Runtime Filters Builder: {d_week_seq_2}
+      │                    ├─ Filter
+      │                    │  │     Condition: Runtime Filters: {d_week_seq_5}
+      │                    │  └─ TableScan tpcds1000.date_dim
+      │                    │           Where: Runtime Filters: {d_week_seq}
+      │                    │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_5:=d_week_seq, d_day_name_1:=d_day_name
+      │                    └─ Broadcast Exchange
+      │                       └─ Buffer
+      │                          └─ CTERef[2]
+      └─ Buffer
+         └─ CTERef[2]
 CTEDef [2]
    Repartition Exchange
    │     Partition by: {d_week_seq_2}

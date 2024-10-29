@@ -5,54 +5,47 @@ Projection Est. 20 rows
    └─ Sorting Est. 20 rows
       │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
       │     Limit: 20
-      └─ Gather Exchange Est. 22903853 rows
+      └─ Gather Exchange Est. 1435467 rows
          └─ Sorting Est. 20 rows
             │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
             │     Limit: 20
-            └─ MergingAggregated Est. 22903853 rows
-               └─ Repartition Exchange Est. 22903853 rows
-                  │     Partition by: {c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment}
-                  └─ Aggregating Est. 22903853 rows
-                     │     Group by: {c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment}
-                     │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                     └─ Projection Est. 22903853 rows
-                        │     Expressions: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_phone, n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                        └─ Inner (PARALLEL_HASH) Join Est. 22903853 rows
-                           │     Condition: l_orderkey == o_orderkey
-                           │     Runtime Filters Builder: {o_orderkey}
-                           ├─ Repartition Exchange Est. 148067261 rows
-                           │  │     Partition by: {l_orderkey}
-                           │  └─ Projection Est. 148067261 rows
-                           │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
-                           │     └─ Filter Est. 148067261 rows
-                           │        │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │        └─ TableScan tpch100.lineitem Est. 600037902 rows
-                           │                 Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
-                           └─ Repartition Exchange Est. 5792534 rows
-                              │     Partition by: {o_orderkey}
-                              └─ Inner Join Est. 5792534 rows
-                                 │     Condition: c_nationkey == n_nationkey
-                                 ├─ Inner (PARALLEL_HASH) Join Est. 5792534 rows
-                                 │  │     Condition: c_custkey == o_custkey
-                                 │  │     Runtime Filters Builder: {o_custkey}
-                                 │  ├─ Repartition Exchange Est. 15000000 rows
-                                 │  │  │     Partition by: {c_custkey}
-                                 │  │  └─ Filter Est. 15000000 rows
-                                 │  │     │     Condition: Runtime Filters: {c_custkey}
-                                 │  │     └─ TableScan tpch100.customer Est. 15000000 rows
-                                 │  │              Where: Runtime Filters: {c_custkey}
-                                 │  │              Outputs: [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
-                                 │  └─ Repartition Exchange Est. 5792534 rows
-                                 │     │     Partition by: {o_custkey}
-                                 │     └─ Projection Est. 5792534 rows
-                                 │        │     Expressions: [o_custkey, o_orderkey]
-                                 │        └─ Filter Est. 5792534 rows
-                                 │           │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │           └─ TableScan tpch100.orders Est. 150000000 rows
-                                 │                    Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │                    Outputs: [o_orderkey, o_custkey, o_orderdate]
-                                 └─ Broadcast Exchange Est. 25 rows
-                                    └─ TableScan tpch100.nation Est. 25 rows
-                                             Outputs: [n_nationkey, n_name]
+            └─ Aggregating Est. 1435467 rows
+               │     Group by: {c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment}
+               │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+               └─ Projection Est. 1435467 rows
+                  │     Expressions: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_phone, n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
+                  └─ Inner Join Est. 1435467 rows
+                     │     Condition: c_nationkey == n_nationkey
+                     ├─ Inner (PARALLEL_HASH) Join Est. 1435467 rows
+                     │  │     Condition: c_custkey == o_custkey
+                     │  │     Runtime Filters Builder: {o_custkey}
+                     │  ├─ Repartition Exchange Est. 15000000 rows
+                     │  │  │     Partition by: {c_custkey}
+                     │  │  └─ Filter Est. 15000000 rows
+                     │  │     │     Condition: Runtime Filters: {c_custkey}
+                     │  │     └─ TableScan tpch100.customer Est. 15000000 rows
+                     │  │              Where: Runtime Filters: {c_custkey}
+                     │  │              Outputs: [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
+                     │  └─ Repartition Exchange Est. 5792534 rows
+                     │     │     Partition by: {o_custkey}
+                     │     └─ Inner (PARALLEL_HASH) Join Est. 5792534 rows
+                     │        │     Condition: l_orderkey == o_orderkey
+                     │        │     Runtime Filters Builder: {o_orderkey}
+                     │        ├─ Projection Est. 148067261 rows
+                     │        │  │     Expressions: [l_discount, l_extendedprice, l_orderkey]
+                     │        │  └─ Filter Est. 148067261 rows
+                     │        │     │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                     │        │     └─ TableScan tpch100.lineitem Est. 600037902 rows
+                     │        │              Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                     │        │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
+                     │        └─ Projection Est. 5792534 rows
+                     │           │     Expressions: [o_custkey, o_orderkey]
+                     │           └─ Filter Est. 5792534 rows
+                     │              │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                     │              └─ TableScan tpch100.orders Est. 150000000 rows
+                     │                       Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                     │                       Outputs: [o_orderkey, o_custkey, o_orderdate]
+                     └─ Broadcast Exchange Est. 25 rows
+                        └─ TableScan tpch100.nation Est. 25 rows
+                                 Outputs: [n_nationkey, n_name]
 note: Runtime Filter is applied for 2 times.

@@ -163,7 +163,7 @@ Projection Est. 1 rows
          │  │  │  │  │              └─ Aggregating Est. 1 rows
          │  │  │  │  │                 │     Group by: {}
          │  │  │  │  │                 │     Aggregates: expr#count()_6:=AggNull(count)()
-         │  │  │  │  │                 └─ Filter Est. 540505366 rows
+         │  │  │  │  │                 └─ Filter Est. 540505367 rows
          │  │  │  │  │                    │     Condition: (ss_quantity_9 >= 61) AND (ss_quantity_9 <= 80)
          │  │  │  │  │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
          │  │  │  │  │                             Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
@@ -174,9 +174,9 @@ Projection Est. 1 rows
          │  │  │  │           └─ Aggregating Est. 1 rows
          │  │  │  │              │     Group by: {}
          │  │  │  │              │     Aggregates: expr#avg(ss_ext_discount_amt)_3:=AggNull(avg)(ss_ext_discount_amt_3)
-         │  │  │  │              └─ Projection Est. 540505366 rows
+         │  │  │  │              └─ Projection Est. 540505367 rows
          │  │  │  │                 │     Expressions: [ss_ext_discount_amt_3]
-         │  │  │  │                 └─ Filter Est. 540505366 rows
+         │  │  │  │                 └─ Filter Est. 540505367 rows
          │  │  │  │                    │     Condition: (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
          │  │  │  │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
          │  │  │  │                             Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
@@ -187,9 +187,9 @@ Projection Est. 1 rows
          │  │  │           └─ Aggregating Est. 1 rows
          │  │  │              │     Group by: {}
          │  │  │              │     Aggregates: expr#avg(ss_net_paid)_3:=AggNull(avg)(ss_net_paid_3)
-         │  │  │              └─ Projection Est. 540505366 rows
+         │  │  │              └─ Projection Est. 540505367 rows
          │  │  │                 │     Expressions: [ss_net_paid_3]
-         │  │  │                 └─ Filter Est. 540505366 rows
+         │  │  │                 └─ Filter Est. 540505367 rows
          │  │  │                    │     Condition: (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
          │  │  │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
          │  │  │                             Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
@@ -202,7 +202,7 @@ Projection Est. 1 rows
          │  │              └─ Aggregating Est. 1 rows
          │  │                 │     Group by: {}
          │  │                 │     Aggregates: expr#count()_8:=AggNull(count)()
-         │  │                 └─ Filter Est. 545139640 rows
+         │  │                 └─ Filter Est. 545139641 rows
          │  │                    │     Condition: (ss_quantity_12 >= 81) AND (ss_quantity_12 <= 100)
          │  │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
          │  │                             Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
@@ -213,9 +213,9 @@ Projection Est. 1 rows
          │           └─ Aggregating Est. 1 rows
          │              │     Group by: {}
          │              │     Aggregates: expr#avg(ss_ext_discount_amt)_4:=AggNull(avg)(ss_ext_discount_amt_4)
-         │              └─ Projection Est. 545139640 rows
+         │              └─ Projection Est. 545139641 rows
          │                 │     Expressions: [ss_ext_discount_amt_4]
-         │                 └─ Filter Est. 545139640 rows
+         │                 └─ Filter Est. 545139641 rows
          │                    │     Condition: (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
          │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
          │                             Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
@@ -226,9 +226,9 @@ Projection Est. 1 rows
                   └─ Aggregating Est. 1 rows
                      │     Group by: {}
                      │     Aggregates: expr#avg(ss_net_paid)_4:=AggNull(avg)(ss_net_paid_4)
-                     └─ Projection Est. 545139640 rows
+                     └─ Projection Est. 545139641 rows
                         │     Expressions: [ss_net_paid_4]
-                        └─ Filter Est. 545139640 rows
+                        └─ Filter Est. 545139641 rows
                            │     Condition: (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
                            └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                                     Where: (ss_quantity >= 81) AND (ss_quantity <= 100)

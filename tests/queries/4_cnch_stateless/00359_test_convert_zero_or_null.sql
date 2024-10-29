@@ -29,3 +29,6 @@ SELECT toDecimal256OrZero(-123, 2), toDecimal256OrNull(-123, 2), toDecimal256OrZ
 SELECT toDate(toNullable(toDate32('2022-11-27'))), toDate(toDate32('2022-11-27'));
 SELECT toDateTime(toNullable(toDateTime64('2022-11-27 13:27:04.416509', 6, 'Asia/Chungking'))), toDateTime(toDateTime64('2022-11-27 13:27:04.416509', 6, 'Asia/Chungking'));
 SELECT toDateTime64(toNullable(toDateTime('2022-11-27 13:27:04', 'Asia/Chungking')), 6), toDateTime64(toDateTime('2022-11-27 13:27:04', 'Asia/Chungking'), 6);
+
+SELECT toDate(toDateTime64OrZero(CURTIME())) = today();
+SELECT toDate(toDateTime64OrNull(CURTIME())) = today();

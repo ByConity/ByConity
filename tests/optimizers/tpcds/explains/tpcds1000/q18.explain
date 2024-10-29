@@ -5,25 +5,25 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_country ASC NULLS LAST, ca_state ASC NULLS LAST, ca_county ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 3450200 rows
+      └─ Gather Exchange Est. 1652282 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_country ASC NULLS LAST, ca_state ASC NULLS LAST, ca_county ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 3450200 rows
+            └─ Projection Est. 1652282 rows
                │     Expressions: [ca_country, ca_county, ca_state, expr#avg(CAST(c_birth_year, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_list_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_quantity, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')), i_item_id]
-               └─ MergingAggregated Est. 3450200 rows
-                  └─ Repartition Exchange Est. 3450200 rows
+               └─ MergingAggregated Est. 1652282 rows
+                  └─ Repartition Exchange Est. 1652282 rows
                      │     Partition by: {i_item_id, ca_country, ca_state, ca_county, __grouping_set}
-                     └─ Aggregating Est. 3450200 rows
+                     └─ Aggregating Est. 1652282 rows
                         │     Group by: {i_item_id, ca_country, ca_state, ca_county}
                         │     Aggregates: expr#avg(CAST(cs_quantity, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_list_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(c_birth_year, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'))
-                        └─ Projection Est. 3450200 rows
+                        └─ Projection Est. 1652282 rows
                            │     Expressions: [ca_country, ca_county, ca_state, i_item_id], expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))'):=CAST(c_birth_year, 'Nullable(Decimal(12, 2))'), expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'):=CAST(cd_dep_count, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'):=CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_list_price, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'):=CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))'):=CAST(cs_quantity, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')
-                           └─ Inner Join Est. 3450200 rows
+                           └─ Inner Join Est. 1652282 rows
                               │     Condition: cs_item_sk == i_item_sk
-                              ├─ Repartition Exchange Est. 3450200 rows
+                              ├─ Repartition Exchange Est. 1652282 rows
                               │  │     Partition by: {cs_item_sk}
-                              │  └─ Inner (PARALLEL_HASH) Join Est. 3450200 rows
+                              │  └─ Inner Join Est. 1652282 rows
                               │     │     Condition: cs_bill_customer_sk == c_customer_sk
                               │     │     Runtime Filters Builder: {c_customer_sk}
                               │     ├─ Repartition Exchange Est. 20391804 rows
@@ -55,16 +55,16 @@ Projection Est. 100 rows
                               │     │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
                               │     │                       Where: d_year = 1998
                               │     │                       Outputs: [d_date_sk, d_year]
-                              │     └─ Repartition Exchange Est. 2030345 rows
+                              │     └─ Repartition Exchange Est. 972321 rows
                               │        │     Partition by: {c_customer_sk}
-                              │        └─ Inner Join Est. 2030345 rows
+                              │        └─ Inner Join Est. 972321 rows
                               │           │     Condition: c_current_addr_sk == ca_address_sk
                               │           │     Runtime Filters Builder: {ca_address_sk}
-                              │           ├─ Repartition Exchange Est. 5746734 rows
+                              │           ├─ Repartition Exchange Est. 5746735 rows
                               │           │  │     Partition by: {c_current_addr_sk}
-                              │           │  └─ Projection Est. 5746734 rows
+                              │           │  └─ Projection Est. 5746735 rows
                               │           │     │     Expressions: [c_birth_year, c_current_addr_sk, c_customer_sk]
-                              │           │     └─ Filter Est. 5746734 rows
+                              │           │     └─ Filter Est. 5746735 rows
                               │           │        │     Condition: (c_birth_month IN (1, 2, 6, 8, 9, 12)) AND isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk}
                               │           │        └─ TableScan tpcds1000.customer Est. 12000000 rows
                               │           │                 Where: (c_birth_month IN (1, 2, 6, 8, 9, 12)) AND isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk}

@@ -228,7 +228,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
         index_executor.get(),
         avg_value_size_hints,
         profile_callback,
-        [&](const Progress& value) { progress(value); });
+        [&](const Progress & value) { updateProgress(value); });
 
     if (prewhere_info)
     {
@@ -267,7 +267,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
             pre_index_executor.get(),
             avg_value_size_hints,
             profile_callback,
-            [&](const Progress& value) { progress(value); });
+            [&](const Progress & value) { updateProgress(value); });
     }
 }
 

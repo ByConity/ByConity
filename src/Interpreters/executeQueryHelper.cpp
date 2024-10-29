@@ -12,6 +12,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
+#include <Parsers/parseDatabaseAndTableName.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Transaction/CnchExplicitTransaction.h>
 #include <Transaction/CnchProxyTransaction.h>
@@ -32,77 +33,161 @@ namespace DB
 
 HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
 {
-    /// Only get target server for main table
-    String database, table;
-    bool is_alter_database = false;
+    auto get_target_server_for_table = [&] (const String & database_name, const String & table_name) -> HostWithPorts
+    {
+        if (database_name == "system")
+            return {};
+
+        DatabaseAndTable db_and_tb = DatabaseCatalog::instance().tryGetDatabaseAndTable(StorageID(database_name, table_name), context);
+        DatabasePtr db_ptr = std::move(db_and_tb.first);
+        StoragePtr storage_ptr = std::move(db_and_tb.second);
+        if (!db_ptr || !storage_ptr || db_ptr->getEngineName() != "Cnch")
+            return {};
+
+        auto topology_master = context->getCnchTopologyMaster();
+
+        return topology_master->getTargetServer(
+            UUIDHelpers::UUIDToString(storage_ptr->getStorageUUID()), storage_ptr->getServerVwName(), context->getTimestamp(), true);
+    };
 
     if (const auto * alter = ast->as<ASTAlterQuery>())
     {
-        database = alter->database;
-        table = alter->table;
-        is_alter_database = (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
+        if (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE)
+            return {};
+        return get_target_server_for_table(alter->database.empty() ? context->getCurrentDatabase() : alter->database, alter->table);
     }
     else if (const auto * alter_mysql = ast->as<ASTAlterAnalyticalMySQLQuery>())
     {
-        database = alter_mysql->database;
-        table = alter_mysql->table;
-        is_alter_database = (alter_mysql->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
+        if(alter_mysql->alter_object == ASTAlterQuery::AlterObjectType::DATABASE)
+            return {};
+        return get_target_server_for_table(alter_mysql->database.empty() ? context->getCurrentDatabase() : alter_mysql->database, alter_mysql->table);
     }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
-        if (!context->getSettingsRef().enable_select_query_forwarding)
+        if (!context->getSettingsRef().enable_select_query_forwarding && !context->getSettingsRef().enable_multiple_table_select_query_forwarding)
             return {};
 
         ASTs tables;
         bool has_table_func = false;
         ASTSelectQuery::collectAllTables(ast.get(), tables, has_table_func);
-        // when query inlcudes multiple tables, it is better to just keep existing host since cannot guarantee all tables are in the same host.
-        if (!has_table_func && !tables.empty() && tables.size() == 1)
+
+        if (tables.empty() || has_table_func)
+            return {};
+
+        String current_db = context->getCurrentDatabase();
+        if (tables.size() == 1)
         {
-            // simplily use the first table if there are multiple tables used
-            DatabaseAndTableWithAlias db_and_table(tables[0]);
+            DatabaseAndTableWithAlias db_and_table(tables[0], current_db);
             LOG_DEBUG(
                 &Poco::Logger::get("executeQuery"),
-                "Extract db and table {}.{} from the query.",
+                "Get main table `{}.{}` for current select query.",
                 db_and_table.database,
                 db_and_table.table);
-            database = db_and_table.database;
-            table = db_and_table.table;
+            return get_target_server_for_table(db_and_table.database, db_and_table.table);
         }
         else
+        {
+            if (!context->getSettingsRef().enable_multiple_table_select_query_forwarding)
+                return {};
+
+            std::vector<DatabaseAndTableWithAlias> db_and_tables;
+            for (const auto & table_ast : tables)
+                db_and_tables.emplace_back(DatabaseAndTableWithAlias(table_ast, current_db));
+
+            /// For multiple table select, we forward the query with the following policy:
+            /// 1. If the main table is explicitly set, use the user defined main table.
+            /// 2. If one of the table is set to be main table in the table settings, use that table
+            /// 3. Pick up the first one table shows up in the query as main table.
+            String explicit_main_table = context->getSettingsRef().explicit_main_table;
+            if (!explicit_main_table.empty())
+            {
+                char * begin = explicit_main_table.data();
+                char * end = begin + explicit_main_table.size();
+                Tokens tokens(begin, end);
+                IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
+                auto pos = token_iterator;
+                Expected expected;
+                String database_name, table_name;
+                if (parseDatabaseAndTableName(pos, expected, database_name, table_name))
+                {
+                    if (database_name.empty())
+                        database_name = current_db;
+
+                    // Only if the specified main table shows up in select we can forward the query to its host server.
+                    if (std::any_of(db_and_tables.begin(), db_and_tables.end(), [&](const auto & ele){return ele.database == database_name && ele.table == table_name;}))
+                    {
+                        LOG_DEBUG(
+                            &Poco::Logger::get("executeQuery"),
+                            "Get explicit main table `{}.{}` for current select query from settings.",
+                            database_name,
+                            table_name);
+                        return get_target_server_for_table(database_name, table_name);
+                    }
+                    else
+                    {
+                        LOG_WARNING(
+                            &Poco::Logger::get("executeQuery"),
+                            "Ignore main table settings because `{}.{}` is not in the select query.",
+                            database_name,
+                            table_name);
+                    }
+                }
+            }
+
+            StoragePtr main_storage;
+            for (const auto & db_and_table : db_and_tables)
+            {
+                if (db_and_table.database == "system")
+                    continue;
+
+                DatabaseAndTable db_and_tb = DatabaseCatalog::instance().tryGetDatabaseAndTable(StorageID(db_and_table.database, db_and_table.table), context);
+                DatabasePtr db_ptr = std::move(db_and_tb.first);
+                StoragePtr storage_ptr = std::move(db_and_tb.second);
+                if (!db_ptr || !storage_ptr || db_ptr->getEngineName() != "Cnch")
+                    continue;
+
+                if (!main_storage)
+                    main_storage = std::move(storage_ptr);
+                else
+                {
+                    auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get());
+                    if (!cnch)
+                        continue;
+
+                    // If multiple tables are set to be main table, pick up the first one.
+                    if (cnch->getSettings()->as_main_table)
+                    {
+                        main_storage = std::move(storage_ptr);
+                        break;
+                    }
+                }
+            }
+
+            if (main_storage)
+            {
+                LOG_DEBUG(
+                    &Poco::Logger::get("executeQuery"),
+                    "Get main table `{}.{}` for current select query.",
+                    main_storage->getDatabaseName(),
+                    main_storage->getTableName());
+                auto topology_master = context->getCnchTopologyMaster();
+                return topology_master->getTargetServer(
+                    UUIDHelpers::UUIDToString(main_storage->getStorageUUID()), main_storage->getServerVwName(), context->getTimestamp(), true);
+            }
+
             return {};
+        }
     }
     else if (const auto * rename = ast->as<ASTRenameQuery>())
     {
-        if (!rename->database)
-        {
-            database = rename->elements.at(0).from.database;
-            table = rename->elements.at(0).from.table;
-        }
-        else
+        if (rename->database)
             return {};
+
+        return get_target_server_for_table(rename->elements.at(0).from.database.empty() ? context->getCurrentDatabase() : rename->elements.at(0).from.database,
+            rename->elements.at(0).from.table);
     }
     else
         return {};
-
-    if (database.empty())
-        database = context->getCurrentDatabase();
-
-    if (database == "system" || is_alter_database)
-        return {};
-
-    DatabaseAndTable db_and_tb = DatabaseCatalog::instance().tryGetDatabaseAndTable(StorageID(database, table), context);
-    DatabasePtr db_ptr = std::move(db_and_tb.first);
-    StoragePtr storage_ptr = std::move(db_and_tb.second);
-    if (!db_ptr || !storage_ptr)
-        return {};
-    if (db_ptr->getEngineName() != "Cnch")
-        return {};
-
-    auto topology_master = context->getCnchTopologyMaster();
-
-    return topology_master->getTargetServer(
-        UUIDHelpers::UUIDToString(storage_ptr->getStorageUUID()), storage_ptr->getServerVwName(), context->getTimestamp(), true);
 }
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res, bool in_interactive_txn, const String & query)

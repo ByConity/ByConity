@@ -68,7 +68,11 @@ class TableWriteStep::Target
 public:
     virtual ~Target() = default;
     virtual TargetType getTargetType() const = 0;
-    virtual String toString() const = 0;
+    String toString() const
+    {
+        return toString({});
+    }
+    virtual String toString(const String & remove_tenant_id) const = 0;
     virtual StoragePtr getStorage() const = 0;
     virtual NameToNameMap getTableColumnToInputColumnMap(const Names & input_columns) const = 0;
 
@@ -85,7 +89,7 @@ public:
     }
 
     TargetType getTargetType() const override { return TargetType::INSERT; }
-    String toString() const override;
+    String toString(const String & remove_tenant_id) const override;
     StoragePtr getStorage() const override
     {
         return storage;

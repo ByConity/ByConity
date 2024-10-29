@@ -43,6 +43,7 @@
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
 #include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
+#include <Optimizer/Rule/Rewrite/JoinUsingToJoinOn.h>
 
 namespace DB
 {
@@ -238,4 +239,10 @@ std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
 {
     return {std::make_shared<ExtractBitmapImplicitFilter>()};
 }
+
+std::vector<RulePtr> Rules::joinUsingToJoinOn()
+{
+    return {std::make_shared<JoinUsingToJoinOn>()};
+}
+
 }

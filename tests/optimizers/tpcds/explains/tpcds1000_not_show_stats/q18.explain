@@ -23,7 +23,7 @@ Projection
                               │     Condition: cs_item_sk == i_item_sk
                               ├─ Repartition Exchange
                               │  │     Partition by: {cs_item_sk}
-                              │  └─ Inner (PARALLEL_HASH) Join
+                              │  └─ Inner Join
                               │     │     Condition: cs_bill_customer_sk == c_customer_sk
                               │     │     Runtime Filters Builder: {c_customer_sk}
                               │     ├─ Repartition Exchange

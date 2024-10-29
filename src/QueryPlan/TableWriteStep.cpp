@@ -1,14 +1,24 @@
 #include <QueryPlan/TableWriteStep.h>
 
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnsNumber.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Processors/Sources/SinkToOutputStream.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
+#include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Processors/Transforms/TableWriteTransform.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/RpcClientPool.h>
@@ -299,9 +309,11 @@ TableWriteStep::InsertTarget::createFromProtoImpl(const Protos::TableWriteStep::
     return step;
 }
 
-String TableWriteStep::InsertTarget::toString() const
+String TableWriteStep::InsertTarget::toString(const String & remove_tenant_id) const
 {
-    return "Insert " + storage_id.getNameForLogs();
+    auto tmp_id = storage_id;
+    tmp_id.database_name = getOriginalDatabaseName(tmp_id.database_name, remove_tenant_id);
+    return "Insert " + tmp_id.getNameForLogs();
 }
 
 NameToNameMap TableWriteStep::InsertTarget::getTableColumnToInputColumnMap(const Names & input_columns) const

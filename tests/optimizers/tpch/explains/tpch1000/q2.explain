@@ -5,13 +5,13 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 120080 rows
+      └─ Gather Exchange Est. 120081 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 120080 rows
+            └─ Projection Est. 120081 rows
                │     Expressions: [n_name, p_mfgr, ps_partkey, s_acctbal, s_address, s_comment, s_name, s_phone]
-               └─ Filter Est. 120080 rows
+               └─ Filter Est. 120081 rows
                   │     Condition: ps_supplycost = cast(`expr#min(ps_supplycost)`, 'Nullable(Decimal(15, 2))')
                   └─ Window Est. 480322 rows
                      └─ Repartition Exchange Est. 480322 rows
