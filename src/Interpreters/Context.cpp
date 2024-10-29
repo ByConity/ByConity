@@ -325,7 +325,6 @@ struct ContextSharedPart
     String dictionaries_lib_path;                           /// Path to the directory with user provided binaries and libraries for external dictionaries.
     String metastore_path;                                  /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
     ConfigurationPtr config;                                /// Global configuration settings.
-    ConfigurationPtr cnch_config;                           /// Config used in cnch.
     RootConfiguration root_config;                          /// Predefined global configuration settings.
 
     String tmp_path; /// Path to the temporary files that occur when processing the request.
@@ -1457,24 +1456,6 @@ const Poco::Util::AbstractConfiguration & Context::getConfigRefWithLock(const st
 void Context::initRootConfig(const Poco::Util::AbstractConfiguration & config)
 {
     shared->root_config.loadFromPocoConfig(config, "");
-}
-
-void Context::initCnchConfig(const Poco::Util::AbstractConfiguration & config)
-{
-    if (config.has("cnch_config"))
-    {
-        const auto cnch_config_path = config.getString("cnch_config");
-        ConfigProcessor config_processor(cnch_config_path);
-        const auto loaded_config = config_processor.loadConfig();
-        shared->cnch_config = loaded_config.configuration;
-    }
-    else
-        throw Exception("cnch_config not found", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-}
-
-const Poco::Util::AbstractConfiguration & Context::getCnchConfigRef() const
-{
-    return shared->cnch_config ? *shared->cnch_config : getConfigRef();
 }
 
 void Context::updateRootConfig(std::function<void (RootConfiguration &)> update_callback)
@@ -5169,7 +5150,7 @@ void Context::setGINStoreReaderFactory(const GINStoreReaderFactorySettings & set
     if (shared->gin_store_reader_factory)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "GINStoreReaderFactory has already "
             "been created");
-    
+
     shared->gin_store_reader_factory = std::make_shared<GINStoreReaderFactory>(settings_);
 }
 
@@ -5197,8 +5178,8 @@ void Context::updateQueueManagerConfig() const
 
 void Context::initServiceDiscoveryClient()
 {
-    const auto & cnch_config = getCnchConfigRef();
-    shared->sd = ServiceDiscoveryFactory::instance().create(cnch_config);
+    const auto & config = getConfigRef();
+    shared->sd = ServiceDiscoveryFactory::instance().create(config);
 }
 
 ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const

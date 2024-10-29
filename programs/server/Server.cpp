@@ -649,7 +649,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->addRestrictSettingsToWhitelist(setting_names);
     }
 
-    global_context->initCnchConfig(config());
     const UInt64 memory_amount = getMemoryAmount();
 
     global_context->setBlockPrivilegedOp(config().getBool("restrict_tenanted_users_to_privileged_operations", false));
@@ -699,7 +698,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
         global_context->setComplexQueryActive(true);
 
-    MetastoreConfig catalog_conf(global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE);
+    MetastoreConfig catalog_conf(global_context->getConfigRef(), CATALOG_SERVICE_CONFIGURE);
 
     std::string current_raw_sd_config;
     if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
@@ -1347,19 +1346,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
 #if USE_HDFS
     /// Init hdfs user
-    std::string hdfs_user = global_context->getCnchConfigRef().getString("hdfs_user", "clickhouse");
+    std::string hdfs_user = global_context->getConfigRef().getString("hdfs_user", "clickhouse");
     global_context->setHdfsUser(hdfs_user);
-    std::string hdfs_nnproxy = global_context->getCnchConfigRef().getString("hdfs_nnproxy", "nnproxy");
+    std::string hdfs_nnproxy = global_context->getConfigRef().getString("hdfs_nnproxy", "nnproxy");
     global_context->setHdfsNNProxy(hdfs_nnproxy);
 
     /// Init HDFS3 client config path
-    std::string hdfs_config = global_context->getCnchConfigRef().getString("hdfs3_config", "");
+    std::string hdfs_config = global_context->getConfigRef().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
     {
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
     }
 
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
@@ -1423,9 +1422,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if( has_hdfs_disk )
     {
-        const int hdfs_max_fd_num = global_context->getCnchConfigRef().getInt("hdfs_max_fd_num", 100000);
-        const int hdfs_skip_fd_num = global_context->getCnchConfigRef().getInt("hdfs_skip_fd_num", 100);
-        const int hdfs_io_error_num_to_reconnect = global_context->getCnchConfigRef().getInt("hdfs_io_error_num_to_reconnect", 10);
+        const int hdfs_max_fd_num = global_context->getConfigRef().getInt("hdfs_max_fd_num", 100000);
+        const int hdfs_skip_fd_num = global_context->getConfigRef().getInt("hdfs_skip_fd_num", 100);
+        const int hdfs_io_error_num_to_reconnect = global_context->getConfigRef().getInt("hdfs_io_error_num_to_reconnect", 10);
         registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
     }
 
@@ -1484,9 +1483,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
         // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
-        if (global_context->getCnchConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
+        if (global_context->getConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
         {
-            ExternalCatalog::Mgr::init(*global_context, global_context->getCnchConfigRef());
+            ExternalCatalog::Mgr::init(*global_context, global_context->getConfigRef());
         }
     }
     /// Check sanity of MergeTreeSettings on server startup

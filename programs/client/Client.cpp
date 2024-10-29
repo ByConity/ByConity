@@ -374,13 +374,13 @@ private:
             query_id_formats.emplace_back("Query id:", " {query_id}\n");
 #if USE_HDFS
         /// Init HDFS3 client config path
-        std::string hdfs_config = context->getCnchConfigRef().getString("hdfs3_config", "");
+        std::string hdfs_config = context->getConfigRef().getString("hdfs3_config", "");
         if (!hdfs_config.empty())
         {
             setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
         }
 
-        HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(context->getCnchConfigRef());
+        HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(context->getConfigRef());
         context->setHdfsConnectionParams(hdfs_params);
 #endif
         auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());

@@ -36,6 +36,4 @@
             </vw>
         </vws>
     </resource_manager>
-
-    <cnch_config>/etc/byconity-server/cnch_config.xml</cnch_config>
 </yandex>

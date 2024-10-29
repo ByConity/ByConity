@@ -438,5 +438,4 @@
             </cnch_default_hdfs>
         </policies>
     </storage_configuration>
-    <cnch_config>root_path_replace_me/config/cnch_config.xml</cnch_config>
 </yandex>
