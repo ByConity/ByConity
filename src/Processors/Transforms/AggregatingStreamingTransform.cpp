@@ -68,7 +68,7 @@ ISimpleTransform::Status AggregatingStreamingTransform::prepare()
 
     if (has_left && start_generated)
     {
-        output_data.chunk = std::move(chunks[chunk_idx++]);
+        output_data.chunk = std::move(fetchNewChunk());
         output.pushData(std::move(output_data));
         has_left = chunk_idx != chunks.size();
         return Status::PortFull;
@@ -146,18 +146,8 @@ void AggregatingStreamingTransform::work()
         return;
     }
 
-    try
-    {
-        transform(input_data.chunk);
-        output_data.chunk.swap(input_data.chunk);
-    }
-    catch (DB::Exception &)
-    {
-        output_data.exception = std::current_exception();
-        has_output = false;
-        has_input = false;
-        return;
-    }
+    transform(input_data.chunk);
+    output_data.chunk.swap(input_data.chunk);
 
     if (output_data.chunk.hasRows())
         has_output = true;
@@ -178,7 +168,7 @@ void AggregatingStreamingTransform::transform(DB::Chunk & chunk)
                 return;
             }
 
-            chunk = std::move(chunks[chunk_idx++]);
+            chunk = std::move(fetchNewChunk());
             has_left = chunk_idx != chunks.size();
         }
         return;
@@ -196,7 +186,7 @@ void AggregatingStreamingTransform::transform(DB::Chunk & chunk)
     {
         input_rows += num_rows;
         auto block = inputs.front().getHeader().cloneWithColumns(chunk.getColumns());
-        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
+        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys, is_cancelled))
         {
             start_generated = true;
             no_more_data_needed = true;
@@ -276,7 +266,7 @@ void AggregatingStreamingTransform::generate(DB::Chunk & chunk)
         chunks.emplace_back(std::move(tmp_chunk));
     }
 
-    chunk = std::move(chunks[chunk_idx++]);
+    chunk = std::move(fetchNewChunk());
     rows_returned += chunk.getNumRows();
     has_left = chunk_idx != chunks.size();
     LOG_TRACE(

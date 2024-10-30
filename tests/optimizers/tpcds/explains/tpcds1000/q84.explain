@@ -1,16 +1,16 @@
 Projection Est. 100 rows
 │     Expressions: customer_id:=c_customer_id, customername:=`expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))`
-└─ Projection Est. 100 rows
-   │     Expressions: [c_customer_id], expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, '')):=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
-   └─ Limit Est. 100 rows
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {c_customer_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting Est. 100 rows
-         │     Order by: {c_customer_id ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange Est. 5294149 rows
-            └─ Sorting Est. 100 rows
-               │     Order by: {c_customer_id ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange Est. 5294149 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {c_customer_id ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection Est. 5294149 rows
+               │     Expressions: [c_customer_id], expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, '')):=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
                └─ Inner Join Est. 5294149 rows
                   │     Condition: sr_cdemo_sk == c_current_cdemo_sk
                   │     Runtime Filters Builder: {c_current_cdemo_sk}

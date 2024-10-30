@@ -1,16 +1,16 @@
 Projection
 │     Expressions: average:=`expr#divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)`, cs_dev:=`expr#multiply(divide(cs_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100)`, cs_item_rev:=`expr#sum(cs_ext_sales_price)`, item_id:=i_item_id_1, ss_dev:=`expr#multiply(divide(ss_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100)`, ss_item_rev:=`expr#sum(ss_ext_sales_price)`, ws_dev:=`expr#multiply(divide(ws_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100)`, ws_item_rev:=`expr#sum(ws_ext_sales_price)`
-└─ Projection
-   │     Expressions: [expr#sum(cs_ext_sales_price), expr#sum(ss_ext_sales_price), expr#sum(ws_ext_sales_price), i_item_id_1], expr#divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3):=((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3, expr#multiply(divide(cs_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(cs_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, expr#multiply(divide(ss_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(ss_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, expr#multiply(divide(ws_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(ws_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100
-   └─ Limit
+└─ Limit
+   │     Limit: 100
+   └─ Sorting
+      │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting
-         │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange
-            └─ Sorting
-               │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange
+         └─ Sorting
+            │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection
+               │     Expressions: [expr#sum(cs_ext_sales_price), expr#sum(ss_ext_sales_price), expr#sum(ws_ext_sales_price), i_item_id_1], expr#divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3):=((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3, expr#multiply(divide(cs_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(cs_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, expr#multiply(divide(ss_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(ss_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, expr#multiply(divide(ws_item_rev, divide(plus(plus(ss_item_rev, cs_item_rev), ws_item_rev), 3)), 100):=(`expr#sum(ws_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100
                └─ Inner Join
                   │     Condition: i_item_id_1 == i_item_id
                   │     Filter: (`expr#sum(ws_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ws_ext_sales_price)`))

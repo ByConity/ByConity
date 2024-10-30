@@ -1,12 +1,12 @@
 Projection
 │     Expressions: multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100):=`expr#multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100)`, promotions:=`expr#sum(ss_ext_sales_price)`, total:=`expr#sum(ss_ext_sales_price)_1`
-└─ Projection
-   │     Expressions: [expr#sum(ss_ext_sales_price), expr#sum(ss_ext_sales_price)_1], expr#multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100):=(CAST(`expr#sum(ss_ext_sales_price)`, 'decimal(15, 4)') / CAST(`expr#sum(ss_ext_sales_price)_1`, 'decimal(15, 4)')) * 100
-   └─ Limit
+└─ Limit
+   │     Limit: 100
+   └─ Sorting
+      │     Order by: {expr#sum(ss_ext_sales_price) ASC NULLS LAST, expr#sum(ss_ext_sales_price)_1 ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting
-         │     Order by: {expr#sum(ss_ext_sales_price) ASC NULLS LAST, expr#sum(ss_ext_sales_price)_1 ASC NULLS LAST}
-         │     Limit: 100
+      └─ Projection
+         │     Expressions: [expr#sum(ss_ext_sales_price), expr#sum(ss_ext_sales_price)_1], expr#multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100):=(CAST(`expr#sum(ss_ext_sales_price)`, 'decimal(15, 4)') / CAST(`expr#sum(ss_ext_sales_price)_1`, 'decimal(15, 4)')) * 100
          └─ Inner Join
             │     Condition: 
             ├─ MergingAggregated

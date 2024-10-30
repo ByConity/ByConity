@@ -192,9 +192,9 @@ public:
         function->merge(place, rhs, arena);
     }
     bool isAbleToParallelizeMerge() const override { return function->isAbleToParallelizeMerge(); }
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, Arena * arena) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const override
     {
-        function->merge(place, rhs, thread_pool, arena);
+        function->merge(place, rhs, thread_pool, is_cancelled, arena);
     }
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override { function->serialize(place, buf); }
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override

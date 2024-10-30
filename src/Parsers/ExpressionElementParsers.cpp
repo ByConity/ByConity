@@ -3144,7 +3144,8 @@ bool ParserAssignmentWithAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserToken s_equals(TokenType::Equals);
     ParserExpression p_expression(dt);
 
-    parseDatabaseAndTableName(pos, expected, assignment->table_name, assignment->column_name);
+    /// Reuse `parseDatabaseAndTableName` for extracting table alias and column name. Need to ignore tenant_id.
+    parseDatabaseAndTableName(pos, expected, assignment->table_name, assignment->column_name, /*rewrite_db*/false);
 
     if (!s_equals.ignore(pos, expected))
         return false;

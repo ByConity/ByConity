@@ -1524,6 +1524,20 @@ String ColumnPruningVisitor::selectColumnWithMinSize(NamesAndTypesList source_co
             {
                 source_columns.remove(column);
             }
+
+            // tmp fix for 40113_lowcard_nullable_subcolumn
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & columns_desc = metadata_snapshot->getColumns();
+            source_columns.erase(
+                std::remove_if(
+                    source_columns.begin(),
+                    source_columns.end(),
+                    [&](const auto & type_and_name) {
+                        auto column_opt = columns_desc.tryGetColumnOrSubcolumn(GetColumnsOptions::Ordinary, type_and_name.name);
+                        return column_opt && column_opt->isSubcolumn()
+                            && !!(typeid_cast<const DataTypeLowCardinality *>(column_opt->getTypeInStorage().get()));
+                    }),
+                source_columns.end());
         }
         /// If we have no information about columns sizes, choose a column of minimum size of its data type.
         return ExpressionActions::getSmallestColumn(source_columns);

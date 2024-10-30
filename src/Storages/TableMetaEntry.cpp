@@ -1,3 +1,4 @@
+#include <mutex>
 #include <Catalog/Catalog.h>
 #include <Storages/TableMetaEntry.h>
 #include <Storages/PartCacheManager.h>
@@ -82,5 +83,15 @@ void TableMetaEntry::forEachPartition(std::function<void(PartitionInfoPtr)> call
 {
     for (auto it = partitions.begin(); it != partitions.end(); it++)
         callback(*it);
+}
+RWLock MetaLockHolder::getPartitionLock(const String & partition_id)
+{
+    std::scoped_lock<std::mutex> lock(lock_of_partition_locks);
+    if (partition_locks.find(partition_id) != partition_locks.end())
+    {
+        return partition_locks[partition_id];
+    }
+    partition_locks.emplace(partition_id, RWLockImpl::create());
+    return partition_locks[partition_id];
 }
 }

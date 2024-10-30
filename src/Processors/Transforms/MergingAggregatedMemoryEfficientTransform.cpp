@@ -342,7 +342,7 @@ void MergingAggregatedBucketTransform::transform(Chunk & chunk)
     res_info->bucket_num = chunks_to_merge->bucket_num;
     chunk.setChunkInfo(std::move(res_info));
 
-    auto block = params->aggregator.mergeBlocks(blocks_list, params->final);
+    auto block = params->aggregator.mergeBlocks(blocks_list, params->final, is_cancelled);
     size_t num_rows = block.rows();
     chunk.setColumns(block.getColumns(), num_rows);
 }

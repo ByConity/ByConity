@@ -1,16 +1,16 @@
 Projection
 │     Expressions: num_customers:=`expr#count()`, segment:=`expr#CAST(divide(revenue, 50), 'int')`, segment_base:=`expr#multiply(segment, 50)`
-└─ Projection
-   │     Expressions: [expr#CAST(divide(revenue, 50), 'int'), expr#count()], expr#multiply(segment, 50):=`expr#CAST(divide(revenue, 50), 'int')` * 50
-   └─ Limit
+└─ Limit
+   │     Limit: 100
+   └─ Sorting
+      │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting
-         │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange
-            └─ Sorting
-               │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange
+         └─ Sorting
+            │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection
+               │     Expressions: [expr#CAST(divide(revenue, 50), 'int'), expr#count()], expr#multiply(segment, 50):=`expr#CAST(divide(revenue, 50), 'int')` * 50
                └─ MergingAggregated
                   └─ Repartition Exchange
                      │     Partition by: {expr#CAST(divide(revenue, 50), 'int')}

@@ -36,6 +36,7 @@ SELECT age FROM update_join_test ORDER BY id;
 DROP TABLE update_join_test;
 DROP TABLE update_join_test_new;
 
+CREATE DATABASE IF NOT EXISTS test;
 DROP TABLE IF EXISTS test.update_join_tuj;
 DROP TABLE IF EXISTS test.update_join_tt;
 

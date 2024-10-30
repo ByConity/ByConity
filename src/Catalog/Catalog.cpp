@@ -2742,7 +2742,7 @@ namespace Catalog
                             return;
                         }
                     }
-                    getPartitionsFromMetastore(*cnch_table, partitions);
+                    getPartitionsFromMetastore(*cnch_table, partitions, nullptr);
                 }
 
                 for (auto it = partitions.begin(); it != partitions.end(); it++)
@@ -2844,8 +2844,9 @@ namespace Catalog
     }
 
 
-    template<typename Map>
-    void Catalog::getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list)
+    template <typename Map>
+    void
+    Catalog::getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list, std::shared_ptr<MetaLockHolder> lock_holder)
     {
         runWithMetricSupport(
             [&] {
@@ -2858,7 +2859,8 @@ namespace Catalog
                     Protos::PartitionMeta partition_meta;
                     partition_meta.ParseFromString(it->value());
                     auto partition_ptr = createPartitionFromMetaModel(table, partition_meta);
-                    auto partition_info = std::make_shared<CnchPartitionInfo>(table_uuid, partition_ptr, partition_meta.id());
+                    auto partition_lock = lock_holder ? (*lock_holder).getPartitionLock(partition_meta.id()) : nullptr;
+                    auto partition_info = std::make_shared<CnchPartitionInfo>(table_uuid, partition_ptr, partition_meta.id(), partition_lock);
                     if (partition_meta.has_gctime())
                         partition_info->gctime = partition_meta.gctime();
                     partition_list.emplace(partition_meta.id(), std::move(partition_info));
@@ -2868,8 +2870,9 @@ namespace Catalog
             ProfileEvents::GetPartitionsFromMetastoreFailed);
     }
 
-    template void Catalog::getPartitionsFromMetastore<PartitionMap>(const MergeTreeMetaBase &, PartitionMap &);
-    template void Catalog::getPartitionsFromMetastore<ScanWaitFreeMap<String, PartitionInfoPtr>>(const MergeTreeMetaBase &, ScanWaitFreeMap<String, PartitionInfoPtr> &);
+    template void Catalog::getPartitionsFromMetastore<PartitionMap>(const MergeTreeMetaBase &, PartitionMap &, std::shared_ptr<MetaLockHolder>);
+    template void Catalog::getPartitionsFromMetastore<ScanWaitFreeMap<String, PartitionInfoPtr>>(
+        const MergeTreeMetaBase &, ScanWaitFreeMap<String, PartitionInfoPtr> &, std::shared_ptr<MetaLockHolder>);
 
     Strings Catalog::getPartitionIDsFromMetastore(const ConstStoragePtr & storage)
     {
