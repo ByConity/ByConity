@@ -11,7 +11,7 @@ jobs:
       - name: Setup Git Proxy.
         if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
         run: |
-          git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
+          git config --global http.https://github.com.proxy http://${{ secrets.VIP_PROXY }}:3128
       - name: Setup Environment Varialbes
         run: |
           export PROJECT_NAME=byconity-$(cat /etc/hostname)
