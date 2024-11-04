@@ -36,7 +36,7 @@ public:
 protected:
 
     bool getNewTaskImpl() override;
-    void firstTaskInitialization();
+    bool firstTaskInitialization();
 
     /// Used by Task
     Names required_columns;

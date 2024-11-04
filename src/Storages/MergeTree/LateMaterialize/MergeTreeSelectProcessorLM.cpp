@@ -54,15 +54,13 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
 {
     try
     {
-        if (part_detail.ranges.empty())
+        if (part_detail.ranges.empty() || !firstTaskInitialization())
         {
             readers.clear();
             range_readers.clear();
             part_detail.data_part.reset();
             return false;
         }
-
-        firstTaskInitialization();
 
         auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
             ? nullptr
@@ -85,7 +83,7 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
     }
 }
 
-void MergeTreeSelectProcessorLM::firstTaskInitialization()
+bool MergeTreeSelectProcessorLM::firstTaskInitialization()
 {
     std::unique_ptr<roaring::Roaring> row_filter = nullptr;
     if (mark_ranges_filter_callback)
@@ -111,6 +109,7 @@ void MergeTreeSelectProcessorLM::firstTaskInitialization()
             *delete_bitmap &= *row_filter;
         }
     }
+    return !part_detail.ranges.empty();
 }
 
 }

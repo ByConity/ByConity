@@ -97,3 +97,10 @@ create table norder5 (ts DateTime, c1 Int64) engine = CnchMergeTree partition by
 insert into norder5 select toDateTime('2024-06-01 00:00:00') + interval number hour, 1 from numbers(3);
 select * from norder5 where c1 = 1 order by ts limit 1; -- { serverError 277 }
 drop table norder5;
+
+drop table if exists inorder_filter_all_ranges;
+create table inorder_filter_all_ranges (ts DateTime, value String, index val_idx value type inverted granularity 1) engine = CnchMergeTree partition by toDate(ts) order by ts;
+insert into inorder_filter_all_ranges values ('2024-11-04 00:00:00', 'abc def')('2024-11-03 00:00:00', 'ghi jkl');
+select * from inorder_filter_all_ranges where hasToken(value, 'a') order by ts asc;
+select * from inorder_filter_all_ranges where hasToken(value, 'a') order by ts desc;
+drop table inorder_filter_all_ranges;

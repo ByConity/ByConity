@@ -62,8 +62,8 @@ protected:
 
     bool getNewTask() override;
     /// Do extra mark range filter, row filter generation and delete bitmap
-    /// initialize
-    void firstTaskInitialization();
+    /// initialize, return if there are mark ranges to read
+    bool firstTaskInitialization();
 
     /// Used by Task
     Names required_columns;

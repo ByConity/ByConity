@@ -77,11 +77,12 @@ try
         finish();
         return false;
     }
-    if (is_first_task)
-    {
-        firstTaskInitialization();
-    }
     is_first_task = false;
+    if (!firstTaskInitialization())
+    {
+        finish();
+        return false;
+    }
 
     task_columns = getReadTaskColumns(
         storage, storage_snapshot, part_detail.data_part,
@@ -112,7 +113,7 @@ catch (...)
     throw;
 }
 
-void MergeTreeSelectProcessor::firstTaskInitialization()
+bool MergeTreeSelectProcessor::firstTaskInitialization()
 {
     std::unique_ptr<roaring::Roaring> row_filter = nullptr;
     if (mark_ranges_filter_callback)
@@ -138,6 +139,7 @@ void MergeTreeSelectProcessor::firstTaskInitialization()
             *delete_bitmap &= *row_filter;
         }
     }
+    return !part_detail.ranges.empty();
 }
 
 void MergeTreeSelectProcessor::finish()

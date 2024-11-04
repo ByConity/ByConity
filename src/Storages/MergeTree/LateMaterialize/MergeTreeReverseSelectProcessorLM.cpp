@@ -18,9 +18,15 @@ try
 {
     if (is_first_task)
     {
-        firstTaskInitialization();
+        is_first_task = false;
+        if (!firstTaskInitialization())
+        {
+            readers.clear();
+            range_readers.clear();
+            part_detail.data_part.reset();
+            return false;
+        }
     }
-    is_first_task = false;
 
     if ((chunks.empty() && part_detail.ranges.empty()))
     {

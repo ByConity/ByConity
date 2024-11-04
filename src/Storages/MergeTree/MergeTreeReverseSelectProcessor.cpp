@@ -44,9 +44,13 @@ try
     }
     if (is_first_task)
     {
-        firstTaskInitialization();
+        is_first_task = false;
+        if (!firstTaskInitialization())
+        {
+            finish();
+            return false;
+        }
     }
-    is_first_task = false;
 
     /// We have some blocks to return in buffer.
     /// Return true to continue reading, but actually don't create a task.
