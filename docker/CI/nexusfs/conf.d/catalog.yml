@@ -1,6 +1,0 @@
-catalog:
-  name_space: default
-catalog_service:
-  type: fdb
-  fdb:
-    cluster_file: /config/fdb.cluster

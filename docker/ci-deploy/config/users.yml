@@ -12,6 +12,8 @@ profiles:
     send_cacheable_table_definitions: true
     optimize_skip_unused_shards: true
     enable_prune_source_plan_segment: true
+  readonly:
+    readonly: 1
 
 users:
   default:
