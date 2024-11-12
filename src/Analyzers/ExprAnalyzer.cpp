@@ -428,7 +428,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     auto function_ret_type = function_base->getResultType();
     if (options.evaluate_constant_expression && function_base->isSuitableForConstantFoldingInOptimizer())
     {
-        if (all_const && !BitEngineHelper::isBitEngineEncodeDecodeFunction(Poco::toLower(function->name)))
+        if (all_const)
             res_col = function_base->execute(processed_arguments, function_ret_type, 1, false);
         else
             res_col = function_base->getConstantResultForNonConstArguments(processed_arguments, function_ret_type);
