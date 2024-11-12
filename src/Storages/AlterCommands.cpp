@@ -90,6 +90,8 @@ AlterCommand::RemoveProperty removePropertyFromString(const String & property)
         return AlterCommand::RemoveProperty::CODEC;
     else if (property == "TTL")
         return AlterCommand::RemoveProperty::TTL;
+    else if (property == "REPLACE_IF_NOT_NULL")
+        return AlterCommand::RemoveProperty::REPLACE_IF_NOT_NULL;
 
     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot remove unknown property '{}'", property);
 }
@@ -223,6 +225,9 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
             if (!replace_current_timestamp)
                 command.default_expression = ast_col_decl.default_expression;
         }
+
+        if (ast_col_decl.replace_if_not_null)
+            command.replace_if_not_null = ast_col_decl.replace_if_not_null;
 
         if (ast_col_decl.comment)
         {
@@ -586,10 +591,17 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context,
             {
                 column.ttl.reset();
             }
+            else if (to_remove == RemoveProperty::REPLACE_IF_NOT_NULL)
+            {
+                column.replace_if_not_null = false;
+            }
             else
             {
                 if (codec)
                     column.codec = CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(codec, data_type ? data_type : column.type, false, true);
+
+                if (replace_if_not_null)
+                    column.replace_if_not_null = replace_if_not_null;
 
                 if (comment)
                     column.comment = *comment;
@@ -1466,6 +1478,11 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                     throw Exception(
                         ErrorCodes::BAD_ARGUMENTS,
                         "Column {} doesn't have COMMENT, cannot remove it",
+                        backQuote(column_name));
+                if (command.to_remove == AlterCommand::RemoveProperty::REPLACE_IF_NOT_NULL && !column_from_table.replace_if_not_null)
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "Column {} doesn't specify REPLACE_IF_NOT_NULL, cannot remove it",
                         backQuote(column_name));
             }
 

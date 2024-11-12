@@ -49,6 +49,7 @@ public:
     }
     const std::string & getSQL() const { return sql; }
     const QueryPlanPtr & getPlan() const { return plan; }
+    const QueryPlanPtr & getPlanBeforeCascades() const { return plan_before_cascades; }
     const PlanCostMap & getCosts() const { return costs; }
 
     /*

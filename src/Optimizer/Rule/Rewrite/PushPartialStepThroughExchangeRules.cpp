@@ -530,7 +530,7 @@ TransformResult PushPartialTopNDistinctThroughExchange::transformImpl(PlanNodePt
     auto partial_sort = std::make_unique<SortingStep>(
         sorting_children[0]->getStep()->getOutputStream(),
         sort_step->getSortDescription(),
-        sort_step->getLimit(),
+        0u,
         SortingStep::Stage::PARTIAL,
         SortDescription{});
     auto partial_sort_node
@@ -551,6 +551,7 @@ TransformResult PushPartialTopNDistinctThroughExchange::transformImpl(PlanNodePt
 
     QueryPlanStepPtr final_sort = sort_step->copy(context.context);
     dynamic_cast<SortingStep *>(final_sort.get())->setStage(SortingStep::Stage::MERGE);
+    dynamic_cast<SortingStep *>(final_sort.get())->setLimit(0);
     PlanNodes exchange{exchange_node};
     auto final_sort_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(final_sort), exchange, node->getStatistics());

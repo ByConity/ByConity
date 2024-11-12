@@ -382,6 +382,12 @@ void MergeTreeMetaBase::checkProperties(
         }
     }
 
+    for (const auto & column : new_metadata.columns)
+    {
+        if (column.replace_if_not_null && !column.type->isNullable())
+            throw Exception("REPLACE_IF_NOT_NULL could not used with nullable type, column name: " + column.name, ErrorCodes::LOGICAL_ERROR);
+    }
+
     checkKeyExpression(*new_sorting_key.expression, new_sorting_key.sample_block, "Sorting", allow_nullable_key);
 
 }

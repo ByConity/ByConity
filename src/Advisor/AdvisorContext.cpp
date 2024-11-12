@@ -19,7 +19,7 @@ AdvisorContext AdvisorContext::buildFrom(ContextMutablePtr session_context, Work
     ColumnUsages column_usages = buildColumnUsages(queries);
     SignatureUsages signature_usages = buildSignatureUsages(queries, session_context);
 
-std::unordered_map<String, WorkloadQueryPtr> query_id_to_query;
+    std::unordered_map<String, WorkloadQueryPtr> query_id_to_query;
     for (const auto & query : queries)
         query_id_to_query[query->getQueryId()] = query;
 
@@ -27,7 +27,7 @@ std::unordered_map<String, WorkloadQueryPtr> query_id_to_query;
         session_context,
         tables,
         queries,
-std::move(query_id_to_query),
+        std::move(query_id_to_query),
         query_thread_pool,
         std::move(column_usages),
         std::move(signature_usages));

@@ -21,7 +21,7 @@ bool ParserAdviseQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
     ParserKeyword s_all("ALL");
     ParserKeyword s_orderby("ORDER_BY");
-    ParserKeyword s_distributedby("DISTRIBUTED_BY");
+    ParserKeyword s_clusterby("CLUSTER_BY");
     ParserKeyword s_datatype("DATA_TYPE");
     ParserKeyword s_materialized_view("MATERIALIZED_VIEW");
     ParserKeyword s_projection("PROJECTION");
@@ -51,8 +51,10 @@ bool ParserAdviseQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         type = ASTAdviseQuery::AdvisorType::ALL;
     else if (s_orderby.ignore(pos, expected))
         type = ASTAdviseQuery::AdvisorType::ORDER_BY;
-    else if (s_distributedby.ignore(pos, expected))
-        type = ASTAdviseQuery::AdvisorType::DISTRIBUTED_BY;
+    else if (s_clusterby.ignore(pos, expected))
+        type = ASTAdviseQuery::AdvisorType::CLUSTER_BY;
+    else if (s_datatype.ignore(pos, expected))
+        type = ASTAdviseQuery::AdvisorType::DATA_TYPE;
     else if (s_materialized_view.ignore(pos, expected))
         type = ASTAdviseQuery::AdvisorType::MATERIALIZED_VIEW;
     else if (s_projection.ignore(pos, expected))

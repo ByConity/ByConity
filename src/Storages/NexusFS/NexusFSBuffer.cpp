@@ -225,6 +225,11 @@ BufferManager * BufferManager::getInstance()
     return buffer_manager.get();
 }
 
+void BufferManager::destroy()
+{
+    buffer_manager.reset();
+}
+
 BufferManager::BufferManager(
     size_t buffer_size_,
     UInt32 segment_size_,

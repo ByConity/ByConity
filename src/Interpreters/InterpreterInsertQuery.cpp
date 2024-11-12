@@ -675,7 +675,15 @@ BlockIO InterpreterInsertQuery::execute()
     if (insert_query.is_overwrite && !lock_holders.empty())
     {
         /// Make sure lock is release after txn commit
-        res.in = std::make_shared<LockHoldBlockInputStream>(res.in, std::move(lock_holders));
+        if (res.in)
+        {
+            /// Only use LockHoldBlockInputStream if there is a input stream to avoid misjudgement.
+            res.in = std::make_shared<LockHoldBlockInputStream>(res.in, std::move(lock_holders));
+        }
+        else
+        {
+            res.pipeline.addLockHolders(std::move(lock_holders));
+        }
     }
     return res;
 }

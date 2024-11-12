@@ -5,14 +5,12 @@ Projection Est. 100 rows
    └─ Distinct Est. 100 rows
       └─ Sorting Est. 100 rows
          │     Order by: {i_product_name ASC NULLS LAST}
-         │     Limit: 100
          └─ Gather Exchange Est. 1818 rows
             └─ Limit Est. 100 rows
                │     Limit: 100
                └─ Distinct Est. 100 rows
                   └─ Sorting Est. 100 rows
                      │     Order by: {i_product_name ASC NULLS LAST}
-                     │     Limit: 100
                      └─ Distinct Est. 100 rows
                         └─ Inner Join Est. 1818 rows
                            │     Condition: 

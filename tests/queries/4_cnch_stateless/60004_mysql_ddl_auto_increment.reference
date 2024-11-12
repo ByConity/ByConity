@@ -1,0 +1,9 @@
+60004_t1	CREATE TABLE test.`60004_t1` (\n    `id` Int64 NULL DEFAULT generateSnowflakeID(),\n    `val` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+1
+1
+100
+101
+1
+1
+1
+1

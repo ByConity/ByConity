@@ -67,7 +67,7 @@ void TableFinishStep::preExecute(ContextMutablePtr query_context)
         if (auto * insert = dynamic_cast<ASTInsertQuery *>(query.get()); insert->is_overwrite)
         {
             Stopwatch watch;
-            query_context->setSetting("prefer_cnch_catalog", hdfs_table->settings.prefer_cnch_catalog.value);
+            query_context->setSetting("prefer_cnch_catalog", s3_table->settings.prefer_cnch_catalog.value);
             s3_table->clear(query_context);
             ProfileEvents::increment(ProfileEvents::TableFinishStepPreClearS3TableMicroseconds, watch.elapsedMicroseconds());
         }

@@ -590,7 +590,7 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
             {
                 std::optional<CurrentThread::QueryScope> query_scope;
                 query_scope.emplace(insert_context);
-                CurrentThread::get().pushTenantId(insert_context->getSettingsRef().tenant_id);
+                insert_context->setTenantId(insert_context->getSettingsRef().tenant_id);
                 BlockIO insert_io;
                 try
                 {
@@ -623,7 +623,6 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
                     insert_io.onException();
                     throw;
                 }
-
                 query_scope.reset();
             }
             catch (...)
@@ -701,7 +700,7 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
         {
             std::optional<CurrentThread::QueryScope> query_scope;
             query_scope.emplace(insert_overwrite_context);
-            CurrentThread::get().pushTenantId(insert_overwrite_context->getSettingsRef().tenant_id);
+            insert_overwrite_context->setTenantId(insert_overwrite_context->getSettingsRef().tenant_id);
 
             LOG_DEBUG(log, "refresh sync materialized view refresh insert overwite query: {}", param->insert_overwrite_query);
             BlockIO insert_io;

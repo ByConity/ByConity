@@ -4,7 +4,14 @@ profiles:
     log_queries: 1
     max_execution_time: 180
     exchange_timeout_ms: 300000
-    cnch_max_cached_storage : 50000
+  point_lookup:
+    max_threads: 1
+    exchange_source_pipeline_threads: 1
+    enable_plan_cache: true
+    query_worker_fault_tolerance: false
+    send_cacheable_table_definitions: true
+    optimize_skip_unused_shards: true
+    enable_prune_source_plan_segment: true
   readonly:
     readonly: 1
 

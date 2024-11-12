@@ -1,0 +1,14 @@
+0
+---- INSERT VALUES enable_optimizer = 0
+1
+---- INSERT VALUES enable_optimizer = 1
+2
+---- INSERT SELECT enable_optimizer = 0
+0
+1
+2
+---- INSERT SELECT enable_optimizer = 1
+0
+1
+2
+3

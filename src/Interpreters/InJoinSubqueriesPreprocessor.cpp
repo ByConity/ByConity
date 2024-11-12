@@ -90,15 +90,11 @@ private:
     {
         const DistributedProductMode distributed_product_mode = getContext()->getSettingsRef().distributed_product_mode;
 
-        StoragePtr storage = tryGetTable(database_and_table, getContext());
-        if (!storage || !checker.hasAtLeastTwoShards(*storage))
-            return;
-
+        /// Convert distributed table to corresponding remote table.
         if (distributed_product_mode == DistributedProductMode::LOCAL)
         {
-            /// Convert distributed table to corresponding remote table.
-            StorageDistributed * distributed = dynamic_cast<StorageDistributed *>(storage.get());
-            if (!distributed)
+            StoragePtr storage = tryGetTable(database_and_table, getContext());
+            if (!storage || !checker.hasAtLeastTwoShards(*storage))
                 return;
 
             std::string database;

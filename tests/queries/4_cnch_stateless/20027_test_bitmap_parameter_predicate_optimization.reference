@@ -1,0 +1,7 @@
+single_agg	3
+multi_agg	6	5	3	[6,5,3]
+multi_agg_with_subquery	6	5	3	[6,5,3]
+multi_agg_multi_column	5	[6,4,4]	5	3	6	3
+multi_agg_multi_column_with_subquery	5	[6,4,4]	5	3	6	3
+multi_agg_multi_column_2	{1,2,3,4,5}	[{1,2,3,4,5,6},{3,4,5,6},{1,2,4,8}]	{1,2,3,4,5}	{3,4,5}	{1,2,3,4,5,6}	{3,5,6}
+multi_agg_multi_column_2_with_subquery	{1,2,3,4,5}	[{1,2,3,4,5,6},{3,4,5,6},{1,2,4,8}]	{1,2,3,4,5}	{3,4,5}	{1,2,3,4,5,6}	{3,5,6}

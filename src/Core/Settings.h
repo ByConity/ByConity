@@ -79,6 +79,7 @@ enum PreloadLevelSettings : UInt64
       "The maximum size of blocks of uncompressed data before compressing for writing to a table.", \
       0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
+    M(UInt64, min_block_size, 1024, "Minimum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, max_insert_block_size_bytes, DEFAULT_BLOCK_SIZE_BYTES, "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", 0) \
@@ -313,8 +314,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, force_optimize_skip_unused_shards, 0, "Throw an exception if unused shards cannot be skipped (1 - throw only if the table has the sharding key, 2 - always throw.", 0) \
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
-    \
-    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
     \
     M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, \
@@ -807,13 +806,10 @@ enum PreloadLevelSettings : UInt64
       "will create several shared dictionaries.", \
       0) \
     M(Bool, decimal_check_overflow, true, "Check overflow of decimal arithmetic/comparison operations", 0) \
-\
-    M(Bool, \
-      prefer_localhost_replica, \
-      1, \
-      "1 - always send query to local replica, if it exists. 0 - choose replica to send query between local and remote ones according to " \
-      "load_balancing", \
-      0) \
+    \
+    M(Bool, size_predictor_estimate_lc_size_by_fullstate, true, "Using estimate size of fullstate LowCardinality in size predictor", 0) \
+    \
+    M(Bool, prefer_localhost_replica, 1, "1 - always send query to local replica, if it exists. 0 - choose replica to send query between local and remote ones according to load_balancing", 0) \
     M(UInt64, max_fetch_partition_retries_count, 5, "Amount of retries while fetching partition from another host.", 0) \
     M(UInt64, \
       http_max_multipart_form_data_size, \
@@ -1548,6 +1544,10 @@ enum PreloadLevelSettings : UInt64
     M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
     M(Bool, optimize_json_function_to_subcolumn, false, "Whether to optimize json extract functions to subcolumn read", 0) \
+    /** Point lookup optimizations */ \
+    M(Bool, enable_point_lookup_profile, false, "Whether to enable settings for point-lookup queries, If true, the settings from point_lookup_profile are applied in order to improve QPS.", 0) \
+    M(String, point_lookup_profile, "", "Name of the setting profile to apply when enable_point_lookup_profile is true. If empty, will apply engine's default settings for point-lookup queries. If not empty but the profile doesn't exist, will also fallback to engine's default settings", 0) \
+    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_forward_query, false, "Indicate whether this query is coming from another replica", 0)  \

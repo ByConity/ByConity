@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -292,8 +293,43 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     return result;
 }
 
+/// workers will be assigning tasks by the order of its data size
+std::vector<const AddressInfo *> orderAddrByRows(std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads)
+{
+    std::vector<const AddressInfo *> ordered_addrs;
+    ordered_addrs.reserve(payloads.size());
+    for (const auto & p : payloads)
+        ordered_addrs.emplace_back(&p.first);
+    /// order workers by weight
+    std::sort(ordered_addrs.begin(), ordered_addrs.end(), [&](auto * l, auto * r) { return payloads[*l].rows > payloads[*r].rows; });
+    return ordered_addrs;
+}
+
+/// assign one task for each non-empty worker
+size_t initNodeSelectorResult(
+    const std::vector<const AddressInfo *> & ordered_addrs,
+    std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    size_t parallel_size,
+    NodeSelectorResult & result,
+    std::function<void(const AddressInfo &)> init_source_func)
+{
+    size_t assigned_instances = 0;
+    for (const auto * addr_p : ordered_addrs)
+    {
+        const auto & addr = *addr_p;
+        const auto & payload_on_worker = payloads[addr];
+        if (payload_on_worker.rows > 0 && parallel_size > 0)
+        {
+            init_source_func(addr);
+            result.worker_nodes.emplace_back(WorkerNode(addr, NodeType::Remote, payload_on_worker.worker_id));
+            assigned_instances++;
+        }
+    }
+    return assigned_instances;
+}
+
 void divideSourceTaskByBucket(
-    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
     size_t weight_sum,
     size_t parallel_size,
     NodeSelectorResult & result)
@@ -303,13 +339,19 @@ void divideSourceTaskByBucket(
             ErrorCodes::LOGICAL_ERROR,
             fmt::format("Invalid argument for divideSourceTaskByBucket payloads.size:{} parallel_size:{}", payloads.size(), parallel_size));
 
-    size_t assigned_instances = 0;
+    std::vector<const AddressInfo *> ordered_addrs = orderAddrByRows(payloads);
+    size_t assigned_instances = initNodeSelectorResult(ordered_addrs, payloads, parallel_size, result, [&](const AddressInfo & addr) {
+        result.buckets_on_workers[addr].emplace_back(std::set<Int64>{});
+    });
+
     while (assigned_instances < parallel_size)
     {
-        for (const auto & [addr, payload_on_worker] : payloads)
+        for (const auto & addr_p : ordered_addrs)
         {
-            size_t weight = payload_on_worker.rows;
-            size_t to_be_assigned = weight_sum == 0 ? 0 : weight * parallel_size / weight_sum;
+            const auto & addr = *addr_p;
+            const auto & payload_on_worker = payloads.find(addr)->second;
+
+            size_t to_be_assigned = weight_sum == 0 ? 0 : payload_on_worker.rows * parallel_size / weight_sum;
             /// to_be_assigned <= bucket_groups.size, as to avoid empty plan segment instance.
             to_be_assigned = std::min(to_be_assigned, payload_on_worker.bucket_groups.size());
             size_t already_assigned = std::min(to_be_assigned, result.buckets_on_workers[addr].size());
@@ -357,7 +399,7 @@ void divideSourceTaskByBucket(
 }
 
 void divideSourceTaskByPart(
-    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
     size_t weight_sum,
     size_t parallel_size,
     NodeSelectorResult & result)
@@ -367,25 +409,29 @@ void divideSourceTaskByPart(
             ErrorCodes::LOGICAL_ERROR,
             fmt::format("Invalid argument for divideSourceTaskByPart payloads.size:{} parallel_size:{}", payloads.size(), parallel_size));
 
-    size_t assigned_instances = 0;
+    std::vector<const AddressInfo *> ordered_addrs = orderAddrByRows(payloads);
+    size_t assigned_instances = initNodeSelectorResult(
+        ordered_addrs, payloads, parallel_size, result, [&](const AddressInfo & addr) { result.source_task_count_on_workers[addr]++; });
+
     while (assigned_instances < parallel_size)
     {
-        for (auto iter = payloads.begin(); iter != payloads.end() && assigned_instances < parallel_size; iter++)
+        for (const auto & addr_p : ordered_addrs)
         {
-            const auto & addr = iter->first;
-            const auto & payload_on_worker = iter->second;
-            size_t weight = payload_on_worker.rows;
-            size_t to_be_assigned = weight_sum == 0 ? 0 : weight * parallel_size / weight_sum;
+            const auto & addr = *addr_p;
+            const auto & payload_on_worker = payloads.find(addr)->second;
+
+            size_t to_be_assigned = weight_sum == 0 ? 0 : payload_on_worker.rows * parallel_size / weight_sum;
             /// to_be_assigned <= part num, as to avoid empty plan segment instance.
             to_be_assigned = std::min(to_be_assigned, payload_on_worker.part_num);
             size_t already_assigned = std::min(to_be_assigned, result.source_task_count_on_workers[addr]);
             to_be_assigned = to_be_assigned - already_assigned;
             ///  make sure there is no infinte loop
             to_be_assigned = std::max(1UL, to_be_assigned);
+
             for (size_t p = 0; p < to_be_assigned && assigned_instances < parallel_size; p++)
             {
                 result.source_task_count_on_workers[addr]++;
-                result.worker_nodes.emplace_back(WorkerNode(addr, NodeType::Remote, iter->second.worker_id));
+                result.worker_nodes.emplace_back(WorkerNode(addr, NodeType::Remote, payload_on_worker.worker_id));
                 assigned_instances++;
             }
         }
@@ -452,65 +498,6 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
             worker_number);
     }
 
-    /// will be obsolete in the future
-    auto old_func = [&](std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payload_on_workers,
-                        size_t rows_count,
-                        size_t parallel_size) {
-        size_t avg = rows_count / parallel_size + 1;
-        if (rows_count < parallel_size)
-            rows_count = 0;
-        if (rows_count > 0)
-        {
-            // Assign parallelism accroding to regular average size.
-            for (auto & [addr, payload] : payload_on_workers)
-            {
-                size_t s = payload.rows;
-                size_t p = s / avg;
-                if (p > 0)
-                {
-                    s = s % avg;
-                }
-                if (p == 0 && s > 0)
-                {
-                    p = 1;
-                    s = 0;
-                }
-                for (size_t i = 0; i < p; i++)
-                {
-                    result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
-                    result.source_task_count_on_workers[addr]++;
-                }
-            }
-        }
-        // Assign parallelism according to major part(>0.5) of average size, if needed.
-        if (result.worker_nodes.size() < parallel_size)
-        {
-            for (auto & [addr, payload] : payload_on_workers)
-            {
-                size_t s = payload.rows;
-                if (s * 2 > avg)
-                {
-                    result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
-                    result.source_task_count_on_workers[addr]++;
-                    s = 0;
-                }
-                if (result.worker_nodes.size() == parallel_size)
-                    break;
-            }
-        }
-        // Assign parallelism to each worker until no one left.
-        while (result.worker_nodes.size() < parallel_size)
-        {
-            for (const auto & [addr, payload] : payload_on_workers)
-            {
-                result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
-                result.source_task_count_on_workers[addr]++;
-                if (result.worker_nodes.size() == parallel_size)
-                    break;
-            }
-        }
-    };
-
     // If parallelism is greater than the worker number, we split the parts according to the input size.
     if (plan_segment_ptr->getParallelSize() > worker_number)
     {
@@ -560,7 +547,7 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         if (is_bucket_valid)
             divideSourceTaskByBucket(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize(), result);
         else
-            old_func(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize());
+            divideSourceTaskByPart(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize(), result);
     }
     else
     {

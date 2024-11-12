@@ -37,8 +37,7 @@ public:
                                                   const String & table_name,
                                                   const NamesAndTypesList & columns);
 
-    PlanNodeStatisticsPtr basic_stats;
-    WorkloadExtendedStatsPtr extended_stats;
+    PlanNodeStatisticsPtr getBasicStats() { return basic_stats; }
 
 private:
     explicit WorkloadTableStats(PlanNodeStatisticsPtr basic_stats_)
@@ -46,6 +45,9 @@ private:
         , extended_stats(std::make_shared<WorkloadExtendedStats>())
     {
     }
+
+    PlanNodeStatisticsPtr basic_stats;
+    WorkloadExtendedStatsPtr extended_stats;
 
     static const char * getStatsAggregation(const WorkloadExtendedStatsType & type)
     {

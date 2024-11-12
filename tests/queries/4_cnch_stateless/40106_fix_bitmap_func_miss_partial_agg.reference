@@ -8,10 +8,10 @@ Projection
          └─ TableScan default.t40106
                   Outputs: [bm]
 Projection
-│     Expressions: BitMapCount(\'1\')(toInt64(1), bm):=`expr#BitMapCount(\'1\')(toInt64(1), bm)`
+│     Expressions: BitmapCount(\'1\')(toInt64(1), bm):=`expr#BitmapCount(\'1\')(toInt64(1), bm)`
 └─ Aggregating
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(toInt64(1), bm):=AggNull(bitmapCount)(expr#toInt64(1),bm)
+   │     Aggregates: expr#BitmapCount(\'1\')(toInt64(1), bm):=AggNull(BitmapCount)(expr#toInt64(1),bm)
    └─ Gather Exchange
       └─ Projection
          │     Expressions: [bm], expr#toInt64(1):=cast(1, \'Int64\')

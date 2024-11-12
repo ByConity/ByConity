@@ -45,6 +45,7 @@
 #include <AggregateFunctions/AggregateBitmapExpression_fwd.h>
 #include <Interpreters/PartitionPredicateVisitor.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/convertFieldToType.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
@@ -988,5 +989,160 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
         LOG_TRACE(getLogger("optimizePartitionPredicate"), "Optimize partition prediate push down query rewrited to {} , partiton filter-{} ",
                 queryToString(query), queryToString(query_info.partition_filter));
     }
+}
+
+void getTargetFunctions(const ASTPtr & ast, ASTs & functions)
+{
+    if (!ast)
+        return;
+
+    if (ASTFunction * func = ast->as<ASTFunction>())
+    {
+        String func_name = Poco::toLower(func->name);
+        if (BITMAP_EXPRESSION_AGGREGATE_FUNCTIONS.count(func_name))
+        {
+            functions.push_back(func->clone());
+            return;
+        }
+    }
+
+    for (const auto & child : ast->children)
+        getTargetFunctions(child, functions);
+}
+
+ASTPtr constructAndFunction(ASTs functions)
+{
+    if (functions.size() == 1)
+        return functions.front();
+
+    const auto and_func = std::make_shared<ASTFunction>();
+    and_func->name = "and";
+    and_func->arguments = std::make_shared<ASTExpressionList>();
+    and_func->children.push_back(and_func->arguments);
+    for (const auto & func : functions)
+        and_func->arguments->children.push_back(func);
+
+    return and_func;
+}
+
+ASTPtr constructOrFunction(ASTs functions)
+{
+    if (functions.size() == 1)
+        return functions.front();
+
+    const auto and_func = std::make_shared<ASTFunction>();
+    and_func->name = "or";
+    and_func->arguments = std::make_shared<ASTExpressionList>();
+    and_func->children.push_back(and_func->arguments);
+    for (const auto & func : functions)
+        and_func->arguments->children.push_back(func);
+
+    return and_func;
+}
+
+void collectionParameterValueInFunction(
+    const ASTPtr & ast, std::unordered_map<String, std::set<Field>> & parameters_map, const StorageMetadataPtr & metadata_snapshot)
+{
+    if (!ast)
+        return;
+
+    ASTFunction * func = ast->as<ASTFunction>();
+
+    if (!func)
+        return;
+
+    ASTPtr func_arguments = func->arguments;
+    ASTPtr func_parameters = func->parameters;
+
+    if (!func_arguments || !func_parameters)
+        return;
+
+    if (func_arguments->children.size() < 2 || func_parameters->children.empty())
+        return;
+
+    ASTIdentifier * index_arg = func_arguments->children.front()->as<ASTIdentifier>();
+
+    if (!index_arg)
+        return;
+    /// not a physical column in the table, no need to optimize
+    DataTypePtr data_type{nullptr};
+    if (metadata_snapshot)
+        data_type = metadata_snapshot->getColumns().tryGetPhysical(index_arg->name()).value_or(NameAndTypePair{}).type;
+
+    if (!data_type)
+        return;
+
+    auto & parameters = parameters_map[index_arg->name()];
+    String exp;
+    for (const auto & child : func_parameters->children)
+    {
+        ASTLiteral * param = child->as<ASTLiteral>();
+        if (param && param->value.tryGet<String>(exp))
+        {
+            Names values = getBitMapParameterValues(exp);
+            for (auto & node : values)
+            {
+                Field field(node);
+                field = convertFieldToType(field, *data_type);
+                parameters.emplace(field);
+            }
+        }
+    }
+}
+
+void optimizeBitMapParametersToWhere(ASTPtr & query, const StorageMetadataPtr & metadata_snapshot)
+{
+    ASTSelectQuery * select = query->as<ASTSelectQuery>();
+    if (!select || !select->select())
+        return;
+
+    ASTs target_functions;
+    getTargetFunctions(select->select(), target_functions);
+
+    if (target_functions.empty())
+        return;
+
+    std::unordered_map<String, std::set<Field>> parameters_map;
+    for (const auto & function : target_functions)
+    {
+        collectionParameterValueInFunction(function, parameters_map, metadata_snapshot);
+    }
+
+    if (parameters_map.empty())
+        return;
+
+    size_t total_in_elems{0};
+    ASTs functions;
+    /// create in function for those parametered values
+    for (const auto & parameter : parameters_map)
+    {
+        auto [in_ast, elem_size] = createInFunctionForBitMapParameter(parameter.first, parameter.second);
+        functions.push_back(in_ast);
+        total_in_elems += elem_size;
+    }
+
+    size_t found_parameters = functions.size();
+    /// for example, `bitmapCount('1 | 2 & 3')(a, b), bitmapCount('3&4')(c,b)`,
+    // we need construct 'a in (1, 2, 3) OR c in (3, 4)' predicate expression.
+    auto parameter_func = constructOrFunction(functions);
+    functions.clear();
+    functions.emplace_back(parameter_func);
+
+    if (select->where())
+    {
+        functions.push_back(select->where());
+    }
+
+    // use AND function to combine the newly add IN functions and WHERE expression
+    ASTPtr new_predicate = constructAndFunction(functions);
+
+    select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(new_predicate));
+
+    LOG_TRACE(
+        getLogger("optimizeBitMapParametersToWhere"),
+        "Optimize {} bitmap function arguments to where expression, "
+        "with {} IN elements",
+        found_parameters,
+        total_in_elems);
 }
 }

@@ -35,7 +35,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
     extern const int BAD_ARGUMENTS;
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
     extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
@@ -56,10 +55,12 @@ struct AggregateFunctionBitMapColumnDiffData
 
     void add(const T key, const BitMap64 & bitmap)
     {
-        auto [it, inserted] = data.try_emplace(key, std::make_unique<BitMap64>(std::move(const_cast<BitMap64 &>(bitmap))));
-        if (!inserted) {
+        auto it = data.find(key);
+
+        if (it != data.end())
             *(it->second) |= bitmap;
-        }
+        else
+            data.emplace(key, std::make_unique<BitMap64>(const_cast<BitMap64 &>(bitmap)));
     }
 
     void merge(AggregateFunctionBitMapColumnDiffData & rhs)
@@ -133,7 +134,7 @@ enum DiffDirection
 struct DiffDirectionOp
 {
     DiffDirectionOp() : diff_direc(DiffDirection::FORWARD) {}
-    DiffDirectionOp(String diff_dir_op)
+    explicit DiffDirectionOp(String diff_dir_op)
     {
         std::transform(diff_dir_op.begin(), diff_dir_op.end(), diff_dir_op.begin(), ::tolower);
         if (diff_dir_op.empty() || diff_dir_op == "forward")
@@ -227,7 +228,7 @@ public:
             return;
 
         if (diff_step >= input_data.size())
-            throw Exception(getName() + ": the step " + std::to_string(diff_step) + " is larger than data size", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(getName() + ": the step " + std::to_string(diff_step) + " is larger than data size", ErrorCodes::BAD_ARGUMENTS);
 
         std::vector<DiffPair> all_data;
         std::unordered_map<T, std::vector<BitMapPtr>> intermediate_res;

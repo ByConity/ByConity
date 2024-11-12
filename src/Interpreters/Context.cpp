@@ -495,6 +495,9 @@ struct ContextSharedPart
     bool restrict_tenanted_users_to_whitelist_settings = false;
     bool restrict_tenanted_users_to_privileged_operations = false;
 
+    mutable std::mutex extra_whitelist_settings_mutex;
+    std::unordered_set<String> extra_whitelist_settings;
+
     Stopwatch uptime_watch;
 
     Context::ApplicationType application_type = Context::ApplicationType::SERVER;
@@ -2334,7 +2337,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     {
         for (const auto & change : changes)
         {
-            if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
+            if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name) && !isExtraRestrictSettingsToWhitelist(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
                     "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
@@ -4564,6 +4567,18 @@ void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_
         SettingsChanges::WHITELIST_SETTINGS.emplace(name);
 }
 
+void Context::setExtraRestrictSettingsToWhitelist(std::unordered_set<String>&& new_settings)
+{
+    std::lock_guard<std::mutex> lock(shared->extra_whitelist_settings_mutex);
+    shared->extra_whitelist_settings.swap(new_settings);
+}
+
+bool Context::isExtraRestrictSettingsToWhitelist(const String & name) const
+{
+    std::lock_guard<std::mutex> lock(shared->extra_whitelist_settings_mutex);
+    return shared->extra_whitelist_settings.find(name) != shared->extra_whitelist_settings.end();
+}
+
 bool Context::getBlockPrivilegedOp() const
 {
     return shared->restrict_tenanted_users_to_privileged_operations;
@@ -5169,7 +5184,7 @@ void Context::setGINStoreReaderFactory(const GINStoreReaderFactorySettings & set
     if (shared->gin_store_reader_factory)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "GINStoreReaderFactory has already "
             "been created");
-    
+
     shared->gin_store_reader_factory = std::make_shared<GINStoreReaderFactory>(settings_);
 }
 

@@ -127,7 +127,7 @@ public:
     explicit NexusFS(NexusFSConfig && config);
     NexusFS(const NexusFS &) = delete;
     NexusFS & operator=(const NexusFS &) = delete;
-    ~NexusFS() = default;
+    ~NexusFS();
 
 
     UInt64 getSize() const { return region_manager.getSize(); }

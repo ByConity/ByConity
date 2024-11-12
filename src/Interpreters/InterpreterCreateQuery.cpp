@@ -492,6 +492,9 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns,
             column_declaration->on_update_expression = column.on_update_expression->clone();
         }
 
+        if (column.replace_if_not_null)
+            column_declaration->replace_if_not_null = column.replace_if_not_null;
+
         if (!column.comment.empty())
         {
             column_declaration->comment = std::make_shared<ASTLiteral>(Field(column.comment));
@@ -738,6 +741,9 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         {
             column.on_update_expression = getDefaultExpression(col_decl.on_update_expression);
         }
+
+        if (col_decl.replace_if_not_null)
+            column.replace_if_not_null = col_decl.replace_if_not_null;
 
         if (col_decl.comment)
             column.comment = col_decl.comment->as<ASTLiteral &>().value.get<String>();

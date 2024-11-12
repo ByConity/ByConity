@@ -52,6 +52,9 @@ public:
     void dumpServerStatus() const;
 
     void updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name = "server_virtual_warehouses");
+
+    static bool vwStartsWith(const String & full_name, const String & prefix);
+
 private:
     bool onLeader();
     bool onFollower();

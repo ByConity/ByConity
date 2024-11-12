@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <iterator>
 #include <Processors/IProcessor.h>
 #include <QueryPlan/QueryIdHolder.h>
 #include <QueryPlan/QueryPlan.h>
@@ -28,6 +29,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <Storages/TableLockHolder.h>
 #include <Interpreters/Cache/QueryCache.h> /// nested classes such as QC::Writer can't be fwd declared
+#include <Transaction/CnchLock.h>
 
 namespace DB
 {
@@ -153,6 +155,10 @@ public:
     /// For queries with nested interpreters (i.e. StorageDistributed)
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { holder.query_plans.emplace_back(std::move(plan)); }
 
+    void addLockHolders(CnchLockHolderPtrs && lock_holders_) { holder.lock_holders.insert(holder.lock_holders.end(),
+                                                                                          std::make_move_iterator(lock_holders_.begin()),
+                                                                                          std::make_move_iterator(lock_holders_.end())); }
+
 private:
     /// Destruction order: processors, header, locks, temporary storages, local contexts
 
@@ -172,6 +178,7 @@ private:
         std::vector<std::unique_ptr<QueryPlan>> query_plans;
         std::shared_ptr<QueryIdHolder> query_id_holder;
         CacheHolderPtr cache_holder;
+        CnchLockHolderPtrs lock_holders;
     };
 
     Holder holder;

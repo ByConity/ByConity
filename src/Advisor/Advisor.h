@@ -21,7 +21,7 @@ public:
     }
     WorkloadAdvises analyze(const std::vector<String> & queries, ContextPtr context);
 
-    private:
+private:
     static WorkloadAdvisors getAdvisors(ASTAdviseQuery::AdvisorType type);
 
     ASTAdviseQuery::AdvisorType type;

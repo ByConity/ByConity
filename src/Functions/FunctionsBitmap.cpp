@@ -35,6 +35,8 @@ REGISTER_FUNCTION(Bitmap)
     factory.registerFunction<FunctionBitmapToArray>();
     factory.registerFunction<FunctionBitmapSubsetInRange>();
     factory.registerFunction<FunctionBitmapSubsetLimit>();
+    factory.registerFunction<FunctionBitmapSubsetOffsetLimit>();
+    factory.registerFunction<FunctionSubBitmapStartsFromOne>();
     factory.registerFunction<FunctionBitmapTransform>();
 
     factory.registerFunction<FunctionBitmapSelfCardinality>();

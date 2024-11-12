@@ -1,0 +1,105 @@
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ TableScan default.blacklist
+                        Sample Size: 9 / 10
+                        Outputs: [c1, c2]
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ Projection
+                  │     Expressions: [c1, c2]
+                  └─ Filter
+                     │     Condition: (`expr#rand()` % 2) = 1
+                     └─ Projection
+                        │     Expressions: [c1, c2], expr#rand():=rand()
+                        └─ TableScan default.blacklist
+                                 Outputs: [c1, c2]
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ Filter
+                  │     Condition: (rand() % 2) = 1
+                  └─ TableScan default.blacklist
+                           Prewhere: (rand() % 2) = 1
+                           Outputs: [c1, c2]
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2, __grouping_set}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ TableScan default.blacklist
+                        Outputs: [c1, c2]
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ Limit
+                  │     Limit: 1
+                  └─ Sorting
+                     │     Order by: {c1 ASC NULLS LAST}
+                     │     Limit: 1
+                     └─ Gather Exchange
+                        └─ Sorting
+                           │     Order by: {c1 ASC NULLS LAST}
+                           │     Prefix Order: {c1}
+                           │     Limit: 1
+                           └─ TableScan default.blacklist
+                                    Input Order Info: {c1 ASC ANY}
+                                    Outputs: [c1, c2]
+Projection
+│     Expressions: sum(c1):=`expr#sum(c1)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [expr#sum(c1)]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {c2}
+            └─ Aggregating
+               │     Group by: {c2}
+               │     Aggregates: expr#sum(c1):=AggNull(sum)(c1)
+               └─ Limit
+                  │     Limit: 1
+                  └─ Gather Exchange
+                     └─ Limit
+                        │     Limit: 1
+                        └─ TableScan default.blacklist
+                                 Limit: 1
+                                 Outputs: [c1, c2]

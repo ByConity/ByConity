@@ -326,9 +326,11 @@ ReadFromMergeTree::ReadFromMergeTree(
     , metadata_for_reading(storage_snapshot->getMetadataForQuery())
     , context(std::move(context_))
     , max_block_size(max_block_size_)
+    , min_block_size(context->getSettingsRef().min_block_size)
     , requested_num_streams(num_streams_)
     , preferred_block_size_bytes(context->getSettingsRef().preferred_block_size_bytes)
     , preferred_max_column_in_block_size_bytes(context->getSettingsRef().preferred_max_column_in_block_size_bytes)
+    , size_predictor_estimate_lc_size_by_fullstate(context->getSettingsRef().size_predictor_estimate_lc_size_by_fullstate)
     , sample_factor_column_queried(sample_factor_column_queried_)
     , map_column_keys_column_queried(map_column_keys_column_queried_)
     , max_block_numbers_to_read(std::move(max_block_numbers_to_read_))
@@ -390,8 +392,10 @@ Pipe ReadFromMergeTree::readFromPool(
     MergeTreeStreamSettings stream_settings {
         .min_marks_for_concurrent_read = min_marks_for_concurrent_read,
         .max_block_size = max_block_size,
+        .min_block_size = min_block_size,
         .preferred_block_size_bytes = settings.preferred_block_size_bytes,
         .preferred_max_column_in_block_size_bytes = settings.preferred_max_column_in_block_size_bytes,
+        .size_predictor_estimate_lc_size_by_fullstate = settings.size_predictor_estimate_lc_size_by_fullstate,
         .use_uncompressed_cache = use_uncompressed_cache,
         .actions_settings = actions_settings,
         .reader_settings = reader_settings
@@ -461,8 +465,10 @@ Pipe ReadFromMergeTree::readInOrder(
     Pipes pipes;
     MergeTreeStreamSettings stream_settings{
         .max_block_size = max_block_size,
+        .min_block_size = min_block_size,
         .preferred_block_size_bytes = preferred_block_size_bytes,
         .preferred_max_column_in_block_size_bytes = preferred_max_column_in_block_size_bytes,
+        .size_predictor_estimate_lc_size_by_fullstate = size_predictor_estimate_lc_size_by_fullstate,
         .use_uncompressed_cache = use_uncompressed_cache,
         .actions_settings = actions_settings,
         .reader_settings = reader_settings

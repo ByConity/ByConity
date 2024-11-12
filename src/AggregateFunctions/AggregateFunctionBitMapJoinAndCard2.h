@@ -19,6 +19,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 
+#include "Common/formatIPv6.h"
 #include <Common/ThreadPool.h>
 #include <Common/setThreadName.h>
 #include <Common/CurrentThread.h>
@@ -50,7 +51,6 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
     extern const int NUMBER_OF_ARGUMENTS_DOES_NOT_MATCH;
 }
 
@@ -65,7 +65,7 @@ struct AggregateFunctionBitMapJoinAndCard2Data
     void add(const BitMapPtr & bitmap_ptr, const Int32 & pos, const JoinKey & join_key, const String & attr_val, const Strings & args, Int32 union_num)
     {
         if (pos <= 0 || pos > union_num+1)
-            throw Exception("AggregateFunction BitMapJoinAndCard2: Wrong position value. Position starts from 1 and ends with join_num+1, please check", DB::ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction BitMapJoinAndCard2: Wrong position value. Position starts from 1 and ends with join_num+1, please check", DB::ErrorCodes::BAD_ARGUMENTS);
 
         Strings attr_vals(union_num+1);
         attr_vals[pos-1] = attr_val;
@@ -84,14 +84,14 @@ struct AggregateFunctionBitMapJoinAndCard2Data
 
         size_t input_tuples_size = input_tuples.size();
         writeVarUInt(input_tuples_size, buf);
-        for (auto it = input_tuples.begin(); it != input_tuples.end(); ++it)
+        for (const auto & input_tuple : input_tuples)
         {
             BitMapPtr bitmap_ptr;
             Int32 pos;
             JoinKey joinkey;
             Strings attr_vals;
             Strings args;
-            std::tie(bitmap_ptr, pos, joinkey, attr_vals, args) = *it;
+            std::tie(bitmap_ptr, pos, joinkey, attr_vals, args) = input_tuple;
 
             size_t bytes_size = (*bitmap_ptr).getSizeInBytes();
             writeVarUInt(bytes_size, buf);
@@ -103,13 +103,13 @@ struct AggregateFunctionBitMapJoinAndCard2Data
             writeVarInt(joinkey, buf);
 
             writeVarUInt(attr_vals.size(), buf);
-            for (auto str: attr_vals)
+            for (const auto& str: attr_vals)
             {
                 writeString(str, buf);
             }
 
             writeVarUInt((args).size(), buf);
-            for (auto a: args)
+            for (const auto& a: args)
             {
                 writeString(a, buf);
             }
@@ -183,7 +183,7 @@ public:
         auto bitmap_ptr = std::make_shared<BitMap64>(std::move(const_cast<BitMap64 &>(bitmap)));
 
         const auto & col_position = static_cast<const ColumnInt8 &>(*columns[1]);
-        const Int32 & positionInUnion = static_cast<Int32>(col_position.getElement(row_num));
+        const Int32 & position_in_union = static_cast<Int32>(col_position.getElement(row_num));
 
         const auto & col_joinkey = static_cast<const ColumnInt32 &>(*columns[2]);
         const JoinKey & join_key = col_joinkey.getElement(row_num);
@@ -198,7 +198,7 @@ public:
             args.emplace_back(col_arg.getDataAt(row_num).toString());
         }
 
-        this->data(place).add(bitmap_ptr, positionInUnion, join_key, attr_val, args, union_num);
+        this->data(place).add(bitmap_ptr, position_in_union, join_key, attr_val, args, union_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr __restrict rhs, Arena *) const override
@@ -232,20 +232,20 @@ public:
     {
         auto & input_tuples = this->data(place).input_tuples;
 
-        std::vector<PositionTuples> tuplesByPosition;
+        std::vector<PositionTuples> tuples_by_position;
         for (size_t i = 0; i < union_num + 1; ++i)
         {
-            tuplesByPosition.emplace_back(i, JoinTuplePtrs());
+            tuples_by_position.emplace_back(i, JoinTuplePtrs());
         }
 
         //partition all input tuples by position
         for (auto & p : input_tuples)
         {
             Int32 pos = std::get<1>(p);
-            tuplesByPosition.at(pos-1).addTuple(p);
+            tuples_by_position.at(pos-1).addTuple(p);
         }
 
-        const auto res = calcJoin(tuplesByPosition);
+        const auto res = calcJoin(tuples_by_position);
 
         auto & col = static_cast<ColumnArray &>(to);
         auto &col_offsets = static_cast<ColumnArray::ColumnOffsets &>(col.getOffsetsColumn());
@@ -257,16 +257,16 @@ public:
 
         size_t args_num = arguments_num - 4;
 
-        for (auto & p : res)
+        for (const auto & p : res)
         {
-            for (auto rt = p.begin(); rt != p.end(); ++rt)
+            for (const auto & rt : p)
             {
                 UInt64 bitmap_cardinality;
                 JoinKey joinkey;
                 Strings attr_vals;
                 Strings args;
 
-                std::tie(bitmap_cardinality, std::ignore, joinkey, attr_vals, args) = std::move(*rt);
+                std::tie(bitmap_cardinality, std::ignore, joinkey, attr_vals, args) = std::move(rt);
                 col_bitmap_card.insert(bitmap_cardinality);
                 col_joinkey.insert(joinkey);
 
@@ -293,17 +293,17 @@ private:
         std::vector<std::vector<ResultTuple>> res_tuples_buckets(thread_num_, std::vector<ResultTuple>());  // It store the final result of the last JOIN
         ThreadGroupStatusPtr thread_group = CurrentThread::getGroup();
 
-        auto runJoinAndCard = [&] (size_t index)
+        auto run_join_and_card = [&] (size_t index)
         {
-            setThreadName("bitmapJoinAndCard");
+            setThreadName("JoinAndCard2");
             CurrentThread::attachToIfDetached(thread_group);
             JoinTuplePtrs tuples_tmp;
             std::vector<ResultTuple> res_tuples_in_a_thread;
 
             auto & left = res_ptr->at(index);
-            for (auto rt = rhs->tuples.begin(); rt != rhs->tuples.end(); ++rt)
+            for (auto & rt : rhs->tuples)
             {
-                for (auto lt = left.begin(); lt != left.end(); ++lt)
+                for (auto & lt : left)
                 {
                     BitMapPtr bitmap_ptr, rt_bitmap_ptr;
                     Int32 pos, rt_pos;
@@ -311,8 +311,8 @@ private:
                     Strings attr_vals, rt_attr_vals;
                     Strings args, rt_args;
 
-                    std::tie(bitmap_ptr, pos, joinkey, attr_vals, args) = *(*lt);
-                    std::tie(rt_bitmap_ptr, rt_pos, std::ignore, rt_attr_vals, rt_args) = *(*rt);
+                    std::tie(bitmap_ptr, pos, joinkey, attr_vals, args) = *lt;
+                    std::tie(rt_bitmap_ptr, rt_pos, std::ignore, rt_attr_vals, rt_args) = *rt;
 
                     BitMap64 bitmap(*bitmap_ptr);
                     bitmap &= *rt_bitmap_ptr;
@@ -344,15 +344,15 @@ private:
                 res_tuples_buckets[index] = std::move(res_tuples_in_a_thread);
         };
 
-        std::unique_ptr<ThreadPool> threadPool = std::make_unique<ThreadPool>(thread_num_);
+        std::unique_ptr<ThreadPool> thread_pool = std::make_unique<ThreadPool>(thread_num_);
 
         for (size_t i = 0; i < thread_num; ++i)
         {
-            auto joinAndCardFunc = std::bind(runJoinAndCard, i);
-            threadPool->scheduleOrThrowOnError(joinAndCardFunc);
+            auto join_and_card_func = [&run_join_and_card, i]() { run_join_and_card(i); };
+            thread_pool->scheduleOrThrowOnError(join_and_card_func);
         }
 
-        threadPool->wait();
+        thread_pool->wait();
 
         res_ptr = std::make_shared<std::vector<JoinTuplePtrs>>(std::move(intermediate_tuples_bucktes));
         // For intermediate JOIN, a empty object returned,
@@ -364,7 +364,7 @@ private:
     {
         //partition the entire position tuples into several parts
         if (position_tuples.empty())
-            throw Exception("BitMapJoinAndCard::calcJoin: empty input data!", DB::ErrorCodes::LOGICAL_ERROR);
+            throw Exception("BitMapJoinAndCard::calcJoin: empty input data!", DB::ErrorCodes::BAD_ARGUMENTS);
 
         //look up for the largest parts
         size_t max_size = 0;

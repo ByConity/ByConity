@@ -92,6 +92,7 @@ struct AlterCommand
         COMMENT,
         CODEC,
         TTL,
+        REPLACE_IF_NOT_NULL,
     };
 
     Type type = UNKNOWN;
@@ -109,6 +110,9 @@ struct AlterCommand
 
     ColumnDefaultKind default_kind{};
     ASTPtr default_expression{};
+
+    /// For MODIFY REPLACE_IF_NOT_NULL
+    bool replace_if_not_null = false;
 
     /// For COMMENT column
     std::optional<String> comment;

@@ -19,14 +19,16 @@ public:
                         "  deptno UInt32 not null,"
                         "  name Nullable(String),"
                         "  salary Nullable(Float64),"
-                        "  commission Nullable(UInt32)"
-                        ") ENGINE=CnchMergeTree() order by empid;");
+                        "  commission Nullable(UInt32),"
+                        "  history Array(UInt32)"
+                        ") ENGINE=Memory();");
         tester->execute("CREATE TABLE IF NOT EXISTS depts("
                         "  deptno UInt32 not null,"
                         "  name Nullable(String)"
-                        ") ENGINE=CnchMergeTree() order by deptno;");
+                        ") ENGINE=Memory();");
     }
 
+    static void TearDownTestCase() { tester.reset(); }
 
     ColumnUsages buildColumnUsagesFromSQL(std::initializer_list<std::string> sql_list)
     {
@@ -72,7 +74,7 @@ TEST_F(ColumnUsageTest, testSelect)
                                             "select empid from emps"});
     auto select_usages = getColumnFrequencies(column_usages, ColumnUsageType::SCANNED, true);
     auto empid_column = QualifiedColumnName{tester->getDatabaseName(), "emps", "empid"};
-    EXPECT_EQ(select_usages.size(), 5);
+    EXPECT_EQ(select_usages.size(), 6);
     ASSERT_TRUE(select_usages.contains(empid_column));
     EXPECT_EQ(select_usages[empid_column], 2);
 }
@@ -106,9 +108,9 @@ TEST_F(ColumnUsageTest, testNestedJoin)
 
 TEST_F(ColumnUsageTest, testNestedJoinCountAll)
 {
-    tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
-    tester->execute("CREATE TABLE IF NOT EXISTS B(b UInt32 not null, c UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
-    tester->execute("CREATE TABLE IF NOT EXISTS C(c UInt32 not null, d UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
+    tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=Memory();");
+    tester->execute("CREATE TABLE IF NOT EXISTS B(b UInt32 not null, c UInt32 not null) ENGINE=Memory();");
+    tester->execute("CREATE TABLE IF NOT EXISTS C(c UInt32 not null, d UInt32 not null) ENGINE=Memory();");
 
     auto column_usages = buildColumnUsagesFromSQL({"select * from A, B, C where A.b = B.b and B.c = C.c"});
 
@@ -160,5 +162,28 @@ TEST_F(ColumnUsageTest, testInFilter)
     ASSERT_TRUE(in_usages.contains(empid_column));
     EXPECT_EQ(in_usages[empid_column], 1);
 }
+
+TEST_F(ColumnUsageTest, testArraySetFnction)
+{
+    auto column_usages = buildColumnUsagesFromSQL({"select if(arraySetCheck(history, (9000)), 'hint', 'miss') from emps "
+                                                   "where has(history, 9000) and arraySetCheck(history, (9000)) = 1"});
+    auto history_column = QualifiedColumnName{tester->getDatabaseName(), "emps", "history"};
+
+    auto array_set_usages = getColumnFrequencies(column_usages, ColumnUsageType::ARRAY_SET_FUNCTION, true);
+    ASSERT_TRUE(array_set_usages.contains(history_column));
+    EXPECT_GE(array_set_usages[history_column], 2);
+}
+
+TEST_F(ColumnUsageTest, testPrewhere)
+{
+    auto column_usages = buildColumnUsagesFromSQL({"select empid from emps "
+                                                   "prewhere arraySetCheck(history, (9000)) = 1 where empid in (1,2,3)"});
+    auto history_column = QualifiedColumnName{tester->getDatabaseName(), "emps", "history"};
+
+    auto array_set_usages = getColumnFrequencies(column_usages, ColumnUsageType::ARRAY_SET_FUNCTION, true);
+    ASSERT_TRUE(array_set_usages.contains(history_column));
+    EXPECT_GE(array_set_usages[history_column], 1);
+}
+
 
 } // namespace DB

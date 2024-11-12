@@ -19,7 +19,9 @@ public:
     {
         ALL,
         ORDER_BY,
-        DISTRIBUTED_BY,
+        CLUSTER_BY,
+        COLUMN_USAGE,
+        DATA_TYPE,
         MATERIALIZED_VIEW,
         PROJECTION
     };

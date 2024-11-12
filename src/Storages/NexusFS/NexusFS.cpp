@@ -265,6 +265,13 @@ NexusFS::NexusFS(NexusFSConfig && config)
     LOG_TRACE(log, "NexusFS created");
 }
 
+NexusFS::~NexusFS()
+{
+    if (buffer_manager)
+        buffer_manager->destroy();
+    LOG_TRACE(log, "NexusFS destroyed");
+}
+
 void NexusFS::preload(const String & file, const OffsetAndSizeVector & offsets_and_sizes, std::unique_ptr<ReadBufferFromFileBase> & source)
 {
     std::unordered_set<UInt64> segment_ids;

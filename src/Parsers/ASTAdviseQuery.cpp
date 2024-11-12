@@ -10,10 +10,13 @@ const char * ASTAdviseQuery::getTypeString(ASTAdviseQuery::AdvisorType adviseTyp
     {
         case AdvisorType::ALL: return "ALL";
         case AdvisorType::ORDER_BY: return "ORDER_BY";
-        case AdvisorType::DISTRIBUTED_BY: return "DISTRIBUTED_BY";
+        case AdvisorType::CLUSTER_BY: return "CLUSTER_BY";
+        case AdvisorType::DATA_TYPE: return "DATA_TYPE";
         case AdvisorType::MATERIALIZED_VIEW: return "MATERIALIZED_VIEW";
         case AdvisorType::PROJECTION:
             return "PROJECTION";
+        case AdvisorType::COLUMN_USAGE:
+            return "COLUMN_USAGE";
     }
 }
 

@@ -41,6 +41,9 @@ public:
     ASTPtr on_update_expression;
     bool auto_increment;
     bool mysql_primary_key;
+    /// For partial update, this means the imported data will only be replaced when it is of non-null value
+    /// We did not add this information to flags because it is only used on the write side and does not need to be serialized to the part.
+    bool replace_if_not_null = false;
     ASTPtr comment;
     ASTPtr codec;
     ASTPtr ttl;

@@ -120,6 +120,7 @@ public:
         InodeManager & inode_manager_
     );
     static BufferManager * getInstance();
+    static void destroy();
 
     explicit BufferManager(
         size_t buffer_size_,

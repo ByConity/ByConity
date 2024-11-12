@@ -369,6 +369,8 @@ void CnchServerClient::redirectCommitParts(
 {
     auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
+    if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
+        cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
     Protos::RedirectCommitPartsReq request;
     Protos::RedirectCommitPartsResp response;
 

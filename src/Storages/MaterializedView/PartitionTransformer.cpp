@@ -16,7 +16,6 @@
 #include <Storages/Hive/HivePartition.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
-#include <Analyzers/QueryRewriter.h>
 #include <Databases/DatabasesCommon.h>
 
 #include <Optimizer/MaterializedView/ExpressionSubstitution.h>
@@ -128,7 +127,7 @@ void PartitionTransformer::validate(ContextMutablePtr local_context)
         return;
     LOG_DEBUG(log, "PartitionTransformer::validate mv_query: {} ", queryToString(mv_query));
     interpretSettings(mv_query, local_context);
-    CurrentThread::get().pushTenantId(local_context->getSettingsRef().tenant_id);
+    local_context->setTenantId(local_context->getSettingsRef().tenant_id);
     MaterializedViewStructurePtr structure
         = MaterializedViewStructure::buildFrom(target_table_id, target_table_id, mv_query->clone(), async_materialized_view, local_context);
     validate(local_context, structure);
@@ -371,7 +370,6 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
             AsyncRefreshParamPtr refresh_param = std::make_shared<AsyncRefreshParam>();
             const auto & settings = local_context->getSettingsRef();
             auto query = mv_query->clone();
-            QueryRewriter{}.rewrite(query, local_context, false);
             bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
             bool insert_overwrite = local_context->getSettingsRef().enable_mv_async_insert_overwrite;
 

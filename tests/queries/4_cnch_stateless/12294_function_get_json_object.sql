@@ -8,6 +8,9 @@ SELECT JSONExtractRaw('{"n_s" : [{"ac":"abc","xz":"xz"}, {"def":"def"}], "n_i" :
 select get_json_object('{"a":100}'::Nullable(String), '$.a');
 select get_json_object('{"a":100}'::LowCardinality(Nullable(String)), '$.a');
 
+select get_json_object(null::Nullable(String), '$.a');
+select get_json_object(null::LowCardinality(Nullable(String)), '$.a');
+
 DROP TABLE IF EXISTS test;
 CREATE TABLE test(a Nullable(String)) ENGINE = CnchMergeTree ORDER BY tuple() PARTITION BY tuple();
 SELECT get_json_object('{"test": "test"}', a) FROM test;

@@ -250,9 +250,12 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, Names
         const auto & column = column_ast->as<ASTColumnDeclaration>();
         if (column->mysql_primary_key)
             primary_keys->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(column->name));
-        if (column->auto_increment && context->getSettingsRef().exception_on_unsupported_mysql_syntax)
+        if (column->auto_increment)
         {
-            throw Exception("auto_increment not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+            column->default_specifier = "DEFAULT";
+            auto default_expression = makeASTFunction("generateSnowflakeID");
+            column->default_expression = default_expression;
+            column->children.push_back(std::move(default_expression));
         }
     }
 

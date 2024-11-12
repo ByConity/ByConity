@@ -5,14 +5,12 @@ Projection
    └─ Distinct
       └─ Sorting
          │     Order by: {i_product_name ASC NULLS LAST}
-         │     Limit: 100
          └─ Gather Exchange
             └─ Limit
                │     Limit: 100
                └─ Distinct
                   └─ Sorting
                      │     Order by: {i_product_name ASC NULLS LAST}
-                     │     Limit: 100
                      └─ Distinct
                         └─ Inner Join
                            │     Condition: 

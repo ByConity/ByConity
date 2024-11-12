@@ -1,5 +1,6 @@
 
 set dialect_type='CLICKHOUSE';
+set min_block_size=1;
 drop table if exists tab;
 create table tab (date Date, x UInt64, s FixedString(128)) engine = CnchMergeTree() PARTITION BY toYYYYMM(date) ORDER BY (date, x) SETTINGS index_granularity = 8192;
 insert into tab select today(), number, toFixedString('', 128) from system.numbers limit 8192;

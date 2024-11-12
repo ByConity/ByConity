@@ -16,6 +16,39 @@ struct StaticVisitor
     using ResultType = R;
 };
 
+/// F is template parameter, to allow universal reference for field, that is useful for const and non-const values.
+template <typename Visitor, typename F>
+typename std::decay_t<Visitor>::ResultType applyVisitorExplicit(Visitor && visitor, F && field)
+{
+    switch (field.getType())
+    {
+        case Field::Types::Null: return visitor(field.template get<Null>());
+        case Field::Types::UInt64: return visitor(field.template get<UInt64>());
+        case Field::Types::UInt128: return visitor(field.template get<UInt128>());
+        case Field::Types::UInt256: return visitor(field.template get<UInt256>());
+        case Field::Types::Int64: return visitor(field.template get<Int64>());
+        case Field::Types::Float64: return visitor(field.template get<Float64>());
+        case Field::Types::String: return visitor(field.template get<String>());
+        case Field::Types::Array: return visitor(field.template get<Array>());
+        case Field::Types::Tuple: return visitor(field.template get<Tuple>());
+        case Field::Types::Decimal32: return visitor(field.template get<DecimalField<Decimal32>>());
+        case Field::Types::Decimal64: return visitor(field.template get<DecimalField<Decimal64>>());
+        case Field::Types::Decimal128: return visitor(field.template get<DecimalField<Decimal128>>());
+        case Field::Types::Decimal256: return visitor(field.template get<DecimalField<Decimal256>>());
+        case Field::Types::AggregateFunctionState: return visitor(field.template get<AggregateFunctionStateData>());
+#ifdef HAVE_BOO_TYPE
+        case Field::Types::Bool:
+            return visitor(field.template get<bool>());
+#endif
+        case Field::Types::Object: return visitor(field.template get<Object>());
+        case Field::Types::Map:     return visitor(field.template get<Map>());
+        case Field::Types::BitMap64:
+            return visitor(field.template get<BitMap64>());
+
+        default:
+            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
+    }
+}
 
 /// F is template parameter, to allow universal reference for field, that is useful for const and non-const values.
 template <typename Visitor, typename F>

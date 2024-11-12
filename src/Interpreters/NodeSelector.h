@@ -91,12 +91,12 @@ struct ClusterNodes
 
 struct NodeSelectorResult;
 void divideSourceTaskByBucket(
-    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
     size_t weight_sum,
     size_t parallel_size,
     NodeSelectorResult & result);
 void divideSourceTaskByPart(
-    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
     size_t weight_sum,
     size_t parallel_size,
     NodeSelectorResult & result);
