@@ -176,7 +176,7 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     factory.addHandler(ping_handler);
 
     auto api_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<APIRequestHandler>>(server);
-    api_handler->attachStrictPath("/api");
+    api_handler->attachNonStrictPath("/api");
     api_handler->allowGetAndHeadRequest();
     factory.addHandler(api_handler);
 
