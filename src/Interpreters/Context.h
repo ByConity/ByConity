@@ -1399,6 +1399,7 @@ public:
 
     /// Provides storage politics schemes
     StoragePolicyPtr getStoragePolicy(const String & name) const;
+    StoragePolicyPtr tryGetStoragePolicy(const String & name) const;
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;

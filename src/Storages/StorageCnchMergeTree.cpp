@@ -1195,7 +1195,7 @@ MinimumDataParts StorageCnchMergeTree::getBackupPartsFromDisk(
     Strings backup_part_names;
     // HDFS will only return part_name, while S3 will return the fullpath of object.
     backup_disk->listFiles(parts_path_in_backup, backup_part_names);
-    if (backup_disk->getType() == DiskType::Type::ByteS3)
+    if (backup_disk->getInnerType() == DiskType::Type::ByteS3)
     {
         for (String & backup_part_name : backup_part_names)
         {
@@ -1284,7 +1284,7 @@ void StorageCnchMergeTree::restoreDataFromBackup(
                 String relative_part_path;
                 // Part's full path relative to disk. For HDFS, need to add table_uuid as directory.
                 String full_part_path;
-                switch (table_disk->getType())
+                switch (table_disk->getInnerType())
                 {
                     case DiskType::Type::ByteS3: {
                         relative_part_path = UUIDHelpers::UUIDToString(new_part_uuid);
@@ -2557,7 +2557,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
 
         "insertion_label_ttl",
         "enable_local_disk_cache",
-        /// "enable_cloudfs", // table level setting for cloudfs has not been supported well
+        "enable_cloudfs", // table level setting for cloudfs
         "enable_nexus_fs",
         "enable_preload_parts",
         "enable_parts_sync_preload",
@@ -2858,7 +2858,7 @@ void StorageCnchMergeTree::dropPartsImpl(
     {
         auto metadata_snapshot = getInMemoryMetadataPtr();
 
-        DiskType::Type remote_storage_type = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+        DiskType::Type remote_storage_type = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getInnerType();
         bool enable_copy_for_partition_operation = local_context->getSettingsRef().cnch_enable_copy_for_partition_operation;
 
         if (enable_copy_for_partition_operation)
@@ -3203,8 +3203,23 @@ LocalDeleteBitmaps StorageCnchMergeTree::createDeleteBitmapTombstones(const IMut
 
 StoragePolicyPtr StorageCnchMergeTree::getStoragePolicy(StorageLocation location) const
 {
-    String policy_name = (location == StorageLocation::MAIN ? getSettings()->storage_policy : getContext()->getCnchAuxilityPolicyName());
-    return getContext()->getStoragePolicy(policy_name);
+    if (location == StorageLocation::MAIN)
+    {
+        /// XXX: should we add a setting to control whether to enable fallback logic?
+        if (getSettings()->enable_cloudfs)
+        {
+            const String & storage_policy_name = getSettings()->storage_policy.value + CLOUDFS_STORAGE_POLICY_SUFFIX;
+            auto policy = getContext()->tryGetStoragePolicy(storage_policy_name);
+            if (policy)
+                return policy;
+            else
+                LOG_WARNING(log, "Storage Policy {} is not found and will fallback to use ufs storage policy", storage_policy_name);
+        }
+
+        return getContext()->getStoragePolicy(getSettings()->storage_policy);
+    }
+    else
+        return getContext()->getStoragePolicy(getContext()->getCnchAuxilityPolicyName());
 }
 
 const String & StorageCnchMergeTree::getRelativeDataPath(StorageLocation location) const

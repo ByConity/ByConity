@@ -1,14 +1,14 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include "Common/config.h"
+#include <Common/config.h>
 #if USE_HIVE
 
-#include <Storages/IStorage.h>
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/StorageInMemoryMetadata.h"
-#include <common/shared_ptr_helper.h>
 #include <Processors/IntermediateResult/CacheManager.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Storages/IStorage.h>
+#include <common/shared_ptr_helper.h>
+#include "Storages/StorageInMemoryMetadata.h"
 
 namespace DB
 {
@@ -27,7 +27,8 @@ public:
 
     std::string getName() const override { return "CloudHive"; }
 
-    HiveFiles filterHiveFilesByIntermediateResultCache(SelectQueryInfo & query_info, ContextPtr query_context, HiveFiles & hive_files);
+    LakeScanInfos
+    filterLakeScanInfosByIntermediateResultCache(SelectQueryInfo & query_info, ContextPtr query_context, LakeScanInfos & lake_scan_infos);
 
     Pipe read(
         const Names & column_names,
@@ -40,16 +41,16 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-    void loadHiveFiles(const HiveFiles & files);
-    HiveFiles getHiveFiles() const { return files; }
+    void loadLakeScanInfos(const LakeScanInfos & lake_scan_infos_);
+    LakeScanInfos getLakeScanInfos() const { return lake_scan_infos; }
     std::shared_ptr<CnchHiveSettings> getSettings() const { return storage_settings; }
     bool supportIntermedicateResultCache() const override { return true; }
     bool supportsPrewhere() const override { return true; }
-private:
 
-    HiveFiles files;
+private:
+    LakeScanInfos lake_scan_infos;
     std::shared_ptr<CnchHiveSettings> storage_settings;
-    LoggerPtr log {getLogger("CloudHive")};
+    LoggerPtr log{getLogger("CloudHive")};
     CacheHolderPtr cache_holder;
 };
 

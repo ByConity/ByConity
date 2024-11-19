@@ -270,11 +270,8 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
             auto reader = global_context->getThreadPoolReader();
             return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, modified_settings);
         }
-        else
-        {
-            return std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
-                s3_util.getBucket(), object_key, modified_settings, 3, false);
-        }
+
+        return impl;
     }
 }
 
@@ -293,20 +290,18 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & pa
         }
     }
 
-    {
-        return std::make_unique<WriteBufferFromS3>(
-            s3_util.getClient(),
-            s3_util.getBucket(),
-            std::filesystem::path(root_prefix) / path,
-            max_single_part_upload_size,
-            min_upload_part_size,
-            settings.file_meta,
-            settings.buffer_size,
-            false,
-            false,
-            8,
-            true);
-    }
+    return std::make_unique<WriteBufferFromS3>(
+        s3_util.getClient(),
+        s3_util.getBucket(),
+        std::filesystem::path(root_prefix) / path,
+        max_single_part_upload_size,
+        min_upload_part_size,
+        settings.file_meta,
+        settings.buffer_size,
+        false,
+        false,
+        8,
+        true);
 }
 
 void DiskByteS3::removeFile(const String& path)
@@ -366,13 +361,14 @@ static void checkRemoveAccess(IDisk & disk) { disk.removeFile("test_acl"); }
 
 void registerDiskByteS3(DiskFactory& factory)
 {
-    auto creator = [](const String& name,
-        const Poco::Util::AbstractConfiguration& config, const String& config_prefix,
-            ContextPtr) -> DiskPtr {
+    auto creator = [](const String & name,
+                             const Poco::Util::AbstractConfiguration & config,
+                             const String & config_prefix,
+                             [[maybe_unused]]ContextPtr ctx,
+                             const DisksMap & /* disk_map */) -> DiskPtr {
         S3::S3Config s3_cfg(config, config_prefix);
         std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
 
-        // initialize cfs
         auto s3disk = std::make_shared<DiskByteS3>(name, s3_cfg.root_prefix, s3_cfg.bucket, client,
             s3_cfg.min_upload_part_size, s3_cfg.max_single_part_upload_size);
 

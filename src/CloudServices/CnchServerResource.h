@@ -99,7 +99,7 @@ struct AssignedResource
     /// parts info
     ServerDataPartsVector server_parts;
     ServerVirtualPartVector virtual_parts;
-    HiveFiles hive_parts;
+    LakeScanInfos lake_scan_info_parts;
     FileDataPartsCNCHVector file_parts;
     std::set<Int64> bucket_numbers;
 
@@ -109,7 +109,7 @@ struct AssignedResource
 
     void addDataParts(const ServerDataPartsVector & parts);
     void addDataParts(ServerVirtualPartVector parts);
-    void addDataParts(const HiveFiles & parts);
+    void addDataParts(const LakeScanInfos & parts);
     void addDataParts(const FileDataPartsCNCHVector & parts);
 
     bool empty() const
@@ -118,7 +118,7 @@ struct AssignedResource
             && table_version == 0
             && server_parts.empty()
             && virtual_parts.empty()
-            && hive_parts.empty()
+            && lake_scan_info_parts.empty()
             && file_parts.empty();
     }
 };

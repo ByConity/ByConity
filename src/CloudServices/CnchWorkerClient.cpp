@@ -22,7 +22,6 @@
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
 #include <DataTypes/ObjectUtils.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
 #include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
@@ -32,7 +31,6 @@
 #include <CloudServices/CnchDedupHelper.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
-#include "Storages/Hive/HiveFile/IHiveFile.h"
 
 #include <brpc/callback.h>
 #include <brpc/channel.h>
@@ -471,11 +469,11 @@ brpc::CallId CnchWorkerClient::sendResources(
             }
         }
 
-        if (!resource.hive_parts.empty())
+        if (!resource.lake_scan_info_parts.empty())
         {
-            auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();
+            auto * mutable_lake_scan_infos = table_data_parts.mutable_lake_scan_info_parts();
             auto & cnch_lake = dynamic_cast<StorageCnchLakeBase &>(*resource.storage);
-            cnch_lake.serializeHiveFiles(*mutable_hive_parts, resource.hive_parts);
+            cnch_lake.serializeLakeScanInfos(*mutable_lake_scan_infos, resource.lake_scan_info_parts);
         }
 
         if (!resource.file_parts.empty())

@@ -14,13 +14,13 @@
  */
 
 #include <Catalog/Catalog.h>
-#include <Catalog/DataModelPartWrapper.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Catalog/DataModelPartWrapper.h>
 #include "Common/HostWithPorts.h"
 #include "common/types.h"
 #include <common/logger_useful.h>
@@ -247,7 +247,7 @@ static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrict
     return ret;
 }
 
-HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts)
+LakeScanInfoPartsAssignMap assignCnchLakeScanInfoParts(const WorkerGroupHandle & worker_group, const LakeScanInfos & lake_scan_infos)
 {
     static LoggerPtr log = getLogger("assignCnchHiveParts");
     auto worker_ids = worker_group->getWorkerIDVec();
@@ -255,23 +255,19 @@ HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, c
     sort(worker_ids.begin(), worker_ids.end());
 
     auto num_workers = worker_ids.size();
-    HivePartsAssignMap ret;
+    LakeScanInfoPartsAssignMap ret;
 
-    for (const auto & file : parts)
+    for (const auto & lake_scan_info : lake_scan_infos)
     {
-        size_t assigned_worker_idx = -1;
-        if (auto bucket_id = file->getBucketId(); bucket_id)
-            assigned_worker_idx = *bucket_id % num_workers;
-        else
-            assigned_worker_idx = consistentHashForString(file->file_path, num_workers);
+        size_t assigned_worker_idx = lake_scan_info->calWorkerIdx(num_workers);
 
         LOG_DEBUG(
             log,
             "file '{}' assign to worker with id: {}, use bucket id dispatch method: {}",
-            file->file_path,
+            lake_scan_info->identifier(),
             assigned_worker_idx,
-            file->getBucketId().has_value());
-        ret[worker_ids[assigned_worker_idx]].emplace_back(file);
+            lake_scan_info->getDistributionId().has_value());
+        ret[worker_ids[assigned_worker_idx]].emplace_back(lake_scan_info);
     }
 
     return ret;

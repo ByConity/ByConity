@@ -1,16 +1,15 @@
 #pragma once
 
-#include <Common/Logger.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Storages/Hive/CnchHiveSettings.h>
+#include <Common/Logger.h>
 #include <common/shared_ptr_helper.h>
 
 namespace DB
 {
 namespace Protos
 {
-    class ProtoHiveFiles;
+    class LakeScanInfos;
 }
 
 struct PrepareContextResult;
@@ -23,6 +22,15 @@ public:
     bool supportsDistributedRead() const override final { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportIntermedicateResultCache() const override final { return true; }
+
+    /**
+     * For lake table, there are two ways of creating table:
+     * 1. Specify each column with name and type.
+     * 2. Not specify column, and the storage will generate metadata from lake's schema.
+     *
+     * And this method is used to check if the metadata is consistent with lake's schema (method 1).
+     */
+    virtual void checkSchema() const { }
 
     StorageCnchLakeBase(
         const StorageID & table_id_,
@@ -60,7 +68,7 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override final;
     void alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &) override final;
 
-    virtual void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
+    virtual void serializeLakeScanInfos(Protos::LakeScanInfos & proto, const LakeScanInfos & lake_scan_infos);
     CnchHiveSettingsPtr getSettings() const { return storage_settings; }
 
 protected:

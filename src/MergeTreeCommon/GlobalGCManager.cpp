@@ -305,7 +305,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
             LOG_DEBUG(log, "Remove data path for table {}", storage_id.getNameForLogs());
             StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy(IStorage::StorageLocation::MAIN);
 
-            DiskType::Type remote_disk_type = remote_storage_policy->getAnyDisk()->getType();
+            DiskType::Type remote_disk_type = remote_storage_policy->getAnyDisk()->getInnerType();
             switch (remote_disk_type)
             {
                 /// delete data directory of the table from hdfs

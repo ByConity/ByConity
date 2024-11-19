@@ -184,6 +184,18 @@ StoragePolicyPtr MergeTreeMetaBase::getStoragePolicy(StorageLocation location) c
         throw Exception("Get auxility storage policy is not supported",
             ErrorCodes::LOGICAL_ERROR);
     }
+
+    /// This logic is only for StorageMergeTree now, thus we only need to check cloudfs
+    // if (getSettings()->enable_cloudfs || getContext()->getSettingsRef().enable_cloudfs)
+    // {
+    //     const String & storage_policy_name = getSettings()->storage_policy.value + CLOUDFS_STORAGE_POLICY_SUFFIX;
+    //     auto policy = getContext()->tryGetStoragePolicy(storage_policy_name);
+    //     if (policy)
+    //         return policy;
+    //     else
+    //         LOG_WARNING(log, "Storage Policy {} is not found and will fallback to use ufs storage policy", storage_policy_name);
+    // }
+
     return getContext()->getStoragePolicy(getSettings()->storage_policy);
 }
 

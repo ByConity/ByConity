@@ -1003,6 +1003,30 @@
     M(ReadBufferFromRpcStreamFileConnectFailed, "remote rpc file data connect failed count") \
     M(ReadBufferFromRpcStreamFileConnectMs, "remote rpc file data connect ms") \
     \
+    M(CloudFSConnect, "The count of connecting CloudFS client") \
+    M(CloudFSConnectMicroseconds, "The time elapsed for connecting CloudFS client") \
+    M(CloudFSDisConnect, "The count of disconnecting CloudFS client") \
+    M(CloudFSDisConnectMicroseconds, "The time elapsed for disconnecting CloudFS client") \
+    M(ReadBufferFromCloudFSRead, "The count of ReadBufferFromCloudFS read op") \
+    M(ReadBufferFromCloudFSReadMicroseconds, "The time spent of ReadBufferFromCloudFS read from client") \
+    M(ReadBufferFromCloudFSFailed, "The failed count of ReadBufferFromCloudFS read op") \
+    M(ReadBufferFromCloudFSReadBytes, "Bytes size ReadBufferFromCloudFS read from client") \
+    M(ReadBufferFromCloudFSSessionGetMicroseconds, "The time spent of ReadBufferFromCloudFS client get session") \
+    M(ReadBufferFromCloudFSOpenFileMicroseconds, "The time spent of ReadBufferFromCloudFS client open file") \
+    M(ReadBufferFromCloudFSOpenFile, "The count of ReadBufferFromCloudFS client open file") \
+    M(ReadBufferFromCloudFSCloseFileMicroseconds, "The time spent of ReadBufferFromCloudFS client close file") \
+    M(ReadBufferFromCloudFSCloseFile, "The count of ReadBufferFromCloudFS client close file") \
+    \
+    M(WriteBufferFromCloudFSWrite, "The number of ops the WriteBufferFromCFS writes") \
+    M(WriteBufferFromCloudFSWriteBytes, "Bytes size WriteBufferFromCFS has written from client") \
+    M(WriteBufferFromCloudFSWriteMicroseconds, "The time elapsed by WriteBufferFromCFS writing from client") \
+    M(WriteBufferFromCloudFSSync, "The number of ops the WriteBufferFromCFS syncs") \
+    M(WriteBufferFromCloudFSSyncMicroseconds, "The time elapsed by WriteBufferFromCFS syncing files") \
+    M(WriteBufferFromCloudFSFailed, "The number of failed ops by the WriteBufferFromCFS") \
+    M(WriteBufferFromCloudFSOpenFile, "The number of ops the WriteBufferFromCFS try to open files") \
+    M(WriteBufferFromCloudFSCloseFile, "The number of ops the WriteBufferFromCFS tye to close files") \
+    M(WriteBufferFromCloudFSCloseFileMicroseconds, "The time elapsed by WriteBufferFromCFS closing files") \
+    \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \
     M(IOSchedulerSubmittedUserRequests, "Number of submitted user request from user") \

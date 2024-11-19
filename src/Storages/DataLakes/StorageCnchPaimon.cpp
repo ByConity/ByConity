@@ -8,6 +8,7 @@
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/PushFilterToStorage.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
@@ -17,13 +18,18 @@
 #include <Parsers/queryToString.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Storages/DataLakes/HiveFile/HivePaimonFile.h>
+#include <Storages/DataLakes/ScanInfo/FileScanInfo.h>
+#include <Storages/DataLakes/ScanInfo/PaimonJNIScanInfo.h>
 #include <Storages/Hive/CnchHiveSettings.h>
+#include <Storages/Hive/DirectoryLister.h>
 #include <Storages/Hive/HiveSchemaConverter.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/StorageFactory.h>
 #include <jni/JNIMetaClient.h>
+#include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/JSON.h>
+#include <Poco/JSON/Parser.h>
+#include <Poco/JSON/Stringifier.h>
 
 namespace DB
 {
@@ -45,15 +51,43 @@ StorageCnchPaimon::StorageCnchPaimon(
     PaimonCatalogClientPtr catalog_client_)
     : StorageCnchLakeBase(table_id_, database_, table_, context_, storage_settings_), catalog_client(catalog_client_)
 {
-    catalog_client->checkOrConvert(db_name, table_name, metadata_);
+    catalog_client->convertMetadataIfNecessary(db_name, table_name, metadata_);
     setInMemoryMetadata(metadata_);
+}
+
+ASTPtr StorageCnchPaimon::applyFilter(
+    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr stats) const
+{
+    const auto & settings = query_context->getSettingsRef();
+    auto * select_query = query_info.getSelectQuery();
+    if (settings.optimize_move_to_prewhere && query_filter && !select_query->prewhere()
+        && (!select_query->final() || settings.optimize_move_to_prewhere_if_final))
+    {
+        PushFilterToStorage push_filter_to_storage(shared_from_this(), query_context);
+
+        // Just discard partition filter
+        auto [_, non_partition_conjuncts] = push_filter_to_storage.extractPartitionFilter(query_filter, true);
+        auto non_partition_filter = PredicateUtils::combineConjuncts(non_partition_conjuncts);
+
+        if (!PredicateUtils::isTruePredicate(non_partition_filter))
+        {
+            // Set all non-partition filters as prewhere
+            select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(non_partition_filter));
+            LOG_DEBUG(log, "Push filter to storage, prewhere: {}", queryToString(select_query->prewhere()));
+        }
+    }
+
+    // We deliberately do not change the query_filter. Because the pushed filter may not work in the remote storage,
+    // and the initial filter is still needed to guarantee the correctness of the result.
+    IStorage::applyFilter(query_filter, query_info, query_context, stats);
+    return query_filter;
 }
 
 PrepareContextResult StorageCnchPaimon::prepareReadContext(
     const Names & column_names,
     const StorageMetadataPtr & /*metadata_snapshot*/,
     SelectQueryInfo & query_info,
-    ContextPtr & local_context,
+    ContextPtr & query_context,
     unsigned /*num_streams*/)
 {
     std::optional<String> predicate = std::nullopt;
@@ -67,19 +101,45 @@ PrepareContextResult StorageCnchPaimon::prepareReadContext(
             LOG_ERROR(log, "failed to convert filter to RPN, filter={}", queryToString(where));
     }
 
-    auto scan_info = catalog_client->getScanInfo(db_name, table_name, column_names, predicate);
-    LOG_DEBUG(log, "Total split size: {}", scan_info.encoded_splits.size());
+    auto scan_info
+        = catalog_client->getScanInfo(db_name, table_name, column_names, predicate, query_context->getSettingsRef().force_paimon_use_jni);
+    LOG_DEBUG(log, "ScanInfo, encoded_splits size: {}, raw_files size: {}", scan_info.encoded_splits.size(), scan_info.raw_files.size());
 
 
-    HiveFiles files;
+    LakeScanInfos lake_scan_infos;
+    size_t id = 0;
     for (auto && split : scan_info.encoded_splits)
     {
-        files.emplace_back(
-            std::make_shared<HivePaimonFile>(scan_info.encoded_table, scan_info.encoded_predicate, std::vector<String>{std::move(split)}));
+        lake_scan_infos.push_back(
+            PaimonJNIScanInfo::create(id++, scan_info.encoded_table, scan_info.encoded_predicate, std::vector<String>{std::move(split)}));
+    }
+    for (auto && raw_file_json_str : scan_info.raw_files)
+    {
+        Poco::JSON::Parser parser;
+        Poco::JSON::Object::Ptr raw_file = parser.parse(raw_file_json_str).extract<Poco::JSON::Object::Ptr>();
+        const String & path = raw_file->getValue<String>("path");
+        const size_t & size = raw_file->getValue<size_t>("size");
+        const String & format = raw_file->getValue<String>("format");
+        Poco::URI uri(path);
+
+        if (format == "ORC")
+        {
+            lake_scan_infos.push_back(FileScanInfo::create(
+                ILakeScanInfo::StorageType::Paimon, FileScanInfo::FormatType::ORC, uri.toString(), size, std::nullopt));
+        }
+        else if (format == "Parquet")
+        {
+            lake_scan_infos.push_back(FileScanInfo::create(
+                ILakeScanInfo::StorageType::Paimon, FileScanInfo::FormatType::PARQUET, uri.toString(), size, std::nullopt));
+        }
+        else
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported file format: {}", format);
+        }
     }
 
-    PrepareContextResult result{.hive_files = std::move(files)};
-    collectResource(local_context, result);
+    PrepareContextResult result{.lake_scan_infos = std::move(lake_scan_infos)};
+    collectResource(query_context, result);
     return result;
 }
 

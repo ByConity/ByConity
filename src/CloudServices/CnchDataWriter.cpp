@@ -237,7 +237,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
         // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
         String relative_path = part_name;
-        if (disk->getType() == DiskType::Type::ByteS3)
+        if (disk->getInnerType() == DiskType::Type::ByteS3)
         {
             UUID part_id = CnchDataWriter::newPartID(part->info, txn_id.toUInt64());
             part->uuid = part_id;
@@ -257,7 +257,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
         // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
         String relative_path = part_name;
-        if (disk->getType() == DiskType::Type::ByteS3)
+        if (disk->getInnerType() == DiskType::Type::ByteS3)
         {
             UUID part_id = CnchDataWriter::newPartID(staged_part->info, txn_id.toUInt64());
             staged_part->uuid = part_id;

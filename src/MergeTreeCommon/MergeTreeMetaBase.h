@@ -42,6 +42,7 @@ class MergeTreeMetaBase : public IStorage, public WithMutableContext, public Mer
 public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
+    constexpr static auto CLOUDFS_STORAGE_POLICY_SUFFIX = "_with_cloudfs";
 
     SourceTaskFilter source_task_filter;
 

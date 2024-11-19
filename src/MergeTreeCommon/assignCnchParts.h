@@ -21,10 +21,10 @@
 #include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Storages/DataPart_fwd.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
 #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
 
 namespace DB
@@ -37,7 +37,7 @@ using FilePartsAssignMap = std::unordered_map<String, FileDataPartsCNCHVector>;
 using AssignmentMap = std::unordered_map<String, MergeTreeDataPartsCNCHVector>;
 using BucketNumbersAssignmentMap = std::unordered_map<String, std::set<Int64>>;
 
-using HivePartsAssignMap = std::unordered_map<String, HiveFiles>;
+using LakeScanInfoPartsAssignMap = std::unordered_map<String, LakeScanInfos>;
 
 struct BucketNumberAndServerPartsAssignment
 {
@@ -46,8 +46,8 @@ struct BucketNumberAndServerPartsAssignment
 };
 
 // the hive has different allocate logic, thus separate it.
+LakeScanInfoPartsAssignMap assignCnchLakeScanInfoParts(const WorkerGroupHandle & worker_group, const LakeScanInfos & lake_scan_infos);
 FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, const FileDataPartsCNCHVector & parts);
-HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts);
 
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);

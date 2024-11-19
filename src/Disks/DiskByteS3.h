@@ -42,8 +42,8 @@ public:
     friend class DiskByteS3Reservation;
 
     DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
-        const std::shared_ptr<Aws::S3::S3Client>& client_,
-        const UInt64 min_upload_part_size_, const UInt64 max_single_part_upload_size_);
+        const std::shared_ptr<Aws::S3::S3Client>& client_, const UInt64 min_upload_part_size_,
+        const UInt64 max_single_part_upload_size_);
 
     virtual const String & getName() const override { return name; }
 

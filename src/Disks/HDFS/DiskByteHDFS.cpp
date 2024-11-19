@@ -31,7 +31,7 @@
 #include <IO/WSReadBufferFromFS.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
-#include "IO/HDFSRemoteFSReader.h"
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -89,8 +89,14 @@ private:
 };
 
 /// TODO: use HDFSCommon replace HDFSFileSystem
-DiskByteHDFS::DiskByteHDFS(const String & disk_name_, const String & hdfs_base_path_, const HDFSConnectionParams & hdfs_params_)
-    : disk_name(disk_name_), disk_path(hdfs_base_path_), hdfs_params(hdfs_params_), hdfs_fs(hdfs_params_, 10000, 100, 0)
+DiskByteHDFS::DiskByteHDFS(
+    const String & disk_name_,
+    const String & hdfs_base_path_,
+    const HDFSConnectionParams & hdfs_params_)
+    : disk_name(disk_name_)
+    , disk_path(hdfs_base_path_)
+    , hdfs_params(hdfs_params_)
+    , hdfs_fs(hdfs_params_, 10000, 100, 0)
 {
     pread_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, true);
     read_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, false);
@@ -184,6 +190,7 @@ void DiskByteHDFS::replaceFile(const String & from_path, const String & to_path)
     assertNotReadonly();
     String from_abs_path = absolutePath(from_path);
     String to_abs_path = absolutePath(to_path);
+
     if (hdfs_fs.exists(to_abs_path))
     {
         String origin_backup_file = to_abs_path + ".old";
@@ -276,11 +283,9 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(const String & 
         }
     }
 
-    {
-        int write_mode = settings.mode == WriteMode::Append ? (O_APPEND | O_WRONLY) : O_WRONLY;
-        return std::make_unique<WriteBufferFromHDFS>(absolutePath(path), hdfs_params,
-                                                     settings.buffer_size, write_mode);
-    }
+    int write_mode = settings.mode == WriteMode::Append ? (O_APPEND | O_WRONLY) : O_WRONLY;
+    return std::make_unique<WriteBufferFromHDFS>(absolutePath(path), hdfs_params,
+                                                    settings.buffer_size, write_mode);
 }
 
 void DiskByteHDFS::removeFile(const String & path)
@@ -293,6 +298,7 @@ void DiskByteHDFS::removeFileIfExists(const String & path)
 {
     assertNotReadonly();
     String abs_path = absolutePath(path);
+
     if (hdfs_fs.exists(abs_path))
     {
         hdfs_fs.remove(abs_path, false);
@@ -365,7 +371,8 @@ void registerDiskByteHDFS(DiskFactory & factory)
     auto creator = [](const String & name,
                       const Poco::Util::AbstractConfiguration & config,
                       const String & config_prefix,
-                      ContextPtr context_) -> DiskPtr {
+                      ContextPtr context_,
+                      const DisksMap & /* disk_map */) -> DiskPtr {
         String path = config.getString(config_prefix + ".path");
         if (path.empty())
             throw Exception("Disk path can not be empty. Disk " + name, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);

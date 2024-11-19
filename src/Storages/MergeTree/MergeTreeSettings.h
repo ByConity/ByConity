@@ -484,7 +484,7 @@ enum StealingCacheMode : UInt64
     /** Obsolete settings. Kept for backward compatibility only. */ \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
-    M(Bool, enable_cloudfs, false, "CROSS feature for table level setting", 0) \
+    M(Bool, enable_cloudfs, false, "Enable cloudfs; disabled by default", 0) \
     M(Bool, enable_nexus_fs, false, "Enable local NexusFS", 0) \
     /*keep enable_preload_parts for compitable*/\
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \

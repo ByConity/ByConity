@@ -185,12 +185,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     VolumeSingleDiskPtr volume = std::make_shared<SingleDiskVolume>("temp_volume", disk);
     MutableMergeTreeDataPartCNCHPtr new_part = nullptr;
 
-    new_part_info.storage_type = disk->getType();
+    new_part_info.storage_type = disk->getInnerType();
     String part_name = new_part_info.getPartName();
 
-    LOG_DEBUG(log, "Disk type : " + DiskType::toString(disk->getType()));
+    LOG_DEBUG(log, "Disk type : " + DiskType::toString(disk->getType())
+                + (disk->getType() == DiskType::Type::CLOUDFS ? " with inner type : " + DiskType::toString(disk->getInnerType()) : ""));
 
-    switch (disk->getType())
+    switch (disk->getInnerType())
     {
         case DiskType::Type::ByteHDFS: {
             String relative_path
@@ -324,8 +325,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         write_settings.mode = WriteMode::Create;
         write_settings.file_meta.insert(std::pair<String, String>(S3ObjectMetadata::PART_GENERATOR_ID, generator_id.str()));
         write_settings.remote_fs_write_failed_injection = data.getContext()->getSettings().remote_fs_write_failed_injection;
-        // if (data.getSettings()->enable_cloudfs.changed)
-        //     write_settings.enable_cloudfs = data.getSettings()->enable_cloudfs;
 
         auto data_out = disk->writeFile(data_file_rel_path, write_settings);
         SCOPE_EXIT({

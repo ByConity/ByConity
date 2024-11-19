@@ -150,6 +150,7 @@ public:
 
     /// Policy by name
     StoragePolicyPtr get(const String & name) const;
+    StoragePolicyPtr tryGet(const String & name) const;
 
     /// All policies
     const StoragePoliciesMap & getPoliciesMap() const { return policies; }

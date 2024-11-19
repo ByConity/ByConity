@@ -9,7 +9,7 @@
 #include <Interpreters/StorageID.h>
 #include <Processors/Chunk.h>
 #include <Processors/IntermediateResult/OwnerInfo.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <bthread/condition_variable.h>
 #include <parallel_hashmap/phmap.h>
@@ -190,8 +190,8 @@ public:
         const ContextPtr & context,
         const String & digest,
         const StorageID & storage_id,
-        const HiveFiles & hive_files,
-        HiveFiles & new_hive_files);
+        const LakeScanInfos & lake_scan_infos,
+        LakeScanInfos & new_lake_scan_infos);
 
     void setCache(const CacheKey & key, CacheValuePtr value)
     {

@@ -156,7 +156,7 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         if (disk->exists(rel_path))
         {
             if ((type() == UndoResourceType::Part || type() == UndoResourceType::StagedPart)
-                && disk->getType() == DiskType::Type::ByteS3)
+                && disk->getInnerType() == DiskType::Type::ByteS3)
             {
                 if (auto s3_disk = std::dynamic_pointer_cast<DiskByteS3>(disk); s3_disk != nullptr)
                 {

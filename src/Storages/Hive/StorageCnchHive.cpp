@@ -31,13 +31,11 @@
 #include "Storages/DataLakes/HudiDirectoryLister.h"
 #include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/DirectoryLister.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/HivePartition.h"
 #include "Storages/Hive/HiveSchemaConverter.h"
-#include "Storages/Hive/HiveWhereOptimizer.h"
 #include "Storages/Hive/HiveVirtualColumns.h"
+#include "Storages/Hive/HiveWhereOptimizer.h"
 #include "Storages/Hive/Metastore/HiveMetastore.h"
-#include "Storages/Hive/StorageHiveSource.h"
 #include "Storages/MergeTree/MergeTreeWhereOptimizer.h"
 #include "Storages/MergeTree/PartitionPruner.h"
 #include "Storages/StorageFactory.h"
@@ -62,7 +60,7 @@ namespace ErrorCodes
 
 static std::optional<UInt64> get_file_hash_index(const String & hive_file_path)
 {
-    auto get_hash_index_from_position = [&hive_file_path] (size_t pos) -> std::optional<Int64> {
+    auto get_hash_index_from_position = [&hive_file_path](size_t pos) -> std::optional<Int64> {
         size_t l = pos, r = pos;
         for (; r < hive_file_path.size(); ++r)
         {
@@ -174,7 +172,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     const auto & settings = local_context->getSettingsRef();
     if (settings.max_partitions_to_read > 0)
     {
-        if (partitions.size() > static_cast<size_t>(settings.max_partitions_to_read ))
+        if (partitions.size() > static_cast<size_t>(settings.max_partitions_to_read))
         {
             throw Exception(
                 ErrorCodes::TOO_MANY_PARTITIONS,
@@ -183,15 +181,15 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
                 settings.max_partitions_to_read);
         }
     }
-    HiveFiles hive_files;
+    LakeScanInfos lake_scan_infos;
     std::mutex mu;
 
     auto lister = getDirectoryLister(local_context);
     auto list_partition = [&](const HivePartitionPtr & partition) {
-        HiveFiles files = lister->list(partition);
+        LakeScanInfos files = lister->list(partition);
         {
             std::lock_guard lock(mu);
-            hive_files.insert(hive_files.end(), std::make_move_iterator(files.begin()), std::make_move_iterator(files.end()));
+            lake_scan_infos.insert(lake_scan_infos.end(), std::make_move_iterator(files.begin()), std::make_move_iterator(files.end()));
         }
     };
 
@@ -219,30 +217,31 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
         pool.wait();
     }
 
-    size_t total_hive_files = hive_files.size();
+    size_t total_scan_infos = lake_scan_infos.size();
     if (isBucketTable() && settings.use_hive_cluster_key_filter)
     {
         auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot);
 
         /// set bucket id for hive files
-        std::for_each(hive_files.begin(), hive_files.end(), [] (auto & hive_file) {
-            auto hash_index = get_file_hash_index(hive_file->file_path);
+        std::for_each(lake_scan_infos.begin(), lake_scan_infos.end(), [](auto & lake_scan_info) {
+            auto hash_index = get_file_hash_index(lake_scan_info->identifier());
             if (!hash_index)
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "failed to parse hash index from hive file path {}", hive_file->file_path);
-            hive_file->setBucketId(*hash_index);
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS, "failed to parse hash index from hive file path {}", lake_scan_info->identifier());
+            lake_scan_info->setDistributionId(*hash_index);
         });
 
         /// prune files with bucket id
-        auto end = std::remove_if(hive_files.begin(), hive_files.end(), [&] (auto & file) {
+        auto end = std::remove_if(lake_scan_infos.begin(), lake_scan_infos.end(), [&](auto & lake_scan_info) {
             if (!required_bucket)
                 return false;
-            return *file->getBucketId() != *required_bucket;
+            return *lake_scan_info->getDistributionId() != *required_bucket;
         });
-        hive_files.erase(end, hive_files.end());
+        lake_scan_infos.erase(end, lake_scan_infos.end());
     }
 
-    LOG_DEBUG(log, "Read from {}/{} hive files", hive_files.size(), total_hive_files);
-    PrepareContextResult result{.hive_files = std::move(hive_files)};
+    LOG_DEBUG(log, "Read from {}/{} hive files", lake_scan_infos.size(), total_scan_infos);
+    PrepareContextResult result{.lake_scan_infos = std::move(lake_scan_infos)};
 
     collectResource(local_context, result);
     return result;
@@ -275,8 +274,7 @@ ASTPtr StorageCnchHive::applyFilter(
     select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(conjuncts));
 
     /// Set prewhere()
-    if (supportsPrewhere() && settings.optimize_move_to_prewhere
-        && select_query->where() && !select_query->prewhere()
+    if (supportsPrewhere() && settings.optimize_move_to_prewhere && select_query->where() && !select_query->prewhere()
         && (!select_query->final() || settings.optimize_move_to_prewhere_if_final))
     {
         if (HiveMoveToPrewhereMethod::ALL == settings.hive_move_to_prewhere_method)
@@ -334,7 +332,11 @@ ASTPtr StorageCnchHive::applyFilter(
     return PredicateUtils::combineConjuncts(conjuncts);
 }
 
-static void filterPartitions(const ASTPtr & partition_filter, const StorageMetadataPtr & storage_metadata, ContextPtr local_context, HivePartitions & hive_partitions)
+static void filterPartitions(
+    const ASTPtr & partition_filter,
+    const StorageMetadataPtr & storage_metadata,
+    ContextPtr local_context,
+    HivePartitions & hive_partitions)
 {
     chassert(partition_filter);
     chassert(storage_metadata->hasPartitionKey());
@@ -382,20 +384,17 @@ static void filterPartitions(const ASTPtr & partition_filter, const StorageMetad
     FilterDescription filter(*filter_column);
     auto result_column = filter.filter(*index_column, -1);
     std::unordered_set<int> result_set;
-    for (size_t i = 0; i < result_column->size(); i++) {
+    for (size_t i = 0; i < result_column->size(); i++)
+    {
         result_set.emplace(result_column->getUInt(i));
     }
 
     idx = 0;
-    std::erase_if(hive_partitions, [&result_set, &idx] (const auto &) {
-        return result_set.find(idx++) == result_set.end();
-    });
+    std::erase_if(hive_partitions, [&result_set, &idx](const auto &) { return result_set.find(idx++) == result_set.end(); });
 }
 
 HivePartitions StorageCnchHive::selectPartitions(
-    ContextPtr local_context,
-    const StorageMetadataPtr & metadata_snapshot,
-    const SelectQueryInfo & query_info)
+    ContextPtr local_context, const StorageMetadataPtr & metadata_snapshot, const SelectQueryInfo & query_info)
 {
     /// non-partition table
     if (!metadata_snapshot->hasPartitionKey())
@@ -449,7 +448,8 @@ HivePartitions StorageCnchHive::selectPartitions(
 
     LOG_DEBUG(
         log,
-        "filtered partition {}/{}, filter_str={}, partition_filter={}, elapsed {} ms to fetch partitions, elpased {} ms to filter partitions",
+        "filtered partition {}/{}, filter_str={}, partition_filter={}, elapsed {} ms to fetch partitions, elpased {} ms to filter "
+        "partitions",
         hive_partitions.size(),
         apache_partitions.size(),
         filter_str,
@@ -459,7 +459,10 @@ HivePartitions StorageCnchHive::selectPartitions(
 
     if (local_context->getSettingsRef().force_index_by_date && filter_str.empty() && hive_partitions.size() == apache_partitions.size())
     {
-        throw Exception(ErrorCodes::INDEX_NOT_USED, "No partitions get filtered (total {}) and setting 'force_index_by_date' is set", hive_partitions.size());
+        throw Exception(
+            ErrorCodes::INDEX_NOT_USED,
+            "No partitions get filtered (total {}) and setting 'force_index_by_date' is set",
+            hive_partitions.size());
     }
 
     return hive_partitions;
@@ -480,20 +483,25 @@ std::optional<UInt64> StorageCnchHive::getSelectedBucketNumber(
     ExpressionActionsPtr cluster_by_expression = metadata_snapshot->cluster_by_key.expression;
     const auto & required_cols = cluster_by_expression->getRequiredColumnsWithTypes();
     Block block;
-    for (const auto &item : required_cols)
+    for (const auto & item : required_cols)
         block.insert(ColumnWithTypeAndName{item.type, item.name});
 
     MutableColumns columns = block.mutateColumns();
     ASTPtr cluster_by_conds = optimizer.cluster_key_conds;
-    LOG_DEBUG(log, "Useful cluster by conditions {}. Cluster key actions {}. Input block {}",
-        queryToString(cluster_by_conds), cluster_by_expression->dumpActions(), block.dumpStructure());
+    LOG_DEBUG(
+        log,
+        "Useful cluster by conditions {}. Cluster key actions {}. Input block {}",
+        queryToString(cluster_by_conds),
+        cluster_by_expression->dumpActions(),
+        block.dumpStructure());
 
-    std::function<void(ASTPtr)> parse_cluster_by_cond = [&] (const ASTPtr &ast) -> void {
-        auto *func = ast->as<ASTFunction>();
+    std::function<void(ASTPtr)> parse_cluster_by_cond = [&](const ASTPtr & ast) -> void {
+        auto * func = ast->as<ASTFunction>();
         if (!func || !func->arguments)
             return;
 
-        if (func->name == "equals" && func->arguments->children.size() == 2) {
+        if (func->name == "equals" && func->arguments->children.size() == 2)
+        {
             ASTPtr column = evaluateConstantExpressionOrIdentifierAsLiteral(func->arguments->children[0], local_context);
             ASTPtr field = evaluateConstantExpressionOrIdentifierAsLiteral(func->arguments->children[1], local_context);
 
@@ -508,14 +516,15 @@ std::optional<UInt64> StorageCnchHive::getSelectedBucketNumber(
         }
         else if (func->name == "and")
         {
-            for (const auto & child : func->arguments->children) {
+            for (const auto & child : func->arguments->children)
+            {
                 parse_cluster_by_cond(child);
             }
         }
     };
     parse_cluster_by_cond(cluster_by_conds);
 
-    if (std::any_of(columns.begin(), columns.end(), [] (auto &column) { return column->empty(); }))
+    if (std::any_of(columns.begin(), columns.end(), [](auto & column) { return column->empty(); }))
         return {};
 
     block.setColumns(std::move(columns));
@@ -531,7 +540,7 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
 {
     bool merge_partition_stats = local_context->getSettingsRef().merge_partition_stats;
 
-    auto stats =  hive_client->getTableStats(db_name, table_name, columns, merge_partition_stats);
+    auto stats = hive_client->getTableStats(db_name, table_name, columns, merge_partition_stats);
     if (stats)
         LOG_TRACE(log, "row_count {}", stats->row_count);
     else
@@ -539,7 +548,8 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
     return stats;
 }
 
-std::vector<std::pair<String, UInt64>> StorageCnchHive::getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format)
+std::vector<std::pair<String, UInt64>>
+StorageCnchHive::getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format)
 {
     String filter = {};
     auto apache_hive_partitions = hive_client->getPartitionsByFilter(db_name, table_name, filter);
@@ -547,7 +557,6 @@ std::vector<std::pair<String, UInt64>> StorageCnchHive::getPartitionLastModifica
     partition_last_modification_times.reserve(apache_hive_partitions.size());
     for (const auto & apache_partition : apache_hive_partitions)
     {
-
         auto partition = std::make_shared<HivePartition>();
         partition->load(apache_partition, metadata_snapshot->getPartitionKey());
         if (binary_format)
@@ -573,11 +582,11 @@ std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister(ContextPtr
     }
     else if (input_format == "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat")
     {
-        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::PARQUET);
+        return std::make_shared<DiskDirectoryLister>(disk, ILakeScanInfo::StorageType::Hive, FileScanInfo::FormatType::PARQUET);
     }
     else if (input_format == "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat")
     {
-        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::ORC);
+        return std::make_shared<DiskDirectoryLister>(disk, ILakeScanInfo::StorageType::Hive, FileScanInfo::FormatType::ORC);
     }
     else
         throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive format {}", input_format);
