@@ -40,10 +40,12 @@ LakeScanInfoPtr ILakeScanInfo::deserialize(
 {
     if (proto.has_file_scan_info())
         return FileScanInfo::deserialize(proto, context, metadata, settings);
+#if USE_JAVA_EXTENSIONS
     else if (proto.has_paimon_jni_scan_info())
         return PaimonJNIScanInfo::deserialize(proto, context, metadata, settings);
     else if (proto.has_hudi_jni_scan_info())
         return HudiJNIScanInfo::deserialize(proto, context, metadata, settings);
+#endif
 
     throw Exception("Unknown protobuf format", ErrorCodes::UNKNOWN_PROTOBUF_FORMAT);
 }

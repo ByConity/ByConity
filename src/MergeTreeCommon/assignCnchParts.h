@@ -48,7 +48,6 @@ struct BucketNumberAndServerPartsAssignment
 // the hive has different allocate logic, thus separate it.
 LakeScanInfoPartsAssignMap assignCnchLakeScanInfoParts(const WorkerGroupHandle & worker_group, const LakeScanInfos & lake_scan_infos);
 FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, const FileDataPartsCNCHVector & parts);
-HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts);
 
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);

@@ -31,7 +31,6 @@
 #include <CloudServices/CnchDedupHelper.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
-#include "Storages/Hive/HiveFile/IHiveFile.h"
 
 #include <brpc/callback.h>
 #include <brpc/channel.h>

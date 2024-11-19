@@ -1,5 +1,5 @@
-// #include "TableFunctions/TableFunctionCloudHive.h"
-// #if USE_HIVE
+#include "TableFunctions/TableFunctionCloudHive.h"
+#if USE_HIVE
 
 #include <Disks/DiskLocal.h>
 #include <Interpreters/StorageID.h>
@@ -11,12 +11,12 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
-// namespace DB
-// {
-// namespace ErrorCodes
-// {
-//     extern const int UNKNOWN_STORAGE;
-// }
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int UNKNOWN_STORAGE;
+}
 
 StoragePtr
 TableFunctionCloudHive::getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const
@@ -60,6 +60,6 @@ TableFunctionCloudHive::getStorage(const ColumnsDescription & columns, ContextPt
     return storage;
 }
 
-// }
+}
 
-// #endif
+#endif
