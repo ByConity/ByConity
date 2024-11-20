@@ -28,7 +28,7 @@ Create SQL Binding succeeded
 ***************************1. row ***************************
 Session Binding UUID: f67a800e-f6be-5b9c-32d7-8aefe61b0e0e
 Pattern: (^select \'bbb*\')|(^select \'aaa*\')
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 Do not execute this query.
 Do not execute this query.
 Projection Est. ? rows
@@ -58,7 +58,7 @@ SELECT a + 1 FROM test.bindings ORDER BY a ASC
 ***************************2. row ***************************
 Global Binding UUID: 2780354c-ba78-39b0-8dfd-0049a2c60573
 Pattern: ^select \'bbb\'
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 1
 Create SQL Binding succeeded
 Create SQL Binding succeeded
@@ -73,7 +73,7 @@ SELECT a + 1 FROM test.bindings ORDER BY a ASC
 ***************************2. row ***************************
 Session Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 ***************************3. row ***************************
 Global Binding UUID: 4917be45-73be-efcb-03d0-834f2b251353
 Pattern:
@@ -83,7 +83,7 @@ SELECT a + 2 FROM test.bindings ORDER BY a ASC
 ***************************4. row ***************************
 Global Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 2
 3
 4
@@ -97,7 +97,7 @@ Create SQL Binding succeeded
 ***************************1. row ***************************
 Session Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 ***************************2. row ***************************
 Session Binding UUID: a6ede439-0206-847e-5bd8-8226f886ead2
 Pattern: ^select \\* from test\\.bindin.*
@@ -111,7 +111,7 @@ Create SQL Binding succeeded
 ***************************1. row ***************************
 Global Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 ***************************2. row ***************************
 Global Binding UUID: a6ede439-0206-847e-5bd8-8226f886ead2
 Pattern: ^select \\* from test\\.bindin.*
@@ -135,7 +135,7 @@ SELECT a + 1 FROM `12345.test`.bindings ORDER BY a ASC
 ***************************2. row ***************************
 Global Binding UUID: deebc5e0-5a0d-3097-4388-831801dc6c9b
 Pattern: ^explain.*select.*from system\\.one.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'
 Do not execute this query.
 2
 3
@@ -156,4 +156,4 @@ SELECT a + 1 FROM `12345.test`.bindings ORDER BY a ASC
 ***************************3. row ***************************
 Global Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
-Settings: enable_execute_query = 0
+Settings: query_dry_run_mode = \'skip_execute_query\'

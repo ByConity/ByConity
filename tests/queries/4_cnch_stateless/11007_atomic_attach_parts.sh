@@ -19,11 +19,11 @@ else
     exit -1
 fi
 
-echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "DB::Exception: Cannot lock directory"`
+echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "Cannot lock directory"`
 
-echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "DB::Exception: Cannot lock directory"`
+echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "Cannot lock directory"`
 
-echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/inner_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "DB::Exception: Cannot lock directory"`
+echo `${CLICKHOUSE_CLIENT} --query "ALTER TABLE atomic_attach_parts ATTACH PARTS FROM '${HDFS_PATH_ROOT}/some_never_used_directory/inner_directory/' SETTINGS cnch_atomic_attach_part = 1;" 2>&1 | grep -c -m 1 "Cannot lock directory"`
 
 TXN_ID=$(${CLICKHOUSE_CLIENT} --query "SELECT txn_id FROM system.cnch_fs_lock WHERE database = currentDatabase(0) AND table = 'atomic_attach_parts';")
 

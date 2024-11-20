@@ -216,31 +216,12 @@ struct QMConfiguration final : public QMConfigurationData
 {
 };
 
-#define AS_CONFIG_FIELDS_LIST(M) \
-    M(MutableUInt64, mem_weight, "", 2, ConfigFlag::Default, "") \
-    M(MutableUInt64, query_num_weight, "", 4, ConfigFlag::Default, "") \
-    M(MutableUInt64, max_plan_segment_size, "", 500, ConfigFlag::Default, "") \
-    M(MutableUInt64, unhealth_segment_size, "", 480, ConfigFlag::Default, "") \
-    M(MutableFloat32, heavy_load_threshold, "", 0.75, ConfigFlag::Default, "") \
-    M(MutableFloat32, only_source_threshold, "", 0.85, ConfigFlag::Default, "") \
-    M(MutableFloat32, unhealth_threshold, "", 0.95, ConfigFlag::Default, "") \
-    M(MutableUInt64, need_reset_seconds, "", 300, ConfigFlag::Default, "") \
-    M(MutableUInt64, unhealth_recheck_seconds, "", 10, ConfigFlag::Default, "") \
-    M(MutableUInt64, heartbeat_interval, "", 10000, ConfigFlag::Default, "")
-
-
-DECLARE_CONFIG_DATA(ASConfigurationData, AS_CONFIG_FIELDS_LIST)
-struct ASConfiguration final : public ASConfigurationData
-{
-};
-
 struct RootConfiguration final : public RootConfigurationData
 {
     RMConfiguration resource_manager;
     SDConfiguration service_discovery;
     SDKVConfiguration service_discovery_kv;
     QMConfiguration queue_manager;
-    ASConfiguration adaptive_scheduler;
     TSOConfiguration tso_service;
     BSPConfiguration bulk_synchronous_parallel;
 
@@ -251,7 +232,6 @@ struct RootConfiguration final : public RootConfigurationData
         sub_configs.push_back(&service_discovery);
         sub_configs.push_back(&service_discovery_kv);
         sub_configs.push_back(&queue_manager);
-        sub_configs.push_back(&adaptive_scheduler);
         sub_configs.push_back(&tso_service);
         sub_configs.push_back(&bulk_synchronous_parallel);
     }

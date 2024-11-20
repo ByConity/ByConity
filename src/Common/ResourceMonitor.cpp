@@ -163,6 +163,9 @@ std::optional<CPUMonitor::ContainerData> CPUMonitor::getContainerData()
         buffer.push_back(data.cpu_usage);
         data.cpu_usage_avg_1min = cpu_usage_accumulate / buffer.size();
 
+        cpu_usage_accumulate_10sec += likely(buffer_10sec.full()) ? data.cpu_usage - buffer_10sec.front() : data.cpu_usage;
+        buffer_10sec.push_back(data.cpu_usage);
+        data.cpu_usage_avg_10sec = cpu_usage_accumulate_10sec / buffer_10sec.size();
         return container_data;
     }
     return std::nullopt;
@@ -236,6 +239,9 @@ CPUMonitor::Data CPUMonitor::getPhysicalMachineData()
     buffer.push_back(data.cpu_usage);
     data.cpu_usage_avg_1min = cpu_usage_accumulate / buffer.size();
 
+    cpu_usage_accumulate_10sec += likely(buffer_10sec.full()) ? data.cpu_usage - buffer_10sec.front() : data.cpu_usage;
+    buffer_10sec.push_back(data.cpu_usage);
+    data.cpu_usage_avg_10sec = cpu_usage_accumulate_10sec / buffer_10sec.size();
     return data;
 }
 
@@ -400,7 +406,10 @@ WorkerNodeResourceData ResourceMonitor::createResourceData(bool init)
     auto mem_data = mem_monitor.get();
 
     data.cpu_usage = cpu_data.cpu_usage;
+    data.cpu_usage_1min = cpu_data.cpu_usage_avg_1min;
+    data.cpu_usage_10sec = cpu_data.cpu_usage_avg_10sec;
     data.memory_usage = mem_data.memory_usage;
+    data.memory_usage_1min = mem_data.memory_usage_avg_1min;
     data.memory_available = mem_data.memory_available;
     data.disk_space = getDiskSpace();
     data.query_num = getQueryCount();

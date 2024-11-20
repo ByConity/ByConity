@@ -49,7 +49,7 @@ namespace ErrorCodes
     {
     public:
         ErrorPair get();
-        void increment(bool remote, const std::string & message, const FramePointers & trace);
+        void increment(bool remote, const std::string & message, const FramePointers & trace, ErrorCode error_code);
 
     private:
         ErrorPair value;

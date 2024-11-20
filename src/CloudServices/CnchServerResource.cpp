@@ -404,7 +404,11 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         initSourceTaskPayload(context, all_resources);
 
     Stopwatch rpc_watch;
+    auto worker_group_status = context->getWorkerGroupStatusPtr();
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
+    if (worker_group_status && worker_group_status->needCheckHalfOpenWorker())
+        handler->setNeedRecord();
+    
     std::vector<brpc::CallId> call_ids;
     call_ids.reserve(all_resources.size());
 
@@ -438,19 +442,16 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         brpc::Join(call_id);
     ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, rpc_watch.elapsedMilliseconds());
 
-    auto worker_group_status = context->getWorkerGroupStatusPtr();
     if (worker_group_status)
     {
         auto rpc_infos = handler->getFailedRpcInfo();
         for (const auto & [worker_id, error_code] : rpc_infos)
             context->getWorkerStatusManager()->setWorkerNodeDead(worker_id, error_code);
 
-        for (const auto & worker_id : worker_group_status->getHalfOpenWorkers())
+        for (const auto & worker_id : handler->getWorkers())
         {
-            if (rpc_infos.count(worker_id) == 0)
-                context->getWorkerStatusManager()->CloseCircuitBreaker(worker_id);
+            worker_group_status->removeHalfOpenWorker(worker_id);
         }
-        worker_group_status->clearHalfOpenWorkers();
     }
 
     handler->throwIfException();

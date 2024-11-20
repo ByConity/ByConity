@@ -95,7 +95,6 @@ public:
 
     String toString();
     String toString(const std::unique_lock<Mutex> &);
-    String toStringSimple() const;
 
 private:
     friend class BufferManager;

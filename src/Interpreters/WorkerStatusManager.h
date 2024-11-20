@@ -1,7 +1,10 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <atomic>
 #include <chrono>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -16,48 +19,25 @@
 #include <Common/Configurations.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Stopwatch.h>
+#include <Core/SettingsEnums.h>
+#include <Interpreters/Context.h>
+#include <Protos/RPCHelpers.h>
 namespace DB
 {
-template <typename Config, class AtomicType>
-void configReload(
-    const Config & config,
-    const String & config_name,
-    typename AtomicType::value_type (Config::*get)(const String & key) const,
-    AtomicType & old_value)
-{
-    if (config.has(config_name))
-    {
-        auto new_value = (config.*get)(config_name);
-        if (new_value != old_value.load(std::memory_order_relaxed))
-            old_value.store(new_value, std::memory_order_relaxed);
-    }
-}
-struct AdaptiveSchedulerConfig
-{
-    std::atomic<size_t> MEM_WEIGHT{2};
-    std::atomic<size_t> QUERY_NUM_WEIGHT{4};
-    std::atomic<size_t> MAX_PLAN_SEGMENT_SIZE{500};
-    std::atomic<size_t> UNHEALTH_SEGMENT_SIZE{480};
-    std::atomic<double> HEAVY_LOAD_THRESHOLD{0.75};
-    std::atomic<double> ONLY_SOURCE_THRESHOLD{0.90};
-    std::atomic<double> UNHEALTH_THRESHOLD{0.95};
-    std::atomic<int64_t> NEED_RESET_SECONDS{300};
-    std::atomic<int64_t> UNHEALTH_RECHECK_SECONDS{10};
-};
-
+class VirtualWarehouseHandleImpl;
 using WorkerGroupData = ResourceManagement::WorkerGroupData;
 
-enum class WorkerSchedulerStatus : uint8_t
+class WorkerStatusManager;
+using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
+
+enum class ScheduleType : uint8_t
 {
     Health = 1,
     Unknown = 2,
-    HeavyLoad = 3,
-    OnlySource = 4,
     Unhealth = 5,
-    NotConnected = 6
 };
 
-enum class WorkerGroupHealthStatus : uint8_t
+enum class GroupHealthType : uint8_t
 {
     Health = 1,
     Unhealth = 2,
@@ -73,15 +53,16 @@ enum class WorkerCircuitBreakerStatus : uint8_t
 
 struct UnhealthWorkerStatus
 {
-    WorkerSchedulerStatus status{WorkerSchedulerStatus::Unknown};
+    ScheduleType status{ScheduleType::Unknown};
     std::chrono::system_clock::time_point update_time{};
 };
 
 struct WorkerCircuitBreaker
 {
-    size_t fail_count{0};
+    int64_t fail_count{0};
     WorkerCircuitBreakerStatus breaker_status{WorkerCircuitBreakerStatus::Close};
     bool is_checking{false};
+    std::chrono::system_clock::time_point open_time;
     String toDebugString() const
     {
         return fmt::format("breaker_status {} fail_count {} is_checking {}", breaker_status, fail_count, is_checking);
@@ -97,114 +78,66 @@ public:
     void set(const KEY & key, const VALUE & value)
     {
         uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        _map[idx][key] = value;
-    }
-
-    void erase(const KEY & key)
-    {
-        uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        _map[idx].erase(key);
-    }
-
-    template <class Func>
-    void eraseWithCallback(const KEY & key, Func && func)
-    {
-        uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        _map[idx].erase(key);
-        func();
+        std::unique_lock<bthread::Mutex> lock(mutex[idx]);
+        map[idx][key] = value;
     }
 
     std::optional<VALUE> get(const KEY & key)
     {
         uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        if (_map[idx].count(key) == 0)
+        std::unique_lock<bthread::Mutex> lock(mutex[idx]);
+        if (map[idx].count(key) == 0)
             return std::nullopt;
-        return _map[idx][key];
+        return map[idx][key];
     }
 
-    template <class... Args, class Func>
-    void updateEmplaceIfNotExist(const KEY & key, const std::function<void(VALUE & value)> & call, Func && func, Args &&... args)
+    template <class... Args>
+    void updateEmplaceIfNotExist(const KEY & key, const std::function<void(VALUE & value)> & call, Args &&... args)
     {
         uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        auto iter = _map[idx].find(key);
-        if (iter != _map[idx].end())
+        std::unique_lock<bthread::Mutex> lock(mutex[idx]);
+        auto iter = map[idx].find(key);
+        if (iter != map[idx].end())
             call(iter->second);
         else
-            _map[idx].emplace(std::make_pair(key, VALUE(args...)));
-        func();
-    }
-
-    void updateCallbackIfNotExist(
-        const KEY & key, const std::function<void(VALUE & value)> & call, const std::function<void(VALUE & value)> & init_call)
-    {
-        uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        auto iter = _map[idx].find(key);
-        if (iter != _map[idx].end())
-            call(iter->second);
-        else
-        {
-            auto [new_iter, _] = _map[idx].try_emplace(key);
-            init_call(new_iter->second);
-        }
+            map[idx].emplace(std::make_pair(key, VALUE(args...)));
     }
 
     template <class Func>
     void update(const KEY & key, Func && call)
     {
         uint32_t idx = mapIdx(key);
-        std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-        auto iter = _map[idx].find(key);
-        if (iter != _map[idx].end())
+        std::unique_lock<bthread::Mutex> lock(mutex[idx]);
+        auto iter = map[idx].find(key);
+        if (iter != map[idx].end())
             call(iter->second);
-    }
-
-    void traverse(const std::function<void(const KEY & k, const VALUE & v)> & call)
-    {
-        for (uint32_t idx = 0; idx < MAP_COUNT; ++idx)
-        {
-            std::unique_lock<bthread::Mutex> lock(_mutex[idx]);
-            for (const auto & [k, v] : _map[idx])
-                call(k, v);
-        }
     }
 
 private:
     uint32_t mapIdx(const KEY & key) { return HASH{}(key) % MAP_COUNT; }
 
-private:
-    std::unordered_map<KEY, VALUE, HASH, EQUAL> _map[MAP_COUNT];
-    bthread::Mutex _mutex[MAP_COUNT];
+    std::unordered_map<KEY, VALUE, HASH, EQUAL> map[MAP_COUNT];
+    bthread::Mutex mutex[MAP_COUNT];
 };
 
-struct WorkerStatus : public DB::WorkerNodeResourceData
+struct ResourceStatus
 {
-    WorkerStatus() = default;
-    WorkerStatus(const Protos::WorkerNodeResourceData & resource_info) : DB::WorkerNodeResourceData(resource_info) { }
-    void setSchedulerInfo(AdaptiveSchedulerConfig & config)
+    ResourceStatus() = default;
+    explicit ResourceStatus(const Protos::WorkerNodeResourceData & info, size_t recommended_concurrent_query_limit, double health_worker_cpu_usage_threshold)
     {
-        //scheduler score, less is better
-        scheduler_score
-            = config.QUERY_NUM_WEIGHT * (100.0 * query_num / config.MAX_PLAN_SEGMENT_SIZE) + cpu_usage + config.MEM_WEIGHT * memory_usage;
-        if (query_num > config.UNHEALTH_THRESHOLD * config.MAX_PLAN_SEGMENT_SIZE || memory_usage > 100 * config.UNHEALTH_THRESHOLD)
-            scheduler_status = WorkerSchedulerStatus::Unhealth;
-        else if (
-            query_num > config.ONLY_SOURCE_THRESHOLD * config.MAX_PLAN_SEGMENT_SIZE || memory_usage > 100 * config.ONLY_SOURCE_THRESHOLD)
-            scheduler_status = WorkerSchedulerStatus::OnlySource;
-        else if (
-            query_num > config.HEAVY_LOAD_THRESHOLD * config.MAX_PLAN_SEGMENT_SIZE || memory_usage > 100 * config.HEAVY_LOAD_THRESHOLD
-            || cpu_usage > 100 * config.UNHEALTH_THRESHOLD)
-            scheduler_status = WorkerSchedulerStatus::HeavyLoad;
+        if (info.query_num() > recommended_concurrent_query_limit || info.cpu_usage_1min() > 100 * health_worker_cpu_usage_threshold)
+            scheduler_status = ScheduleType::Unhealth;
         else
-            scheduler_status = WorkerSchedulerStatus::Health;
+            scheduler_status = ScheduleType::Health;
+
+        last_status_create_time = info.last_status_create_time();
+        //scheduler score, less is better
+        scheduler_score = 100.0 * info.query_num() / recommended_concurrent_query_limit + info.cpu_usage_1min();
+        register_time = info.register_time();
+        host_ports = RPCHelpers::createHostWithPorts(info.host_ports());
     }
 
-    bool compare(const WorkerStatus & rhs)
+    bool compare(const ResourceStatus & rhs) const
     {
         if (scheduler_status == rhs.scheduler_status)
             return scheduler_score < rhs.scheduler_score;
@@ -212,86 +145,81 @@ struct WorkerStatus : public DB::WorkerNodeResourceData
             return scheduler_status < rhs.scheduler_status;
     }
 
-    WorkerSchedulerStatus getStatus() const { return scheduler_status; }
+    ScheduleType getStatus() const { return scheduler_status; }
     String toDebugString() const;
 
-    WorkerSchedulerStatus scheduler_status{WorkerSchedulerStatus::Unknown};
+    ScheduleType scheduler_status{ScheduleType::Unknown};
     double scheduler_score{0};
+    UInt64 last_status_create_time{0};
+    UInt32 register_time{0};
+    HostWithPorts host_ports;
 };
 
-using WorkerNodeSet = std::unordered_set<WorkerId, WorkerIdHash>;
-using WorkerStatusPtr = std::shared_ptr<WorkerStatus>;
-using WorkerNodeStatusContainer = std::unordered_map<WorkerId, WorkerStatusPtr, WorkerIdHash>;
+using WorkerNodeStatusContainer = std::unordered_map<WorkerId, ResourceStatus, WorkerIdHash>;
 
-struct WorkerStatusExtra
+struct WorkerStatus
 {
-    WorkerStatusExtra() = default;
-    WorkerStatusExtra(WorkerStatusPtr ptr, std::chrono::system_clock::time_point time) : worker_status(ptr), server_last_update_time(time)
+    WorkerStatus() = default;
+    WorkerStatus(ResourceStatus status, std::chrono::system_clock::time_point time) : resource_status(status), server_last_update_time(time)
     {
     }
-    WorkerStatusPtr worker_status;
+    ResourceStatus resource_status;
     std::chrono::system_clock::time_point server_last_update_time;
     WorkerCircuitBreaker circuit_break;
-    String toDebugString() const { return worker_status->toDebugString() + circuit_break.toDebugString(); }
+    String toDebugString() const { return resource_status.toDebugString() + "\t" + circuit_break.toDebugString(); }
 };
+
 class WorkerGroupStatus
 {
 public:
     friend class WorkerStatusManager;
-    explicit WorkerGroupStatus(Context * context) : global_context(context)
-    {
-    }
-    WorkerGroupStatus() = default;
+    explicit WorkerGroupStatus(WorkerStatusManagerPtr status_manager_) : status_manager(status_manager_) { }
     ~WorkerGroupStatus();
     void calculateStatus();
 
     std::optional<std::vector<size_t>> selectHealthNode(const HostWithPortsVec & host_ports);
 
-    WorkerGroupHealthStatus getWorkerGroupHealth() const { return status; }
+    GroupHealthType getWorkerGroupHealth() const { return status; }
 
-    size_t getHealthWorkerSize() const { return health_worker_size; }
-    size_t getUnknownWorkerSize() const { return unknown_worker_size; }
-    size_t getHeavyLoadWorkerSize() const { return heavy_load_worker_size; }
-    size_t getOnlySourceWorkerSize() const { return only_source_worker_size; }
-    size_t getAllWorkerSize() const { return total_worker_size; }
-    size_t getAvaiableComputeWorkerSize() const
+    size_t getAllWorkerSize() const { return total_count; }
+    size_t getAvaibleSize() const { return filter_indices.size(); }
+    size_t getHealthWorkerSize() const { return health_count; }
+
+    bool needCheckHalfOpenWorker() const { return need_check; }
+    void removeHalfOpenWorker(const WorkerId & worker_id)
     {
-        size_t health_size = health_worker_size + unknown_worker_size;
-        return health_size > 0 ? health_size : health_size + heavy_load_worker_size;
+        std::lock_guard<bthread::Mutex> lock(mutex);
+        half_open_workers.erase(worker_id);
     }
-    size_t getUnhealthWorkerSize() const { return unhealth_worker_size; }
-    size_t getNotConnectedWorkerSize() const { return not_connected_worker_size; }
-    const WorkerNodeSet & getHalfOpenWorkers() { return half_open_workers; }
-    void clearHalfOpenWorkers() { half_open_workers.clear(); }
 
-    bool hasAvaibleWorker() const { return health_worker_size + only_source_worker_size + unknown_worker_size > 0; }
-
-    WorkerNodeStatusContainer & getWorkersStatus() { return workers_status; }
+    const std::vector<std::optional<ResourceStatus>> & getWorkersResourceStatus() const { return workers_resource_status; }
 
 private:
-    WorkerNodeStatusContainer workers_status;
-    WorkerGroupHealthStatus status{WorkerGroupHealthStatus::Health};
-    WorkerNodeSet half_open_workers;
-    size_t health_worker_size{0};
-    size_t unhealth_worker_size{0};
-    size_t not_connected_worker_size{0};
-    size_t total_worker_size{0};
-    size_t unknown_worker_size{0};
-    size_t only_source_worker_size{0};
-    size_t half_open_workers_checking_size{0};
-    size_t half_open_workers_size{0};
-    size_t heavy_load_worker_size{0};
+    size_t open_count{0};
+    size_t health_count{0};
+    size_t unhealth_count{0};
+    size_t total_count{0};
+    size_t unknown_count{0};
+    size_t half_open_checking_by_other_count{0};
+    size_t half_open_checking_count{0};
+    GroupHealthType status{GroupHealthType::Health};
     std::vector<size_t> filter_indices;
-    Context * global_context{nullptr};
+    std::vector<std::optional<ResourceStatus>> workers_resource_status;
+    WorkerStatusManagerPtr status_manager;
+
+    bthread::Mutex mutex;
+    WorkerNodeSet half_open_workers;
+    std::atomic<bool> need_check{false};
 };
 
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 using UnhealthWorkerStatusMap = std::unordered_map<WorkerId, UnhealthWorkerStatus, WorkerIdHash>;
 
-class WorkerStatusManager : public WithContext
+
+class WorkerStatusManager : public std::enable_shared_from_this<WorkerStatusManager>, WithContext
 {
 public:
-    static inline const String prefix{"worker_status_manager"};
+    friend class VirtualWarehouseHandleImpl;
     enum class UpdateSource : uint8_t
     {
         ComeFromRM = 1,
@@ -300,15 +228,12 @@ public:
 
     // vw_name.wg_name
     using VWType = String;
-    using WorkerList = std::vector<WorkerId>;
-    using WorkerListPtr = std::shared_ptr<WorkerList>;
+    using WorkerVec = std::vector<WorkerId>;
+    using WorkerVecPtr = std::shared_ptr<WorkerVec>;
 
-    constexpr static const size_t CIRCUIT_BREAKER_THRESHOLD = 20;
-
+    virtual ~WorkerStatusManager() = default;
     WorkerStatusManager() = default;
-    explicit WorkerStatusManager(ContextWeakMutablePtr context_);
-
-    virtual ~WorkerStatusManager();
+    explicit WorkerStatusManager(const ContextPtr global_context_) : WithContext(global_context_), log(getLogger("WorkerStatusManager")) { }
 
     void updateWorkerNode(const Protos::WorkerNodeResourceData & resource_info, UpdateSource source);
 
@@ -316,24 +241,13 @@ public:
 
     void restoreWorkerNode(const WorkerId & key);
 
-    void CloseCircuitBreaker(const WorkerId & key);
+    virtual std::optional<WorkerStatus> getWorkerStatus(const WorkerId & worker_id)
+    {
+        return worker_status_map.get(worker_id);
+    }
 
-    UnhealthWorkerStatusMap getWorkersCannotUpdateFromRM();
-
-    template <class WorkersVecType, class GetWorkerFunc>
-    std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(
-        Context * global_context,
-        const WorkersVecType & host_ports,
-        const String & vw_name,
-        const String & wg_name,
-        GetWorkerFunc && func,
-        bool can_check = true);
-
-    std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
-
-    virtual std::optional<WorkerStatusExtra> getWorkerStatus(const WorkerId & worker_id);
-
-    void updateConfig(const ASConfiguration & as_config);
+    std::shared_ptr<WorkerGroupStatus>
+    getWorkerGroupStatus(const std::vector<WorkerId> & worker_ids, SchedulerMode mode);
 
     static WorkerId getWorkerId(const String & vw_name, const String & group_id, const String & id)
     {
@@ -345,130 +259,16 @@ public:
         return WorkerId{resource_info.vw_name(), resource_info.worker_group_id(), resource_info.id()};
     }
 
-    template <class WorkerVecType>
-    void updateVWWorkerList(const WorkerVecType & host_ports, const String & vw_name, const String & wg_name)
-    {
-        if constexpr (std::is_same_v<WorkerVecType, HostWithPortsVec>)
-        {
-            String vw_wg_name = vw_name + '.' + wg_name;
-            LOG_TRACE(log, "update {} worker list.", vw_wg_name);
-            auto worker_list = std::make_shared<WorkerList>();
-            for (const auto & host : host_ports)
-            {
-                worker_list->emplace_back(vw_name, wg_name, host.id);
-            }
-            vw_worker_list_map.set(vw_wg_name, worker_list);
-        }
-    }
-
-    void startHeartbeat(BackgroundSchedulePool & pool_)
-    {
-        task = pool_.createTask(prefix, [&] { heartbeat(); });
-        task->activateAndSchedule();
-    }
-    void stop()
-    {
-        if (task)
-            task->deactivate();
-    }
-    void heartbeat();
-    void shutdown();
-
 private:
-    ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash> global_extra_workers_status;
-    ThreadSafeMap<WorkerId, UnhealthWorkerStatus, WorkerIdHash> unhealth_workers_status;
-    ThreadSafeMap<VWType, WorkerListPtr> vw_worker_list_map;
+    ThreadSafeMap<WorkerId, WorkerStatus, WorkerIdHash> worker_status_map;
 
-    AdaptiveSchedulerConfig adaptive_scheduler_config;
+    std::atomic<size_t> recommended_concurrent_query_limit{480};
+    std::atomic<double> health_worker_cpu_usage_threshold{0.95};
+    std::atomic<int64_t> circuit_breaker_open_to_halfopen_wait_seconds{60};
+    std::atomic<int64_t> unhealth_worker_recheck_wait_seconds{10};
+    std::atomic<int64_t> circuit_breaker_open_error_threshold{10};
     mutable bthread::Mutex map_mutex;
     LoggerPtr log;
-    // rm heartbeat
-    mutable std::optional<BackgroundSchedulePool> schedule_pool;
-    std::atomic<UInt64> heartbeat_interval{10000}; /// in ms;
-    BackgroundSchedulePool::TaskHolder task;
 };
 
-template <class WorkersVecType, class GetWorkerFunc>
-std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(
-    Context * global_context,
-    const WorkersVecType & host_ports,
-    const String & vw_name,
-    const String & wg_name,
-    GetWorkerFunc && func,
-    bool can_check)
-{
-    auto worker_group_status = std::make_unique<WorkerGroupStatus>(global_context);
-    auto now = std::chrono::system_clock::now();
-    WorkerNodeSet need_reset_workers;
-    worker_group_status->filter_indices.reserve(host_ports.size());
-
-    updateVWWorkerList(host_ports, vw_name, wg_name);
-    for (size_t idx = 0; idx < host_ports.size(); ++idx)
-    {
-        const auto & host = host_ports[idx];
-        auto id = func(vw_name, wg_name, host);
-        bool exist = false;
-        global_extra_workers_status.update(
-            id, [idx, &need_reset_workers, &now, this, id, &exist, &worker_group_status, can_check](WorkerStatusExtra & val) {
-                exist = true;
-                auto worker_scheduler_status = val.worker_status->getStatus();
-                if ((worker_scheduler_status == WorkerSchedulerStatus::Unhealth
-                     || worker_scheduler_status == WorkerSchedulerStatus::NotConnected)
-                    && std::chrono::duration_cast<std::chrono::seconds>(now - val.server_last_update_time).count()
-                        > adaptive_scheduler_config.NEED_RESET_SECONDS)
-                    need_reset_workers.emplace(id);
-
-                LOG_TRACE(log, val.toDebugString());
-                if (likely(val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Close))
-                {
-                    if (val.worker_status->getStatus() <= WorkerSchedulerStatus::OnlySource)
-                    {
-                        worker_group_status->filter_indices.emplace_back(idx);
-                        worker_group_status->workers_status.emplace(id, val.worker_status);
-                    }
-                    else
-                        worker_group_status->unhealth_worker_size++;
-                }
-                else if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
-                {
-                    if (val.circuit_break.is_checking)
-                    {
-                        LOG_TRACE(log, "half open worker {} is checking", id.ToString());
-                        worker_group_status->half_open_workers_checking_size++;
-                    }
-                    else
-                    {
-                        if (can_check)
-                        {
-                            LOG_TRACE(log, "check half open worker ", id.ToString());
-                            val.circuit_break.is_checking = true;
-                            worker_group_status->half_open_workers_size++;
-                            worker_group_status->half_open_workers.emplace(id);
-                            worker_group_status->workers_status.emplace(id, val.worker_status);
-                            worker_group_status->filter_indices.emplace_back(idx);
-                        }
-                        else
-                        {
-                            LOG_TRACE(log, "half open worker {} is checking", id.ToString());
-                            worker_group_status->half_open_workers_checking_size++;
-                        }
-                    }
-                }
-            });
-        if (!exist)
-        {
-            worker_group_status->unknown_worker_size++;
-            worker_group_status->filter_indices.emplace_back(idx);
-            LOG_DEBUG(log, "can't find worker node : {}'s status", id.ToString());
-        }
-    }
-    worker_group_status->calculateStatus();
-    for (const auto & id : need_reset_workers)
-    {
-        LOG_DEBUG(log, "restore worker ", id.ToString());
-        restoreWorkerNode(id);
-    }
-
-    return worker_group_status;
-}
 }

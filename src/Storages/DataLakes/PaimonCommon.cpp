@@ -600,12 +600,6 @@ namespace paimon_utils
         {
             data_type = std::make_shared<DataTypeDateTime64>(type.timestamptype().precision());
         }
-        else if (type.has_timetype())
-        {
-            if (type.timetype().precision() != 0)
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Paimon's time type with precision is not supported");
-            data_type = std::make_shared<DataTypeDateTime>();
-        }
         else if (type.has_tinyinttype())
         {
             data_type = std::make_shared<DataTypeInt8>();

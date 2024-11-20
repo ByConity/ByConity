@@ -446,25 +446,28 @@ brpc::CallId CnchWorkerClient::sendResources(
             table_data_parts.set_table_version(resource.table_version);
         }
 
-        if (!resource.server_parts.empty())
+        if (settings.query_dry_run_mode != QueryDryRunMode::SKIP_SEND_PARTS)
         {
-            // todo(jiashuo): bitmap need handler?
-            fillBasePartAndDeleteBitmapModels(
-                *resource.storage,
-                resource.server_parts,
-                *table_data_parts.mutable_server_parts(),
-                *table_data_parts.mutable_server_part_bitmaps());
-        }
-
-        if (!resource.virtual_parts.empty())
-        {
-            fillPartsModelForSend(*resource.storage, resource.virtual_parts, *table_data_parts.mutable_virtual_parts());
-            auto * bitmaps_model = table_data_parts.mutable_virtual_part_bitmaps();
-            for (const auto & virtual_part : resource.virtual_parts)
+            if (!resource.server_parts.empty())
             {
-                for (auto & bitmap_meta : virtual_part->part->delete_bitmap_metas)
+                // todo(jiashuo): bitmap need handler?
+                fillBasePartAndDeleteBitmapModels(
+                    *resource.storage,
+                    resource.server_parts,
+                    *table_data_parts.mutable_server_parts(),
+                    *table_data_parts.mutable_server_part_bitmaps());
+            }
+
+            if (!resource.virtual_parts.empty())
+            {
+                fillPartsModelForSend(*resource.storage, resource.virtual_parts, *table_data_parts.mutable_virtual_parts());
+                auto * bitmaps_model = table_data_parts.mutable_virtual_part_bitmaps();
+                for (const auto & virtual_part : resource.virtual_parts)
                 {
-                    bitmaps_model->Add()->CopyFrom(*bitmap_meta);
+                    for (auto & bitmap_meta : virtual_part->part->delete_bitmap_metas)
+                    {
+                        bitmaps_model->Add()->CopyFrom(*bitmap_meta);
+                    }
                 }
             }
         }

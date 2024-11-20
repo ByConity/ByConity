@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -110,26 +111,26 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::getWorkerGroup(const String & work
 
 void VirtualWarehouseHandleImpl::updateWorkerStatusFromRM(const std::vector<WorkerGroupData> & groups_data)
 {
-    auto worker_status_manager = getContext()->getWorkerStatusManager();
-    auto cannot_update_workers = worker_status_manager->getWorkersCannotUpdateFromRM();
-    if (log->trace())
-    {
-        LOG_TRACE(log, "adaptive updateWorkerStatusFromRM");
-        for (const auto & [id, _] : cannot_update_workers)
-            LOG_TRACE(log, "adaptive cannot update worker : {}", id.ToString());
-    }
     for (const auto & group_data : groups_data)
     {
+        if (!worker_status_managers.contains(group_data.id))
+        {
+            worker_status_managers[group_data.id] = std::make_shared<WorkerStatusManager>(getContext());
+        }
+
+        auto current_wg_status = worker_status_managers[group_data.id];
+        current_wg_status->recommended_concurrent_query_limit.store(settings.recommended_concurrent_query_limit, std::memory_order_relaxed);
+        current_wg_status->health_worker_cpu_usage_threshold.store(settings.health_worker_cpu_usage_threshold, std::memory_order_relaxed);
+        current_wg_status->circuit_breaker_open_to_halfopen_wait_seconds.store(settings.circuit_breaker_open_to_halfopen_wait_seconds, std::memory_order_relaxed);
+        current_wg_status->unhealth_worker_recheck_wait_seconds.store(settings.unhealth_worker_recheck_wait_seconds, std::memory_order_relaxed);
+        current_wg_status->circuit_breaker_open_error_threshold.store(settings.circuit_breaker_open_error_threshold, std::memory_order_relaxed);
         for (const auto & worker_resource_data : group_data.worker_node_resource_vec)
         {
             auto worker_id = WorkerStatusManager::getWorkerId(group_data.vw_name, group_data.id, worker_resource_data.id);
-            if (!cannot_update_workers.count(worker_id))
-            {
-                LOG_TRACE(log, "update worker {} from rm", worker_id.ToString());
-                Protos::WorkerNodeResourceData resource_info;
-                worker_resource_data.fillProto(resource_info);
-                worker_status_manager->updateWorkerNode(resource_info, WorkerStatusManager::UpdateSource::ComeFromRM);
-            }
+            LOG_TRACE(log, "update worker {} from rm", worker_id.toString());
+            Protos::WorkerNodeResourceData resource_info;
+            worker_resource_data.fillProto(resource_info);
+            current_wg_status->updateWorkerNode(resource_info, WorkerStatusManager::UpdateSource::ComeFromRM);
         }
     }
 }
@@ -232,9 +233,9 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromRM()
 
         if (new_settings)
             updateSettings(*new_settings);
-        updateWorkerStatusFromRM(groups_data);
         std::lock_guard lock(state_mutex);
 
+        updateWorkerStatusFromRM(groups_data);
         Container old_groups;
         old_groups.swap(worker_groups);
 
@@ -420,23 +421,18 @@ void VirtualWarehouseHandleImpl::updateSettings(const VirtualWarehouseSettings &
 void VirtualWarehouseHandleImpl::updateWorkerStatusFromPSM(
     const IServiceDiscovery::WorkerGroupMap & groups_data, const std::string & vw_name)
 {
-    auto worker_status_manager = getContext()->getWorkerStatusManager();
-    auto cannot_update_workers = worker_status_manager->getWorkersCannotUpdateFromRM();
-    if (log->trace())
-    {
-        for (const auto & [id, _] : cannot_update_workers)
-            LOG_TRACE(log, "adaptive cannot update unhealth worker : {}", id.ToString());
-    }
-
     for (const auto & [wg_name, host_ports_vec] : groups_data)
     {
+        if (!worker_status_managers.contains(wg_name))
+        {
+            worker_status_managers[wg_name] = std::make_shared<WorkerStatusManager>(getContext());
+        }
+        auto current_wg_status = worker_status_managers[wg_name];
+
         for (const auto & host_ports : host_ports_vec)
         {
             auto worker_id = WorkerStatusManager::getWorkerId(vw_name, wg_name, host_ports.id);
-            if (!cannot_update_workers.count(worker_id))
-            {
-                worker_status_manager->restoreWorkerNode(worker_id);
-            }
+            current_wg_status->restoreWorkerNode(worker_id);
         }
     }
 }
@@ -464,8 +460,8 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
             LOG_DEBUG(log, "No worker group found in VW {} from PSM {}", name, psm);
             return false;
         }
-        updateWorkerStatusFromPSM(groups_map, name);
         std::lock_guard lock(state_mutex);
+        updateWorkerStatusFromPSM(groups_map, name);
 
         Container old_groups;
         old_groups.swap(worker_groups);

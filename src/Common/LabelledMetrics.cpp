@@ -10,7 +10,8 @@
     M(QueriesFailedWhileProcessing, "Number of queries that have failed while processing") \
     M(QueriesFailedFromUser, "Number of queries that have failed because of user side error") \
     M(QueriesFailedFromEngine, "Number of queries that have failed because of engine side error") \
-    M(QueriesSucceeded, "Number of queries that have succeeded")
+    M(QueriesSucceeded, "Number of queries that have succeeded") \
+    M(ErrorCodes, "Number of different error codes")
 
 namespace LabelledMetrics
 {

@@ -1304,7 +1304,6 @@ enum PreloadLevelSettings : UInt64
     /** Complex query settings **/\
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Milliseconds, send_plan_segment_timeout_ms, 10000, "Default timeout for send plan segment by rpc", 0) \
     M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
     M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
@@ -1361,6 +1360,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(VWQueueMode, vw_queue_mode, VWQueueMode::Skip, "Whether enqueue virtual warehouse queue: Skip/Match/Force", 0) \
     M(QueueName, queue_name, QueueName::Auto, "the name of vw queue: highest/high/normal/low/lowest/auto", 0) \
+    M(SchedulerMode, scheduler_mode, SchedulerMode::SKIP, "adaptive scheduler mode: skip/skip_unreachable_node/skip_slow_node", 0) \
     M(UInt64, vw_query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(Bool, enable_concurrency_control, false, "Whether enable concurrency control", 0) \
@@ -1623,7 +1623,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
-    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
@@ -1662,7 +1661,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_materialized_view_union_rewriting, false, "Whether enable materialized view based rewriter for query using union", 0) \
     M(Bool, enforce_materialized_view_union_rewriting, false, "Enforce enable materialized view based rewriter for query using union, used for testing", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
-    M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
+    M(QueryDryRunMode, query_dry_run_mode, QueryDryRunMode::NONE, "Whether to choose a query debug mode, in order to skip some workloads", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
     M(Bool, force_create_foreign_key, false, "Whether to create inexistent foreign key when creating a table", 0) \
     M(Bool, enable_group_by_keys_pruning, false, "Whether to enable RBO -- group by keys pruning optimization", 0) \
@@ -1874,6 +1873,7 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
     MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
     MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
+    MAKE_OBSOLETE(M, Bool, enable_adaptive_scheduler, false) \
     MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \
     MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
     MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \

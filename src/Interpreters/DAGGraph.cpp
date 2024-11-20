@@ -142,10 +142,7 @@ void SourcePruner::pruneSource(CnchServerResource * server_resource, std::unorde
             }
             plan_segment_workers_map[plan_segment_id];
             LOG_TRACE(
-                log,
-                "SourcePrune plan segment : {} worker size {}",
-                plan_segment_id,
-                plan_segment_workers_map[plan_segment_id].size());
+                log, "SourcePrune plan segment : {} worker size {}", plan_segment_id, plan_segment_workers_map[plan_segment_id].size());
         }
     }
     for (auto & node : plan_segments_ptr->getNodes())
@@ -207,7 +204,8 @@ std::vector<size_t> AdaptiveScheduler::getHealthyWorkerRank()
     std::vector<size_t> rank_worker_ids;
     auto worker_group = query_context->tryGetCurrentWorkerGroup();
     auto worker_group_status = query_context->getWorkerGroupStatusPtr();
-    if (!worker_group_status || !worker_group)
+    if (!worker_group_status || !worker_group
+        || worker_group_status->getWorkersResourceStatus().size() != worker_group->getHostWithPortsVec().size())
         return getRandomWorkerRank();
     const auto & hostports = worker_group->getHostWithPortsVec();
     size_t num_workers = hostports.size();
@@ -215,32 +213,27 @@ std::vector<size_t> AdaptiveScheduler::getHealthyWorkerRank()
     for (size_t i = 0; i < num_workers; i++)
         rank_worker_ids.push_back(i);
 
-    auto & workers_status = worker_group_status->getWorkersStatus();
+    const auto & resources = worker_group_status->getWorkersResourceStatus();
     std::stable_sort(rank_worker_ids.begin(), rank_worker_ids.end(), [&](size_t lidx, size_t ridx) {
-        auto lid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[lidx].id);
-        auto rid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[ridx].id);
-        auto liter = workers_status.find(lid);
-        auto riter = workers_status.find(rid);
-        if (liter == workers_status.end())
-            return true;
-        if (riter == workers_status.end())
+        if (!resources[lidx])
             return false;
-        return liter->second->compare(*riter->second);
+        if (!resources[ridx])
+            return true;
+        return resources[lidx]->compare(*resources[ridx]);
     });
 
     if (log->trace())
     {
         for (auto & idx : rank_worker_ids)
         {
-            auto worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[idx].id);
-            if (auto iter = workers_status.find(worker_id); iter != workers_status.end())
-                LOG_TRACE(log, iter->second->toDebugString());
+            if (resources[idx])
+                LOG_TRACE(log, resources[idx]->toDebugString());
         }
     }
 
     thread_local std::random_device rd;
-    //only shuffle healthy worker
-    std::shuffle(rank_worker_ids.begin(), rank_worker_ids.begin() + worker_group_status->getHealthWorkerSize(), rd);
+    //only shuffle first half healthy worker
+    std::shuffle(rank_worker_ids.begin(), rank_worker_ids.begin() + worker_group_status->getHealthWorkerSize() / 2, rd);
     return rank_worker_ids;
 }
 

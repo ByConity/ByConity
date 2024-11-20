@@ -53,7 +53,7 @@ void BufferState::unpin(const std::unique_lock<Mutex> & l)
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "try to unpin a {} whose has invalid {}",
-            handle ? handle->toStringSimple() : "BlockHandle(nullptr)",
+            handle ? handle->toString() : "BlockHandle(nullptr)",
             toString(l));
     reader--;
 }
@@ -77,7 +77,7 @@ bool BufferState::tryUnload(const std::unique_lock<Mutex> &)
     if (state == State::COOLING)
     {
         if (reader != 0)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "try to unload a cooling {} whose reader={}", handle->toStringSimple(), reader);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "try to unload a cooling {} whose reader={}", handle->toString(), reader);
         state = State::COLD;
         reader = 0;
         handle->resetBufferSlot();
@@ -116,7 +116,12 @@ BufferState * BlockHandle::getBufferStateAndLock(std::unique_lock<Mutex> & lock)
         if (slot_id == INVALID_SLOT_ID)
             return nullptr;
         auto * buffer_manager = BufferManager::getInstance();
-        chassert(buffer_manager);
+        if (!buffer_manager)
+        {
+            // the BufferManager could have been destroyed
+            resetBufferSlot();
+            return nullptr;
+        }
         lock = std::unique_lock{buffer_manager->getMetaMutex(slot_id)};
         auto recheck_slot_id = buffer_slot.load();
         if (recheck_slot_id == slot_id)
@@ -147,31 +152,15 @@ void BlockHandle::unpin()
 
 String BlockHandle::toString()
 {
-    std::unique_lock<Mutex> lock;
-    auto * state = getBufferStateAndLock(lock);
-    if (state)
-    {
-        auto laddr = addr.load();
-        return fmt::format(
-            "BlockHandle({}, state={}, valid={}, addr=<{},{}>, size={})",
-            reinterpret_cast<void *>(this),
-            state->toString(lock),
-            laddr.rid().valid(),
-            laddr.rid().index(),
-            laddr.offset(),
-            size);
-    }
-    else
-    {
-        auto laddr = addr.load();
-        return fmt::format(
-            "BlockHandle({}, state=null, valid={}, addr=<{},{}>, size={})",
-            reinterpret_cast<void *>(this),
-            laddr.rid().valid(),
-            laddr.rid().index(),
-            laddr.offset(),
-            size);
-    }
+    auto laddr = addr.load();
+    return fmt::format(
+        "BlockHandle({}, buffer_slot={}, valid={}, addr=<{},{}>, size={})",
+        reinterpret_cast<const void *>(this),
+        buffer_slot.load(),
+        laddr.rid().valid(),
+        laddr.rid().index(),
+        laddr.offset(),
+        size);
 }
 
 String BlockHandle::toString(const std::unique_lock<Mutex> & lock)
@@ -182,19 +171,6 @@ String BlockHandle::toString(const std::unique_lock<Mutex> & lock)
         "BlockHandle({}, state={}, valid={}, addr=<{},{}>, size={})",
         reinterpret_cast<void *>(this),
         state->toString(lock),
-        laddr.rid().valid(),
-        laddr.rid().index(),
-        laddr.offset(),
-        size);
-}
-
-String BlockHandle::toStringSimple() const
-{
-    auto laddr = addr.load();
-    return fmt::format(
-        "BlockHandle({}, buffer_slot={}, valid={}, addr=<{},{}>, size={})",
-        reinterpret_cast<const void *>(this),
-        buffer_slot.load(),
         laddr.rid().valid(),
         laddr.rid().index(),
         laddr.offset(),
@@ -311,7 +287,11 @@ void BufferManager::free(SlotId slot_id)
 
 std::pair<OpResult, uintptr_t> BufferManager::loadAndPin(std::shared_ptr<BlockHandle> & handle, const UInt64 seq_number)
 {
-    if (!handle->isRelAddressValid())
+    RelAddress addr = handle->getRelAddress();
+    size_t size = handle->getSize();
+    chassert(size > 0);
+
+    if (!addr.rid().valid())
         return {OpResult::DEEP_RETRY, 0};
 
     auto [op_result, slot_id] = alloc();
@@ -331,11 +311,6 @@ std::pair<OpResult, uintptr_t> BufferManager::loadAndPin(std::shared_ptr<BlockHa
         return {OpResult::DEEP_RETRY, 0};
     }
 
-    RelAddress addr = handle->getRelAddress();
-    size_t size = handle->getSize();
-    chassert(addr.rid().valid());
-    chassert(size > 0);
-
     auto desc = region_manager.openForRead(addr.rid(), seq_number);
     if (desc.getStatus() != HybridCache::OpenStatus::Ready)
     {
@@ -345,6 +320,14 @@ std::pair<OpResult, uintptr_t> BufferManager::loadAndPin(std::shared_ptr<BlockHa
             return {OpResult::DEEP_RETRY, 0};
         if (desc.getStatus() == HybridCache::OpenStatus::Error)
             throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "fail to open region for read");
+    }
+    if (addr != handle->getRelAddress())
+    {
+        // handle has been invalided 
+        region_manager.close(std::move(desc));
+        handle->resetBufferSlot();
+        free(slot_id);
+        return {OpResult::DEEP_RETRY, 0};
     }
 
     auto & state = getMetaState(slot_id);

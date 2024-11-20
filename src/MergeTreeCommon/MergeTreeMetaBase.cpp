@@ -2231,7 +2231,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
         }
 
         auto block = partition_key_sample.cloneWithColumns(std::move(columns));
-        TTLDescription::tryRewriteTTLWithPartitionKey(rows_ttl, metadata_snapshot->columns, metadata_snapshot->partition_key, metadata_snapshot->primary_key, getContext());
+        TTLDescription::tryRewriteTTLWithPartitionKey(rows_ttl, metadata_snapshot->columns, metadata_snapshot->partition_key, metadata_snapshot->primary_key, getContext(), allow_nullable_key);
         rows_ttl.expression->execute(block);
 
         // got the ttl values for each partition based on ttl expression

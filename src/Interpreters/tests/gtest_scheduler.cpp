@@ -53,8 +53,8 @@ struct MockPlanSegmentSender
 struct MockWorkerStatusManager : public DB::WorkerStatusManager
 {
     ~MockWorkerStatusManager() override = default;
-    DB::ThreadSafeMap<DB::WorkerId, DB::WorkerStatusExtra, DB::WorkerIdHash> data;
-    std::optional<DB::WorkerStatusExtra> getWorkerStatus(const DB::WorkerId & worker_id) override
+    DB::ThreadSafeMap<DB::WorkerId, DB::WorkerStatus, DB::WorkerIdHash> data;
+    std::optional<DB::WorkerStatus> getWorkerStatus(const DB::WorkerId & worker_id) override
     {
         return data.get(worker_id);
     }
@@ -114,8 +114,8 @@ SchedulerTestContext createSchedulerTestContext(size_t parallel_size, const std:
 
     result.mock_worker_status_manager = std::make_shared<MockWorkerStatusManager>();
     auto tp = std::chrono::system_clock::now();
-    DB::WorkerStatusExtra wrk_status(std::make_shared<DB::WorkerStatus>(), tp);
-    wrk_status.worker_status->register_time = 100;
+    DB::WorkerStatus wrk_status(DB::ResourceStatus(), tp);
+    wrk_status.resource_status.register_time = 100;
     result.mock_worker_status_manager->data.set(
         DB::WorkerId(result.cluster_nodes.vw_name, result.cluster_nodes.worker_group_id, result.cluster_nodes.all_workers[0].id),
         wrk_status);

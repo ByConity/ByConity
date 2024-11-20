@@ -68,6 +68,7 @@ TEST(ReadBufferFromNexusFSTest, Read)
     conf->setUInt64("nexus_fs.cache_size", 512 * 10);
     conf->setUInt64("nexus_fs.region_size", 512);
     conf->setUInt64("nexus_fs.segment_size", segment_size);
+    conf->setUInt64("nexus_fs.source_buffer_size", 4 * segment_size);
     conf->setUInt("nexus_fs.alloc_align_size", 32);
     conf->setUInt("nexus_fs.io_align_size", 32);
     conf->setUInt("nexus_fs.clean_regions_pool", 3);
@@ -264,9 +265,8 @@ TEST(ReadBufferFromNexusFSTest, Read)
     // readInto
     {
         constexpr int off = 256;
-        String data;
-        auto fake_source = std::make_unique<ReadIndirectBuffer>("file5", data);
-        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(fake_source), *nexus_fs);
+        auto source = std::make_unique<ReadIndirectBuffer>("file5", large_data);
+        ReadBufferFromNexusFS read_buffer(segment_size, false, std::move(source), *nexus_fs);
 
         char buffer[large_len - off + 5];
         memset(buffer, 0, large_len - off + 5);

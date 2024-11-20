@@ -974,10 +974,11 @@
     \
     M(AllWorkerSize, "Total worker size of worker group") \
     M(HealthWorkerSize, "Number of worker which can execute any type plan segment") \
-    M(HeavyLoadWorkerSize, "Number of worker which can only execute source plan segment") \
-    M(SourceOnlyWorkerSize, "Number of worker which can only execute source plan segment") \
     M(UnhealthWorkerSize, "Number of unhealthy worker") \
-    M(NotConnectedWorkerSize, "Number of not connected worker size") \
+    M(OpenWorkerSize, "Number of open worker") \
+    M(UnknownWorkerSize, "Number of unknown worker") \
+    M(HalfSelfCheckWorkerSize, "Number of checking status worker") \
+    M(HalfOtherCheckWorkerSize, "Number of  worker checked by other sql ") \
     M(SelectHealthWorkerMilliSeconds, "Total time for select health worker") \
     \
     M(PreloadSubmitTotalOps, "Total count of preload submit by writer node") \

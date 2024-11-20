@@ -19,10 +19,18 @@
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
+#include <Common/Exception.h>
 #include <Common/thread_local_rng.h>
+#include <Interpreters/Context.h>
+
+namespace CurrentMetrics
+{
+extern const Metric BackgroundVWPoolSchedulePoolTask;
+}
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
@@ -34,8 +42,39 @@ namespace ErrorCodes
 VirtualWarehousePool::VirtualWarehousePool(ContextPtr global_context_)
     : WithContext(global_context_), log(getLogger("VirtualWarehousePool"))
 {
+    schedule_pool.emplace(1, CurrentMetrics::BackgroundVWPoolSchedulePoolTask, "VWPool");
+    startRepeatTask(*schedule_pool);
 }
 
+void VirtualWarehousePool::startRepeatTask(BackgroundSchedulePool & pool_)
+{
+    task = pool_.createTask("VWPoolTask", [&] { doTask(); });
+    task->activateAndSchedule();
+}
+
+VirtualWarehousePool::~VirtualWarehousePool()
+{
+    task->deactivate();
+    schedule_pool.reset();
+}
+
+void VirtualWarehousePool::doTask()
+{
+    try
+    {
+        LOG_DEBUG(log, "Try update worker groups.");
+        auto all_vw = getAll();
+        for (auto & [_, vw] : all_vw)
+        {
+            vw->tryUpdateWorkerGroups(VirtualWarehouseHandleImpl::TryUpdate);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+    task->scheduleAfter(task_interval.load());
+}
 /// This is helper function to create handle inside pool instead of a lambda function
 VirtualWarehouseHandle VirtualWarehousePool::creatorImpl(const String & vw_name)
 {

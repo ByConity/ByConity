@@ -87,6 +87,16 @@ void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setti
         new_settings.cooldown_seconds_after_scaleup = *setting_changes.cooldown_seconds_after_scaleup;
     if (setting_changes.cooldown_seconds_after_scaledown)
         new_settings.cooldown_seconds_after_scaledown = *setting_changes.cooldown_seconds_after_scaledown;
+    if (setting_changes.recommended_concurrent_query_limit)
+        new_settings.recommended_concurrent_query_limit = *setting_changes.recommended_concurrent_query_limit;
+    if (setting_changes.health_worker_cpu_usage_threshold)
+        new_settings.health_worker_cpu_usage_threshold = *setting_changes.health_worker_cpu_usage_threshold;
+    if (setting_changes.circuit_breaker_open_to_halfopen_wait_seconds)
+        new_settings.circuit_breaker_open_to_halfopen_wait_seconds = *setting_changes.circuit_breaker_open_to_halfopen_wait_seconds;
+    if (setting_changes.unhealth_worker_recheck_wait_seconds)
+        new_settings.unhealth_worker_recheck_wait_seconds = *setting_changes.unhealth_worker_recheck_wait_seconds;
+    if (setting_changes.circuit_breaker_open_error_threshold)
+        new_settings.circuit_breaker_open_error_threshold = *setting_changes.circuit_breaker_open_error_threshold;
 
     LOG_TRACE(getLogger("VirtualWarehouse"), "update settings alter type {}", setting_changes.queue_alter_type);
     if (setting_changes.queue_alter_type == Protos::QueueAlterType::ADD_RULE)

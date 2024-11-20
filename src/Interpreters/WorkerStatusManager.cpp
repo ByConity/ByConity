@@ -1,3 +1,4 @@
+#include <atomic>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -9,71 +10,59 @@
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Poco/Util/AbstractConfiguration.h>
-namespace CurrentMetrics
+#include <Common/Logger.h>
+namespace ProfileEvents
 {
-extern const Metric BackgroundRMHeartbeatSchedulePoolTask;
+extern const Event AllWorkerSize;
+extern const Event HealthWorkerSize;
+extern const Event UnhealthWorkerSize;
+extern const Event OpenWorkerSize;
+extern const Event UnknownWorkerSize;
+extern const Event HalfSelfCheckWorkerSize;
+extern const Event HalfOtherCheckWorkerSize;
 }
+
 namespace DB
 {
-String WorkerStatus::toDebugString() const
+String ResourceStatus::toDebugString() const
 {
-    Protos::WorkerNodeResourceData pb_data;
-    fillProto(pb_data);
-    return pb_data.ShortDebugString();
+    return fmt::format("status {} score {} update_time {}", scheduler_status, scheduler_score, last_status_create_time);
 }
 
 WorkerGroupStatus::~WorkerGroupStatus()
 {
-    if (global_context)
+    for (const auto & half_open_id : half_open_workers)
     {
-        for (const auto & half_open_id : half_open_workers)
-        {
-            global_context->getWorkerStatusManager()->restoreWorkerNode(half_open_id);
-            LOG_DEBUG(getLogger("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
-        }
+        status_manager->restoreWorkerNode(half_open_id);
+        LOG_DEBUG(getLogger("WorkerStatusManager"), "restore half open worker {}", half_open_id.toString());
     }
 }
 
 void WorkerGroupStatus::calculateStatus()
 {
-    total_worker_size = workers_status.size() + unknown_worker_size;
-    for (auto & [_, worker_status] : workers_status)
-    {
-        switch (worker_status->scheduler_status)
-        {
-            case WorkerSchedulerStatus::Health:
-                health_worker_size++;
-                break;
-            case WorkerSchedulerStatus::OnlySource:
-                only_source_worker_size++;
-                break;
-            case WorkerSchedulerStatus::HeavyLoad:
-                heavy_load_worker_size++;
-                break;
-            case WorkerSchedulerStatus::Unhealth:
-                unhealth_worker_size++;
-                break;
-            default:
-                break;
-        }
-    }
+    if (getAvaibleSize() == 0)
+        status = GroupHealthType::Critical;
 
-    if (getAvaiableComputeWorkerSize() == 0)
-        status = WorkerGroupHealthStatus::Critical;
+    if (!half_open_workers.empty())
+        need_check.store(true, std::memory_order_relaxed);
 
+    ProfileEvents::increment(ProfileEvents::AllWorkerSize, total_count);
+    ProfileEvents::increment(ProfileEvents::UnhealthWorkerSize, unhealth_count);
+    ProfileEvents::increment(ProfileEvents::HealthWorkerSize, health_count);
+    ProfileEvents::increment(ProfileEvents::OpenWorkerSize, open_count);
+    ProfileEvents::increment(ProfileEvents::UnknownWorkerSize, unknown_count);
+    ProfileEvents::increment(ProfileEvents::HalfSelfCheckWorkerSize, half_open_checking_count);
+    ProfileEvents::increment(ProfileEvents::HalfOtherCheckWorkerSize, half_open_checking_by_other_count);
     LOG_DEBUG(
         getLogger("WorkerStatusManager"),
-        "allWorkerSize: {}  healthWorkerSize: {}  unhealthWorkerSize: {} \
-    HeavyLoadSize: {} onlySourceSize: {} unknowWorkerSize: {} notConnectedWorkerSize: {} halfOpenChecking: {}  halfOpen: {}",
-        total_worker_size,
-        health_worker_size,
-        unhealth_worker_size,
-        heavy_load_worker_size,
-        only_source_worker_size,
-        unknown_worker_size,
-        not_connected_worker_size,
-        half_open_workers_checking_size,
-        half_open_workers_size);
+        "all: {}  health: {}  unhealth: {} unknown: {}  other_checking: {}  checking: {} open: {}",
+        total_count,
+        health_count,
+        unhealth_count,
+        unknown_count,
+        half_open_checking_by_other_count,
+        half_open_checking_count,
+        open_count);
 }
 
 std::optional<std::vector<size_t>> WorkerGroupStatus::selectHealthNode(const HostWithPortsVec & host_ports_vec)
@@ -83,232 +72,172 @@ std::optional<std::vector<size_t>> WorkerGroupStatus::selectHealthNode(const Hos
     return filter_indices;
 }
 
-WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
-    : WithContext(context_), log(getLogger("WorkerStatusManager"))
-{
-    schedule_pool.emplace(1, CurrentMetrics::BackgroundRMHeartbeatSchedulePoolTask, "RMHeart");
-    startHeartbeat(*schedule_pool);
-}
-
-void WorkerStatusManager::shutdown()
-{
-    stop();
-    if (schedule_pool)
-        schedule_pool.reset();
-}
-
-WorkerStatusManager::~WorkerStatusManager()
-{
-    shutdown();
-}
-
-void WorkerStatusManager::heartbeat()
-{
-    LOG_DEBUG(log, "update worker status from rm heartbeat");
-    try
-    {
-        auto rm_client = getContext()->getResourceManagerClient();
-        if (!rm_client)
-        {
-            LOG_WARNING(log, "The client of ResourceManagement is not initialized");
-        }
-        else
-        {
-            std::vector<WorkerNodeResourceData> data;
-            rm_client->getAllWorkers(data);
-            if (data.empty())
-            {
-                LOG_WARNING(log, "No worker group found from RM");
-            }
-            else
-            {
-                auto cannot_update_workers = getWorkersCannotUpdateFromRM();
-                for (const auto & group_data : data)
-                {
-                    auto worker_id = WorkerStatusManager::getWorkerId(group_data.vw_name, group_data.worker_group_id, group_data.id);
-                    if (!cannot_update_workers.count(worker_id))
-                    {
-                        LOG_TRACE(log, "resource_data : " + group_data.toDebugString());
-                        LOG_TRACE(log, "update worker {} from rm", worker_id.ToString());
-                        Protos::WorkerNodeResourceData resource_info;
-                        group_data.fillProto(resource_info);
-                        updateWorkerNode(resource_info, WorkerStatusManager::UpdateSource::ComeFromRM);
-                    }
-                }
-            }
-        }
-    }
-    catch (...)
-    {
-        tryLogDebugCurrentException(__PRETTY_FUNCTION__);
-    }
-    task->scheduleAfter(heartbeat_interval.load());
-}
-
 void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData & resource_info, UpdateSource source)
 {
-    auto worker_status = std::make_shared<WorkerStatus>(resource_info);
-    worker_status->setSchedulerInfo(adaptive_scheduler_config);
+    ResourceStatus resource_status(
+        resource_info, recommended_concurrent_query_limit.load(std::memory_order_relaxed), health_worker_cpu_usage_threshold.load(std::memory_order_relaxed));
     auto id = getWorkerId(resource_info);
-    WorkerSchedulerStatus old_status{WorkerSchedulerStatus::Unknown};
-    auto new_status = worker_status->getStatus();
     auto now = std::chrono::system_clock::now();
-    bool need_callback = true;
-    global_extra_workers_status.updateEmplaceIfNotExist(
+    LOG_TRACE(log, "update worker id {} : {}", id.toString(), resource_info.ShortDebugString());
+    worker_status_map.updateEmplaceIfNotExist(
         id,
-        [new_status, &old_status, id, this, &now, &worker_status, &need_callback, &source](WorkerStatusExtra & val) {
+        [id, this, &now, &resource_status, source](WorkerStatus & val) {
             // Worker has restarted. We must put it ahead of status update.
-            // TODO(wangtao.vip): support source from worker.
-            if (worker_status->register_time > val.worker_status->register_time && source == UpdateSource::ComeFromRM)
+            if (resource_status.register_time > val.resource_status.register_time)
             {
-                getContext()->getCnchWorkerClientPools().getWorker(worker_status->host_ports, /*refresh=*/true);
-                RpcChannelPool::getInstance().getClient(
-                    worker_status->host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
-                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports, val.worker_status->register_time);
+                auto context_ptr = context.lock();
+                if (context_ptr)
+                {
+                    context_ptr->getCnchWorkerClientPools().getWorker(resource_status.host_ports, /*refresh=*/true);
+                    RpcChannelPool::getInstance().getClient(
+                        resource_status.host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
+                    context_ptr->getSegmentScheduler()->workerRestarted(id, resource_status.host_ports, resource_status.register_time);
+                }
+                
             }
-            if (worker_status->last_status_create_time > val.worker_status->last_status_create_time)
-            {
-                old_status = val.worker_status->getStatus();
-                val.worker_status = worker_status;
-                val.server_last_update_time = now;
+            val.server_last_update_time = now;
+            if (val.resource_status.last_status_create_time < resource_status.last_status_create_time)
+                val.resource_status = resource_status;
 
-                LOG_TRACE(log, "worker {} status changed : {}", worker_status->toDebugString(), (old_status != new_status));
-                if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
-                {
-                    LOG_TRACE(log, "worker: {} is back, set circuit breaker to half open.", id.ToString());
-                    val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::HalfOpen;
-                    val.circuit_break.fail_count = 0;
-                }
-            }
-            else
-                need_callback = false;
-        },
-        [this, new_status, source, &id, &now, &need_callback]() {
-            if (need_callback)
+            if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open
+                && std::chrono::duration_cast<std::chrono::seconds>(now - val.circuit_break.open_time).count() > circuit_breaker_open_to_halfopen_wait_seconds)
             {
-                auto is_new_status_unhealth = new_status == WorkerSchedulerStatus::Unhealth;
-                if (is_new_status_unhealth)
-                {
-                    LOG_TRACE(log, "add unhealth worker {} ", id.ToString());
-                    unhealth_workers_status.set(id, UnhealthWorkerStatus{WorkerSchedulerStatus::Unhealth, now});
-                }
-                else if (source == UpdateSource::ComeFromRM)
-                {
-                    unhealth_workers_status.erase(id);
-                    LOG_TRACE(log, "remove unhealth worker {}", id.ToString());
-                }
+                LOG_DEBUG(log, "worker: {} is back, set circuit breaker to half open.", id.toString());
+                val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::HalfOpen;
+                val.circuit_break.fail_count = 0;
+            }
+            if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen && source == UpdateSource::ComeFromWorker)
+            {
+                LOG_DEBUG(log, "worker: {} is back, close circuit breaker.", id.toString());
+                val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::Close;
+                val.circuit_break.fail_count = 0;
+                val.circuit_break.is_checking = false;
             }
         },
-        worker_status,
+        resource_status,
         now);
 }
 
 void WorkerStatusManager::setWorkerNodeDead(const WorkerId & key, int error_code)
 {
-    LOG_TRACE(log, "set worker: {} dead", key.ToString());
+    LOG_TRACE(log, "set worker: {} dead", key.toString());
     auto now = std::chrono::system_clock::now();
-    global_extra_workers_status.updateCallbackIfNotExist(
-        key,
-        [&key, this, error_code, &now](WorkerStatusExtra & val) {
-            if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
-            {
-                LOG_TRACE(log, "worker: {}'s circuit break is open, wait RM to restart this worker.", key.ToString());
-                return;
-            }
-            size_t error_weight = 1;
-            switch (error_code)
-            {
-                case EHOSTDOWN:
-                    error_weight = 20;
-                    break;
-                case ETIMEDOUT:
-                case ECONNREFUSED:
-                    error_weight = 5;
-                    break;
-                default:
-                    break;
-            }
-            val.circuit_break.fail_count += error_weight;
-            if (val.circuit_break.fail_count > CIRCUIT_BREAKER_THRESHOLD
-                || val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
-            {
-                LOG_TRACE(log, "worker: {}'s fail_count {} open circuit break.", key.ToString(), val.circuit_break.fail_count);
-                val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::Open;
-                val.worker_status = std::make_shared<WorkerStatus>();
-                val.worker_status->scheduler_status = WorkerSchedulerStatus::NotConnected;
-                val.circuit_break.fail_count = 0;
-                val.circuit_break.is_checking = false;
-                unhealth_workers_status.set(key, UnhealthWorkerStatus{WorkerSchedulerStatus::NotConnected, now});
-                LOG_TRACE(log, "add unhealth worker ", key.ToString());
-            }
-        },
-        [key](WorkerStatusExtra & new_val) {
-            new_val.worker_status = std::make_shared<WorkerStatus>();
-            new_val.worker_status->scheduler_status = WorkerSchedulerStatus::NotConnected;
-        });
-}
-
-UnhealthWorkerStatusMap WorkerStatusManager::getWorkersCannotUpdateFromRM()
-{
-    UnhealthWorkerStatusMap ret;
-    auto now = std::chrono::system_clock::now();
-    unhealth_workers_status.traverse([&ret, &now, this](const WorkerId & key, const UnhealthWorkerStatus & worker_info) {
-        if (worker_info.status == WorkerSchedulerStatus::NotConnected)
+    worker_status_map.update(key, [&key, this, error_code, &now](WorkerStatus & val) {
+        if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
         {
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - worker_info.update_time).count()
-                < adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS)
-                ret.emplace(key, worker_info);
+            LOG_TRACE(log, "worker: {}'s circuit break is open, wait RM to restart this worker.", key.toString());
+            return;
+        }
+        size_t error_weight = 1;
+        switch (error_code)
+        {
+            case EHOSTDOWN:
+                error_weight = circuit_breaker_open_error_threshold.load(std::memory_order_relaxed) + 1;
+                break;
+            case ETIMEDOUT:
+            case ECONNREFUSED:
+                error_weight = 1;
+                break;
+            default:
+                break;
+        }
+        val.circuit_break.fail_count += error_weight;
+        if (val.circuit_break.fail_count > circuit_breaker_open_error_threshold.load(std::memory_order_relaxed)
+            || val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
+        {
+            LOG_TRACE(log, "worker: {}'s fail_count {} open circuit break.", key.toString(), val.circuit_break.fail_count);
+            val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::Open;
+            val.circuit_break.fail_count = 0;
+            val.circuit_break.is_checking = false;
+            val.circuit_break.open_time = now;
+            LOG_TRACE(log, "add unhealth worker {}", key.toString());
         }
     });
-
-    return ret;
 }
 
 void WorkerStatusManager::restoreWorkerNode(const WorkerId & key)
 {
-    global_extra_workers_status.eraseWithCallback(key, [&key, this]() { unhealth_workers_status.erase(key); });
-}
-
-void WorkerStatusManager::CloseCircuitBreaker(const WorkerId & key)
-{
-    global_extra_workers_status.update(key, [this, &key](WorkerStatusExtra & val) {
+    worker_status_map.update(key, [&](WorkerStatus & val) {
         if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
         {
-            LOG_DEBUG(log, "worker: {} is back close circuit break.", key.ToString());
-            val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::Close;
             val.circuit_break.is_checking = false;
-            val.circuit_break.fail_count = 0;
         }
     });
 }
 
-std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(const String & vw_name, const String & wg_name)
+std::shared_ptr<WorkerGroupStatus>
+WorkerStatusManager::getWorkerGroupStatus(const std::vector<WorkerId> & worker_ids, SchedulerMode mode)
 {
-    auto worker_id_vec = vw_worker_list_map.get(vw_name + "." + wg_name);
-    if (!worker_id_vec)
-        return nullptr;
-    return getWorkerGroupStatus(
-        nullptr, **worker_id_vec, vw_name, wg_name, [](const String &, const String &, const WorkerId & id) { return id; }, false);
+    auto worker_group_status = std::make_shared<WorkerGroupStatus>(shared_from_this());
+    worker_group_status->total_count = worker_ids.size();
+    worker_group_status->filter_indices.reserve(worker_ids.size());
+    worker_group_status->workers_resource_status.reserve(worker_ids.size());
+    auto now = std::chrono::system_clock::now();
+
+    for (size_t idx = 0; idx < worker_ids.size(); ++idx)
+    {
+        const auto & id = worker_ids[idx];
+        bool exist = false;
+        worker_status_map.update(id, [&](WorkerStatus & val) {
+            exist = true;
+            LOG_TRACE(log, "get worker group status : {}", val.toDebugString());
+            if (likely(val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Close))
+            {
+                if (val.resource_status.getStatus() == ScheduleType::Unhealth)
+                    worker_group_status->unhealth_count++;
+                else
+                    worker_group_status->health_count++;
+
+                if (mode == SchedulerMode::SKIP_SLOW_NODE)
+                {
+                    if (val.resource_status.getStatus() == ScheduleType::Unhealth
+                        && std::chrono::duration_cast<std::chrono::seconds>(now - val.server_last_update_time).count()
+                            < unhealth_worker_recheck_wait_seconds)
+                        return;
+                }
+
+                worker_group_status->filter_indices.emplace_back(idx);
+                worker_group_status->workers_resource_status.emplace_back(val.resource_status);
+            }
+            else if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
+            {
+                if (val.circuit_break.is_checking)
+                {
+                    LOG_DEBUG(log, "half open worker {} is checking", id.toString());
+                    worker_group_status->half_open_checking_by_other_count++;
+                }
+                else
+                {
+                    LOG_DEBUG(log, "check half open worker {}", id.toString());
+                    val.circuit_break.is_checking = true;
+                    worker_group_status->half_open_checking_count++;
+                    worker_group_status->half_open_workers.emplace(id);
+                    worker_group_status->workers_resource_status.emplace_back(val.resource_status);
+                    worker_group_status->filter_indices.emplace_back(idx);
+                }
+            }
+            else if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
+            {
+                worker_group_status->open_count++;
+                if (std::chrono::duration_cast<std::chrono::seconds>(now - val.circuit_break.open_time).count() > circuit_breaker_open_to_halfopen_wait_seconds)
+                {
+                    LOG_TRACE(log, "worker: {} is timeout, set circuit breaker to half open.", id.toString());
+                    val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::HalfOpen;
+                    val.circuit_break.fail_count = 0;
+                }
+            }
+        });
+        if (!exist)
+        {
+            worker_group_status->unknown_count++;
+            worker_group_status->filter_indices.emplace_back(idx);
+            worker_group_status->workers_resource_status.emplace_back(std::nullopt);
+            LOG_DEBUG(log, "can't find worker node : {}'s status", id.toString());
+        }
+    }
+    worker_group_status->calculateStatus();
+    return worker_group_status;
 }
 
-std::optional<WorkerStatusExtra> WorkerStatusManager::getWorkerStatus(const WorkerId & worker_id)
-{
-    return global_extra_workers_status.get(worker_id);
-}
-
-void WorkerStatusManager::updateConfig(const ASConfiguration & as_config)
-{
-    LOG_DEBUG(log, "update WorkerStatusManager config.");
-    adaptive_scheduler_config.MEM_WEIGHT = as_config.mem_weight.safeGet();
-    adaptive_scheduler_config.QUERY_NUM_WEIGHT = as_config.query_num_weight.safeGet();
-    adaptive_scheduler_config.MAX_PLAN_SEGMENT_SIZE = as_config.max_plan_segment_size.safeGet();
-    adaptive_scheduler_config.UNHEALTH_SEGMENT_SIZE = as_config.unhealth_segment_size.safeGet();
-    adaptive_scheduler_config.HEAVY_LOAD_THRESHOLD = as_config.heavy_load_threshold.safeGet();
-    adaptive_scheduler_config.ONLY_SOURCE_THRESHOLD = as_config.only_source_threshold.safeGet();
-    adaptive_scheduler_config.UNHEALTH_THRESHOLD = as_config.unhealth_threshold.safeGet();
-    adaptive_scheduler_config.NEED_RESET_SECONDS = as_config.need_reset_seconds.safeGet();
-    adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS = as_config.unhealth_recheck_seconds.safeGet();
-    heartbeat_interval = as_config.heartbeat_interval.safeGet();
-}
 
 }

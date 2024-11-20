@@ -18,6 +18,7 @@ namespace LabelledMetrics
     const extern Metric VwQuery;
     const extern Metric UnlimitedQuery;
     const extern Metric QueriesFailed;
+    const extern Metric ErrorCodes;
 }
 
 namespace ProfileEvents
@@ -598,7 +599,6 @@ namespace ProfileEvents
     extern const Event CnchReadDataMicroSeconds;
     extern const Event PartsToAttach;
     extern const Event ConnectionPoolIsFullMicroseconds;
-    extern const Event HeavyLoadWorkerSize;
     extern const Event AllWorkerSize;
 }
 
@@ -1305,7 +1305,6 @@ private:
         ProfileEvents::CnchReadDataMicroSeconds,
         ProfileEvents::PartsToAttach,
         ProfileEvents::ConnectionPoolIsFullMicroseconds,
-        ProfileEvents::HeavyLoadWorkerSize,
         ProfileEvents::AllWorkerSize,
     };
     const std::vector<CurrentMetrics::Metric> current_metrics_list =
@@ -1444,6 +1443,7 @@ private:
     const String sd_request_metric{ProfileEvents::getSnakeName(ProfileEvents::SDRequest)};
     const String profile_event_query_metric{ProfileEvents::getSnakeName(ProfileEvents::Query)};
     const String failed_queries_metrics{LabelledMetrics::getSnakeName(LabelledMetrics::QueriesFailed)};
+    const String error_code_metrics{LabelledMetrics::getSnakeName(LabelledMetrics::ErrorCodes)};
 };
 
 }

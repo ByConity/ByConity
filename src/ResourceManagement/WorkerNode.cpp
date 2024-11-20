@@ -118,6 +118,7 @@ void WorkerNode::update(const WorkerNodeResourceData & data, const size_t regist
 
     cpu_usage.store(data.cpu_usage, std::memory_order_relaxed);
     cpu_usage_1min.store(data.cpu_usage_1min, std::memory_order_relaxed);
+    cpu_usage_10sec.store(data.cpu_usage_10sec, std::memory_order_relaxed);
     memory_usage.store(data.memory_usage, std::memory_order_relaxed);
     memory_usage_1min.store(data.memory_usage_1min, std::memory_order_relaxed);
     memory_available.store(data.memory_available, std::memory_order_relaxed);
@@ -171,6 +172,8 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
     res.worker_group_id = worker_group_id;
 
     res.cpu_usage = cpu_usage.load(std::memory_order_relaxed);
+    res.cpu_usage_1min = cpu_usage_1min.load(std::memory_order_relaxed);
+    res.cpu_usage_10sec = cpu_usage_10sec.load(std::memory_order_relaxed);
     res.memory_usage = memory_usage.load(std::memory_order_relaxed);
     res.memory_available = memory_available.load(std::memory_order_relaxed);
     res.disk_space = disk_space.load(std::memory_order_relaxed);
@@ -227,6 +230,7 @@ void WorkerNode::fillProto(Protos::WorkerNodeResourceData & entry) const
     entry.set_manipulation_num(manipulation_num.load(std::memory_order_relaxed));
     entry.set_cpu_usage(cpu_usage.load(std::memory_order_relaxed));
     entry.set_cpu_usage_1min(cpu_usage_1min.load(std::memory_order_relaxed));
+    entry.set_cpu_usage_10sec(cpu_usage_10sec.load(std::memory_order_relaxed));
     entry.set_memory_usage(memory_usage.load(std::memory_order_relaxed));
     entry.set_memory_usage_1min(memory_usage_1min.load(std::memory_order_relaxed));
     entry.set_disk_space(disk_space.load(std::memory_order_relaxed));

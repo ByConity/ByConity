@@ -115,10 +115,16 @@ void VirtualWarehouseSettings::fillProto(Protos::VirtualWarehouseSettings & pb_s
     if (cooldown_seconds_after_scaledown)
         pb_settings.set_cooldown_seconds_after_scaledown(cooldown_seconds_after_scaledown);
 
-    for (auto & queue_data : queue_datas)
+    for (const auto & queue_data : queue_datas)
     {
         queue_data.fillProto(*pb_settings.add_queue_datas());
     }
+
+    pb_settings.set_unhealth_worker_recheck_wait_seconds(unhealth_worker_recheck_wait_seconds);
+    pb_settings.set_circuit_breaker_open_error_threshold(circuit_breaker_open_error_threshold);
+    pb_settings.set_recommended_concurrent_query_limit(recommended_concurrent_query_limit);
+    pb_settings.set_health_worker_cpu_usage_threshold(health_worker_cpu_usage_threshold);
+    pb_settings.set_circuit_breaker_open_to_halfopen_wait_seconds(circuit_breaker_open_to_halfopen_wait_seconds);
 }
 
 void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings)
@@ -149,6 +155,16 @@ void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSett
         queue_datas.resize(queue_datas.size() + 1);
         queue_datas.back().parseFromProto(pb_queue_data);
     }
+    if (pb_settings.has_unhealth_worker_recheck_wait_seconds())
+        unhealth_worker_recheck_wait_seconds = pb_settings.unhealth_worker_recheck_wait_seconds();
+    if (pb_settings.has_recommended_concurrent_query_limit())
+        recommended_concurrent_query_limit = pb_settings.recommended_concurrent_query_limit();
+    if (pb_settings.has_health_worker_cpu_usage_threshold())
+        health_worker_cpu_usage_threshold = pb_settings.health_worker_cpu_usage_threshold();
+    if (pb_settings.has_circuit_breaker_open_to_halfopen_wait_seconds())
+        circuit_breaker_open_to_halfopen_wait_seconds = pb_settings.circuit_breaker_open_to_halfopen_wait_seconds();
+    if (pb_settings.has_circuit_breaker_open_error_threshold())
+        circuit_breaker_open_error_threshold = pb_settings.circuit_breaker_open_error_threshold();
 }
 
 void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const
@@ -225,6 +241,16 @@ void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSetti
     pb_settings.set_queue_alter_type(queue_alter_type);
     if (queue_data)
         queue_data->fillProto(*pb_settings.mutable_queue_data());
+    if (unhealth_worker_recheck_wait_seconds)
+        pb_settings.set_unhealth_worker_recheck_wait_seconds(*unhealth_worker_recheck_wait_seconds);
+    if (recommended_concurrent_query_limit)
+        pb_settings.set_recommended_concurrent_query_limit(*recommended_concurrent_query_limit);
+    if (health_worker_cpu_usage_threshold)
+        pb_settings.set_health_worker_cpu_usage_threshold(*health_worker_cpu_usage_threshold);
+    if (circuit_breaker_open_to_halfopen_wait_seconds)
+        pb_settings.set_circuit_breaker_open_to_halfopen_wait_seconds(*circuit_breaker_open_to_halfopen_wait_seconds);
+    if (circuit_breaker_open_error_threshold)
+        pb_settings.set_circuit_breaker_open_error_threshold(*circuit_breaker_open_error_threshold);
 }
 
 void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings)
@@ -304,6 +330,16 @@ void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehous
         queue_data = std::make_optional<QueueData>();
         queue_data->parseFromProto(pb_settings.queue_data());
     }
+    if (pb_settings.has_recommended_concurrent_query_limit())
+        recommended_concurrent_query_limit = pb_settings.recommended_concurrent_query_limit();
+    if (pb_settings.has_unhealth_worker_recheck_wait_seconds())
+        unhealth_worker_recheck_wait_seconds = pb_settings.unhealth_worker_recheck_wait_seconds();
+    if (pb_settings.has_health_worker_cpu_usage_threshold())
+        health_worker_cpu_usage_threshold = pb_settings.health_worker_cpu_usage_threshold();
+    if (pb_settings.has_circuit_breaker_open_to_halfopen_wait_seconds())
+        circuit_breaker_open_to_halfopen_wait_seconds = pb_settings.circuit_breaker_open_to_halfopen_wait_seconds();
+    if (pb_settings.has_circuit_breaker_open_error_threshold())
+        circuit_breaker_open_error_threshold = pb_settings.circuit_breaker_open_error_threshold();
 }
 
 void VirtualWarehouseData::fillProto(Protos::VirtualWarehouseData & pb_data) const
@@ -386,40 +422,6 @@ std::string WorkerNodeResourceData::serializeAsString() const
     return pb_data.SerializeAsString();
 }
 
-WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceData & resource_info)
-{
-    id = resource_info.id();
-    host_ports = RPCHelpers::createHostWithPorts(resource_info.host_ports());
-
-    cpu_usage = resource_info.cpu_usage();
-    memory_usage = resource_info.memory_usage();
-    memory_available = resource_info.memory_available();
-    disk_space = resource_info.disk_space();
-    query_num = resource_info.query_num();
-
-    if (resource_info.has_cpu_limit())
-        cpu_limit = resource_info.cpu_limit();
-    if (resource_info.has_memory_limit())
-        memory_limit = resource_info.memory_limit();
-
-    if (resource_info.has_vw_name())
-        vw_name = resource_info.vw_name();
-
-    if (resource_info.has_worker_group_id())
-        worker_group_id = resource_info.worker_group_id();
-
-    if (resource_info.has_last_update_time())
-        last_update_time = resource_info.last_update_time();
-
-    if (resource_info.has_register_time())
-        register_time = resource_info.register_time();
-
-    if (resource_info.has_last_status_create_time())
-        last_status_create_time = resource_info.last_status_create_time();
-    if (resource_info.has_state())
-        state = WorkerState(resource_info.state());
-}
-
 void WorkerNodeResourceData::parseFromString(const std::string & s)
 {
     Protos::WorkerNodeResourceData pb_data;
@@ -447,6 +449,8 @@ void WorkerNodeResourceData::parseFromString(const std::string & s)
     reserved_cpu_cores = pb_data.reserved_cpu_cores();
     register_time = pb_data.register_time();
     state = WorkerState(pb_data.state());
+    last_status_create_time = pb_data.last_status_create_time();
+    cpu_usage_10sec = pb_data.cpu_usage_10sec();
 }
 
 void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource_info) const
@@ -486,6 +490,46 @@ void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource
     if (register_time)
         resource_info.set_register_time(register_time);
     resource_info.set_state(static_cast<uint32_t>(state));
+    if (last_status_create_time)
+        resource_info.set_last_status_create_time(last_status_create_time);
+    resource_info.set_cpu_usage_10sec(cpu_usage_10sec);
+}
+
+WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceData & resource_info)
+{
+    id = resource_info.id();
+    host_ports = RPCHelpers::createHostWithPorts(resource_info.host_ports());
+
+    cpu_usage = resource_info.cpu_usage();
+    cpu_usage_1min = resource_info.cpu_usage_1min();
+    cpu_usage_10sec = resource_info.cpu_usage_10sec();
+    memory_usage = resource_info.memory_usage();
+    memory_usage_1min = resource_info.memory_usage_1min();
+    memory_available = resource_info.memory_available();
+    disk_space = resource_info.disk_space();
+    query_num = resource_info.query_num();
+
+    if (resource_info.has_cpu_limit())
+        cpu_limit = resource_info.cpu_limit();
+    if (resource_info.has_memory_limit())
+        memory_limit = resource_info.memory_limit();
+
+    if (resource_info.has_vw_name())
+        vw_name = resource_info.vw_name();
+
+    if (resource_info.has_worker_group_id())
+        worker_group_id = resource_info.worker_group_id();
+
+    if (resource_info.has_last_update_time())
+        last_update_time = resource_info.last_update_time();
+
+    if (resource_info.has_register_time())
+        register_time = resource_info.register_time();
+
+    if (resource_info.has_last_status_create_time())
+        last_status_create_time = resource_info.last_status_create_time();
+    if (resource_info.has_state())
+        state = WorkerState(resource_info.state());
 }
 
 WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::WorkerNodeResourceData & resource_info)
@@ -496,6 +540,7 @@ WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::Wor
 
     res.cpu_usage = resource_info.cpu_usage();
     res.cpu_usage_1min = resource_info.cpu_usage_1min();
+    res.cpu_usage_10sec = resource_info.cpu_usage_10sec();
     res.memory_usage = resource_info.memory_usage();
     res.memory_usage_1min = resource_info.memory_usage_1min();
     res.memory_available = resource_info.memory_available();

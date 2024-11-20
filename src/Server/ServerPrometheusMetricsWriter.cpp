@@ -248,6 +248,10 @@ void ServerPrometheusMetricsWriter::writeLabelledMetrics(WriteBuffer & wb)
                 key = String(PROFILE_EVENTS_PREFIX) + failed_queries_metrics + TOTAL_SUFFIX;
                 metric_doc = String(LabelledMetrics::getDocumentation(LabelledMetrics::QueriesFailed));
             }
+            else if (metric == LabelledMetrics::ErrorCodes)
+            {
+                key = String(PROFILE_EVENTS_PREFIX) + error_code_metrics + TOTAL_SUFFIX;
+            }
             else
             {
                return;
@@ -264,7 +268,6 @@ void ServerPrometheusMetricsWriter::writeLabelledMetrics(WriteBuffer & wb)
         {
             for (const auto & item : labelled_counter)
             {
-                
                 MetricLabels labels = item.first;
                 LabelledMetrics::Count counter = item.second;
 

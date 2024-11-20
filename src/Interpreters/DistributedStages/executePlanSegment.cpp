@@ -72,7 +72,7 @@ void executePlanSegmentInternal(
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
     const auto & settings = context->getSettingsRef();
-    if (settings.debug_plan_generation)
+    if (settings.query_dry_run_mode == QueryDryRunMode::SKIP_EXECUTE_SEGMENT)
         return;
 
     bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode || settings.report_segment_profiles;
@@ -104,16 +104,21 @@ static void OnSendPlanSegmentCallback(
     std::shared_ptr<RpcClient> rpc_channel,
     WorkerStatusManagerPtr worker_status_manager,
     AsyncContextPtr async_context,
-    WorkerId worker_id)
+    WorkerId worker_id,
+    WorkerGroupStatusPtr worker_group_status)
 {
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
     std::unique_ptr<Protos::ExecutePlanSegmentResponse> response_guard(response);
 
-    if (response->has_exception() || cntl->Failed())
-        worker_status_manager->setWorkerNodeDead(worker_id, cntl->ErrorCode());
-    else if (response->has_worker_resource_data())
-        worker_status_manager->updateWorkerNode(response->worker_resource_data(), WorkerStatusManager::UpdateSource::ComeFromWorker);
-
+    if (worker_status_manager && worker_group_status)
+    {
+        if (response->has_exception() || cntl->Failed())
+            worker_status_manager->setWorkerNodeDead(worker_id, cntl->ErrorCode());
+        else if (response->has_worker_resource_data())
+            worker_status_manager->updateWorkerNode(response->worker_resource_data(), WorkerStatusManager::UpdateSource::ComeFromWorker);
+        if (worker_group_status->needCheckHalfOpenWorker())
+            worker_group_status->removeHalfOpenWorker(worker_id);
+    }
     rpc_channel->checkAliveWithController(*cntl);
     AsyncContext::AsyncResult result;
     if (cntl->Failed())
@@ -132,7 +137,7 @@ static void OnSendPlanSegmentCallback(
     }
     else
     {
-        LOG_TRACE(getLogger("executePlanSegment"), "Send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
+        LOG_TRACE(getLogger("executePlanSegment"), "Send plansegment to {} success , response {}", butil::endpoint2str(cntl->remote_side()).c_str(),response->ShortDebugString());
         async_context->asyncComplete(cntl->call_id(), result);
     }
 }
@@ -238,7 +243,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     cntl->request_attachment().append(attachment.movable());
     cntl->set_timeout_ms(context.getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds());
     google::protobuf::Closure * done = brpc::NewCallback(
-        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id);
+        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id, context.getWorkerGroupStatusPtr());
     async_context->addCallId(call_id);
     manager_stub.submitPlanSegment(cntl, &request, response, done);
 }
@@ -283,7 +288,7 @@ void executePlanSegmentsRemotely(
     auto call_id = cntl->call_id();
     cntl->request_attachment().append(attachment.movable());
     google::protobuf::Closure * done = brpc::NewCallback(
-        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id);
+        &OnSendPlanSegmentCallback, response, cntl, std::move(rpc_channel), context.getWorkerStatusManager(), async_context, worker_id, context.getWorkerGroupStatusPtr());
     async_context->addCallId(call_id);
     manager_stub.submitPlanSegments(cntl, &request, response, done);
 }

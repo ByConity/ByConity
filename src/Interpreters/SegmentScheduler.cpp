@@ -747,7 +747,7 @@ PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & quer
 void SegmentScheduler::workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time)
 {
     // Is there any better solution than iteration?
-    LOG_TRACE(log, "Worker {} with register time {} restarted, notify schedulers who care.", id.ToString(), register_time);
+    LOG_TRACE(log, "Worker {} with register time {} restarted, notify schedulers who care.", id.toString(), register_time);
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     for (auto & iter : bsp_scheduler_map)
     {

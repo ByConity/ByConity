@@ -49,6 +49,7 @@ engine = CnchMergeTree
 partition by k
 order by m;
 
+set overwrite_current_file = 0;
 drop table if exists ext_s3_table_4;
 create table ext_s3_table_4
 (

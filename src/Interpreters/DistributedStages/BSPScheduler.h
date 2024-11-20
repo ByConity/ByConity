@@ -113,8 +113,15 @@ class BSPScheduler : public Scheduler
         void insert(const AddressInfo & address, const WorkerId & worker_id, const PlanSegmentInstanceId & instance_id)
         {
             worker_to_running_instances[address].insert(instance_id);
-            std::optional<WorkerStatusExtra> status = worker_status_manager->getWorkerStatus(worker_id);
-            running_instance_epoch[instance_id] = status.has_value() ? status->worker_status->register_time : 0;
+            if (worker_status_manager)
+            {
+                std::optional<WorkerStatus> status = worker_status_manager->getWorkerStatus(worker_id);
+                running_instance_epoch[instance_id] = status.has_value() ? status->resource_status.register_time : 0;
+            }
+            else
+            {
+                running_instance_epoch[instance_id] = 0;
+            }
         }
         void erase(const AddressInfo & address, const PlanSegmentInstanceId & instance_id)
         {
@@ -215,6 +222,7 @@ protected:
     bool addBatchTask(BatchTaskPtr batch_task) override;
 
 private:
+
     bool postEvent(std::shared_ptr<ScheduleEvent> event);
     bool postHighPriorityEvent(std::shared_ptr<ScheduleEvent> event);
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);

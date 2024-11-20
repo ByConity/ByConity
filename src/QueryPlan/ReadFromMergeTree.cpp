@@ -1352,6 +1352,9 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             result.sampling.use_sampling,
             result.sampling.relative_sample_size);
 
+        if (settings.query_dry_run_mode == QueryDryRunMode::SKIP_READ_PARTS)
+            result.parts_with_ranges.clear();
+
         result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByIntermediateResultCache(
             data.getStorageID(),
             query_info,

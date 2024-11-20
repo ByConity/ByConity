@@ -47,7 +47,6 @@ struct PlanSegmentContext
     size_t shard_number = 0;
     String cluster_name;
     PlanSegmentTree * plan_segment_tree;
-    std::optional<size_t> health_parallel;
     size_t getSegmentId() { return id++; }
 };
 

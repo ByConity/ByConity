@@ -395,7 +395,7 @@ void ColumnMap::getExtremes(Field & min, Field & max) const
 
 void ColumnMap::forEachSubcolumn(MutableColumnCallback callback)
 {
-    nested->forEachSubcolumn(callback);
+    callback(nested);
 }
 
 void ColumnMap::forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback)

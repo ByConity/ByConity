@@ -6,6 +6,7 @@ CREATE TABLE p3_source_prune_70000 (`a` String, `b` String) ENGINE = CnchMergeTr
 CREATE TABLE p4_source_prune_70000 (`a` String, `b` String) ENGINE = CnchMergeTree PARTITION BY a ORDER BY b;
 
 set enable_optimizer=1;
+set scheduler_mode='skip_unreachable_node';
 set enable_prune_source_plan_segment=1;
 
 select 'union empty table';

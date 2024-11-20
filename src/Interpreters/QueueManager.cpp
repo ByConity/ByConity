@@ -54,32 +54,6 @@ void QueueManagerTriggerTask::threadFunc()
     }
 }
 
-ResourceQeueueThrottler::ResourceQeueueThrottler(ContextPtr context_) : WithContext(context_)
-{
-}
-
-bool ResourceQeueueThrottler::isThrottling(QueueInfo * queue_info)
-{
-    auto context = getContext();
-    auto worker_status = context->getWorkerStatusManager()->getWorkerGroupStatus(queue_info->vw_name, queue_info->wg_name);
-    if (worker_status == nullptr)
-    {
-        LOG_DEBUG(
-            getLogger("QueueManager"),
-            "{} ResourceQeueueThrottler {}.{} is nullptr",
-            queue_info->query_id,
-            queue_info->vw_name,
-            queue_info->wg_name);
-        return false;
-    }
-    if (worker_status->getWorkerGroupHealth() == WorkerGroupHealthStatus::Critical)
-    {
-        LOG_TRACE(getLogger("QueueManager"), "{} ResourceQeueueThrottler throttle", queue_info->query_id);
-        return true;
-    }
-    return false;
-}
-
 void VWConcurrencyQeueueThrottler::release(const String & vw)
 {
     std::unique_lock lk(mutex);
@@ -155,7 +129,6 @@ QueueManager::QueueManager(ContextWeakMutablePtr context_) : WithContext(context
     queue_manager_trigger_task = std::make_unique<QueueManagerTriggerTask>(*schedule_pool, this, 100, "QueueTask");
     queue_manager_trigger_task->start();
     vw_concurrency_throttler = std::make_shared<VWConcurrencyQeueueThrottler>(this);
-    throttlers.emplace_back(std::make_shared<ResourceQeueueThrottler>(getContext()));
     throttlers.push_back(vw_concurrency_throttler);
 }
 

@@ -65,6 +65,7 @@
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 #include <algorithm>
 #include <memory>
@@ -1422,6 +1423,31 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     for (const auto & grouping_set : group_by_analysis.grouping_sets)
         process_grouping_set(grouping_set);
+
+    if (!context->getSettingsRef().only_full_group_by)
+    {
+        auto name_to_types_before_group_by = builder.getOutputNamesToTypes();
+        const auto & field_symbols_before_group = builder.getFieldSymbolInfos();
+        for (size_t i = 0; i < field_symbols_before_group.size(); ++i)
+        {
+            const auto & field_symbol = field_symbols_before_group.at(i).primary_symbol;
+            if (!field_symbol.empty() && visible_fields.at(i).primary_symbol.empty() && name_to_types_before_group_by.contains(field_symbol))
+            {
+                Array parameters;
+                AggregateFunctionProperties properties;
+                DataTypes data_types{name_to_types_before_group_by.at(field_symbol)};
+                AggregateFunctionPtr any_agg_fun = AggregateFunctionFactory::instance().get("any", data_types, parameters, properties);
+                AggregateDescription any_agg_func_desc;
+                any_agg_func_desc.function = any_agg_fun;
+                auto any_column_name = context->getSymbolAllocator()->newSymbol(field_symbol);
+                any_agg_func_desc.column_name = any_column_name;
+                any_agg_func_desc.argument_names = {field_symbol};
+                any_agg_func_desc.parameters = parameters;
+                aggregate_descriptions.push_back(any_agg_func_desc);
+                visible_fields[i] = any_column_name;
+            }
+        }
+    }
 
     builder.withNewMappings(visible_fields, complex_expressions);
 

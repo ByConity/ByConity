@@ -307,7 +307,6 @@ void tryQueueQuery(ContextMutablePtr context, ASTPtr & query_ast)
         auto query_id = context->getCurrentQueryId();
         const auto & vw_name = worker_group_handler->getVWName();
         const auto & wg_name = worker_group_handler->getID();
-        context->getWorkerStatusManager()->updateVWWorkerList(worker_group_handler->getHostWithPortsVec(), vw_name, wg_name);
         auto queue_info = std::make_shared<QueueInfo>(query_id, vw_name, wg_name, context);
         auto queue_result = query_queue->enqueue(queue_info, context->getSettingsRef().query_queue_timeout_ms);
         if (queue_result == QueueResultStatus::QueueSuccess)
@@ -1208,7 +1207,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
             {
-                if (!settings.enable_execute_query)
+                if (settings.query_dry_run_mode == QueryDryRunMode::SKIP_EXECUTE_QUERY)
                 {
                     Block block;
                     auto warning_column = ColumnString::create();

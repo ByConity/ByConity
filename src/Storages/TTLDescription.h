@@ -89,7 +89,7 @@ struct TTLDescription
     /// execute the ttl_expression, it will throw required column 'xxx' not found exception because we construct the source block
     /// from partition value, which only contains column 'toDate(xxx)'. To fix this, we can replace the ASTFunction in
     /// the TTL with ASTIdentifier when the function shows up in partition definition.
-    static void tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context);
+    static void tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context, bool allow_nullable_key = false);
 
     TTLDescription() = default;
     TTLDescription(const TTLDescription & other);

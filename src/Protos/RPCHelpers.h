@@ -218,6 +218,7 @@ namespace DB::RPCHelpers
             error_code = cntl->ErrorCode();
             RPCHelpers::assertController(*cntl);
             RPCHelpers::checkResponse(*response);
+            handler->addWorker(worker_id);
         }
         catch (...)
         {

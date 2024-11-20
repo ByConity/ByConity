@@ -138,7 +138,7 @@ size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t min_bytes, size_
 
     if (bytes_read)
     {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read, Metrics::MetricType::Counter);
     }
 
     return bytes_read;

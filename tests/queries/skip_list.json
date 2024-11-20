@@ -658,7 +658,6 @@
         "02981_vertical_merges_lc_memory_usage",
         /// Code: 57 -- Table xxx already exists.
         "40023_mv_with_topn_filtering",
-        "01007_ttl_create_nullable_date_in_mysql",
         /// Code: 36 -- Dictionary xxx not found
         "01676_range_hashed_dictionary_ck233",
         "01682_cache_dictionary_complex_key_ck233",
