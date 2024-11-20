@@ -59,9 +59,6 @@ DiskSelector::DiskSelector(const Poco::Util::AbstractConfiguration & config, con
 
     constexpr auto default_disk_name = "default";
     bool has_default_disk = false;
-#if USE_CLOUDFS
-    Strings cloudfs_disks;
-#endif
     for (const auto & disk_name : keys)
     {
         if (!std::all_of(disk_name.begin(), disk_name.end(), isWordCharASCII))
@@ -71,25 +68,10 @@ DiskSelector::DiskSelector(const Poco::Util::AbstractConfiguration & config, con
             has_default_disk = true;
 
         auto disk_config_prefix = config_prefix + "." + disk_name;
-#if USE_CLOUDFS
-        if (config.getString(disk_config_prefix + ".type", "") == "cfs")
-        {
-            cloudfs_disks.emplace_back(disk_name);
-            continue;
-        }
-#endif
 
         disks.emplace(disk_name, factory.create(disk_name, config, disk_config_prefix, context, disks));
     }
 
-    /// DiskCloudFS depends on its ufs disk, thus it must be initialized after all other disks.
-#if USE_CLOUDFS
-    for (auto & disk_name : cloudfs_disks)
-    {
-        auto disk_config_prefix = config_prefix + "." + disk_name;
-        disks.emplace(disk_name, factory.create(disk_name, config, disk_config_prefix, context, disks));
-    }
-#endif
     if (!has_default_disk)
         disks.emplace(default_disk_name, std::make_shared<DiskLocal>(default_disk_name, context->getPath(), DiskStats{}));
 
