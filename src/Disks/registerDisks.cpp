@@ -43,10 +43,6 @@ void registerDiskHDFS(DiskFactory & factory);
 void registerDiskByteHDFS(DiskFactory & factory);
 #endif
 
-#if USE_CLOUDFS
-void registerDiskCloudFS(DiskFactory & factory);
-#endif
-
 void registerDisks()
 {
     auto & factory = DiskFactory::instance();
@@ -64,9 +60,6 @@ void registerDisks()
     registerDiskByteHDFS(factory);
 #endif
 
-#if USE_CLOUDFS
-    registerDiskCloudFS(factory);
-#endif
 }
 
 }

@@ -422,40 +422,6 @@ std::string WorkerNodeResourceData::serializeAsString() const
     return pb_data.SerializeAsString();
 }
 
-WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceData & resource_info)
-{
-    id = resource_info.id();
-    host_ports = RPCHelpers::createHostWithPorts(resource_info.host_ports());
-
-    cpu_usage = resource_info.cpu_usage();
-    memory_usage = resource_info.memory_usage();
-    memory_available = resource_info.memory_available();
-    disk_space = resource_info.disk_space();
-    query_num = resource_info.query_num();
-
-    if (resource_info.has_cpu_limit())
-        cpu_limit = resource_info.cpu_limit();
-    if (resource_info.has_memory_limit())
-        memory_limit = resource_info.memory_limit();
-
-    if (resource_info.has_vw_name())
-        vw_name = resource_info.vw_name();
-
-    if (resource_info.has_worker_group_id())
-        worker_group_id = resource_info.worker_group_id();
-
-    if (resource_info.has_last_update_time())
-        last_update_time = resource_info.last_update_time();
-
-    if (resource_info.has_register_time())
-        register_time = resource_info.register_time();
-
-    if (resource_info.has_last_status_create_time())
-        last_status_create_time = resource_info.last_status_create_time();
-    if (resource_info.has_state())
-        state = WorkerState(resource_info.state());
-}
-
 void WorkerNodeResourceData::parseFromString(const std::string & s)
 {
     Protos::WorkerNodeResourceData pb_data;
@@ -524,8 +490,6 @@ void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource
     if (register_time)
         resource_info.set_register_time(register_time);
     resource_info.set_state(static_cast<uint32_t>(state));
-<<<<<<< HEAD
-=======
     if (last_status_create_time)
         resource_info.set_last_status_create_time(last_status_create_time);
     resource_info.set_cpu_usage_10sec(cpu_usage_10sec);
@@ -566,7 +530,6 @@ WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceD
         last_status_create_time = resource_info.last_status_create_time();
     if (resource_info.has_state())
         state = WorkerState(resource_info.state());
->>>>>>> 0e16b2d73e (Merge 'dev_wg_status' into 'cnch-dev')
 }
 
 WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::WorkerNodeResourceData & resource_info)

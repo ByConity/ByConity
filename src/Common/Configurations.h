@@ -222,7 +222,6 @@ struct RootConfiguration final : public RootConfigurationData
     SDConfiguration service_discovery;
     SDKVConfiguration service_discovery_kv;
     QMConfiguration queue_manager;
-    ASConfiguration adaptive_scheduler;
     TSOConfiguration tso_service;
     BSPConfiguration bulk_synchronous_parallel;
 
@@ -233,7 +232,6 @@ struct RootConfiguration final : public RootConfigurationData
         sub_configs.push_back(&service_discovery);
         sub_configs.push_back(&service_discovery_kv);
         sub_configs.push_back(&queue_manager);
-        sub_configs.push_back(&adaptive_scheduler);
         sub_configs.push_back(&tso_service);
         sub_configs.push_back(&bulk_synchronous_parallel);
     }

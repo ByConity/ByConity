@@ -599,7 +599,6 @@ namespace ProfileEvents
     extern const Event CnchReadDataMicroSeconds;
     extern const Event PartsToAttach;
     extern const Event ConnectionPoolIsFullMicroseconds;
-    extern const Event HeavyLoadWorkerSize;
     extern const Event AllWorkerSize;
 }
 
@@ -1306,7 +1305,6 @@ private:
         ProfileEvents::CnchReadDataMicroSeconds,
         ProfileEvents::PartsToAttach,
         ProfileEvents::ConnectionPoolIsFullMicroseconds,
-        ProfileEvents::HeavyLoadWorkerSize,
         ProfileEvents::AllWorkerSize,
     };
     const std::vector<CurrentMetrics::Metric> current_metrics_list =
