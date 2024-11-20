@@ -1,7 +1,6 @@
 #pragma once
 #include <CloudServices/CnchServerResource.h>
 #include <CloudServices/CnchWorkerResource.h>
-#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/ColumnsDescription.h>
@@ -14,8 +13,6 @@
 #include <Common/CurrentThread.h>
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Common/Trace/Telemetry.h>
-#include <Common/Trace/TracerCommon.h>
 
 namespace ProfileEvents
 {
@@ -35,10 +32,6 @@ namespace ErrorCodes
 template <typename T>
 static void loadQueryResource(const T & query_resource, const ContextPtr & context)
 {
-    auto query_resource_load_span = startCommonSpan("CnchWorker", "CnchWorker.loadQueryResource");
-    OpentelemetryScope scope(query_resource_load_span);
-    query_resource_load_span->SetStatus(opentelemetry::trace::StatusCode::kOk);
-
     static LoggerPtr log = getLogger("WorkerResource");
     LOG_TRACE(log, "Receiving resources for Session: {}", query_resource.txn_id());
     Stopwatch watch;
@@ -69,34 +62,13 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
             if (item.has_dynamic_object_column_schema())
                 object_columns = ColumnsDescription::parse(item.dynamic_object_column_schema());
 
-            std::optional<BitEngineModificationResource> bitengine_modification;
-            if (item.has_bitengine_modification())
-            {
-                const auto & pb_bitengine_modification = item.bitengine_modification();
-                BitEngineModificationResource modification = RPCHelpers::createBitEngineModification(pb_bitengine_modification);
-                bitengine_modification.emplace(modification);
-            }
-            /// compatible with old-version server
-            if (item.has_local_underlying_dictionary_tables())
-            {
-                if (bitengine_modification)
-                {
-                    bitengine_modification->underlying_dictionary_tables = item.local_underlying_dictionary_tables();
-                }
-                else
-                {
-                    bitengine_modification.emplace(
-                        BitEngineModificationResource{.underlying_dictionary_tables = item.local_underlying_dictionary_tables()});
-                }
-            }
-
-            worker_resource->executeCacheableCreateQuery(
+           worker_resource->executeCacheableCreateQuery(
                 context_for_create,
                 RPCHelpers::createStorageID(item.storage_id()),
                 item.definition(),
                 item.local_table_name(),
                 static_cast<WorkerEngineType>(item.local_engine_type()),
-                bitengine_modification,
+                "",
                 object_columns);
         }
         create_timer.stop();
@@ -251,8 +223,6 @@ static void loadQueryResource(const T & query_resource, const ContextPtr & conte
         udf_infos.emplace(udf_info.function_name(), udf_info.version());
         LOG_DEBUG(log, "Received UDF meta data from server, name: {}, version: {}", udf_info.function_name(), udf_info.version());
     }
-    auto & loader = session_context->getUserDefinedSQLObjectsLoader();
-    loader.checkAndLoadUDFFromStorage(udf_infos, session_context);
 
     watch.stop();
     LOG_INFO(log, "Load all resources for session {} in {} us.", query_resource.txn_id(), watch.elapsedMicroseconds());
@@ -299,12 +269,6 @@ static void prepareQueryResource(
                 cacheable->set_local_engine_type(static_cast<UInt32>(def.engine_type));
                 cacheable->set_local_table_name(def.local_table_name);
 
-                if (def.bitengine_modification)
-                {
-                    const auto & bitengine_modification = def.bitengine_modification.value();
-                    auto * pb_bitengine_modification = cacheable->mutable_bitengine_modification();
-                    RPCHelpers::fillBitEngineModification(bitengine_modification, *pb_bitengine_modification);
-                }
             }
             else
             {
@@ -399,17 +363,6 @@ static void prepareQueryResource(
     }
 
     query_resource.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
-
-    if (context->hasQueryContext())
-    {
-        const auto & udf_info = context->getQueryContext()->getToWorkerUDFMap();
-        for (const auto & [name, version] : udf_info)
-        {
-            auto & new_info = *query_resource.mutable_udf_infos()->Add();
-            new_info.set_function_name(name);
-            new_info.set_version(version);
-        }
-    }
 }
 
 }
