@@ -912,7 +912,6 @@ class BuildFlags():
     DATABASE_REPLICATED = 'database-replicated'
     S3 = 's3'
     MULTI_SERVERS = 'multi-servers'
-    CLOUDFS = 'cloudfs'
 
 
 def collect_build_flags(client):
@@ -1039,9 +1038,6 @@ def main(args):
 
     if args.s3:
         build_flags.append(BuildFlags.S3)
-
-    if args.cloudfs:
-        build_flags.append(BuildFlags.CLOUDFS)
 
     if not args.single_server:
         build_flags.append(BuildFlags.MULTI_SERVERS)
