@@ -54,7 +54,7 @@ jobs:
         run: |
           # git -C "$GITHUB_WORKSPACE" submodule sync
           # git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
-          ./build_bin.sh
+          ./build_bin.sh 
       - name: run unit tests
         run: |
           mkdir -p /test_output
@@ -355,7 +355,7 @@ jobs:
         continue-on-error: true
         run: |
           docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/log/byconity /test_output/$2/log' sh || true
-          mv /test_output /Artifacts || true
+          mv /test_output /Artifacts && mv $GITHUB_WORKSPACE/build/programs/clickhouse /Artifacts/ || true
       - name: Upload Artifact
         if: always()
         continue-on-error: true
