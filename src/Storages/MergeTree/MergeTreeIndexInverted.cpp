@@ -1191,7 +1191,7 @@ MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregator() cons
 
 MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(GINStoreWriter * writer) const
 {
-    return std::make_shared<MergeTreeIndexAggregatorInverted>(writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get(), subcolumn_names);
+    return std::make_shared<MergeTreeIndexAggregatorInverted>(*writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get(), subcolumn_names);
 }
 
 MergeTreeIndexConditionPtr MergeTreeIndexInverted::createIndexCondition(const SelectQueryInfo & query, ContextPtr context) const
