@@ -238,7 +238,7 @@ namespace CreateMockedPlanNode
             DataStream input_stream = c.inputs[0]->getStep()->getOutputStream();
             SizeLimits set_size_limits;
             UInt64 limit_hint = 0;
-            return std::make_shared<DistinctStep>(input_stream, set_size_limits, limit_hint, columns, false);
+            return std::make_shared<DistinctStep>(input_stream, set_size_limits, limit_hint, columns, false, true);
         });
     }
 
@@ -246,7 +246,7 @@ namespace CreateMockedPlanNode
     {
         return MockedPlanNode::of([=](const HandlerContext & c) {
             DataStream input_stream = c.inputs[0]->getStep()->getOutputStream();
-            return std::make_shared<DistinctStep>(input_stream, set_size_limits, limit_hint, columns, pre_distinct);
+            return std::make_shared<DistinctStep>(input_stream, set_size_limits, limit_hint, columns, pre_distinct, true);
         });
     }
 
