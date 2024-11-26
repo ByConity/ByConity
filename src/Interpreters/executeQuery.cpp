@@ -1631,23 +1631,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.graphviz = process_list_elem->getGraphviz();
                         logStatusInfo(is_unlimited_query, context, elem, info, ast);
 
-
-                        if (process_list_elem->isUnlimitedQuery())
-                            HistogramMetrics::increment(
-                                HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, Metrics::MetricType::Timer);
-                        else
-                        {
-                            if (auto vw = context->tryGetCurrentVW())
-                                HistogramMetrics::increment(
-                                    HistogramMetrics::QueryLatency,
-                                    elem.query_duration_ms,
-                                    Metrics::MetricType::Timer,
-                                    {{"vw", vw->getName()}});
-                            else
-                                HistogramMetrics::increment(
-                                    HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, Metrics::MetricType::Timer);
-                        }
-
                         auto progress_callback = context->getProgressCallback();
 
                         if (progress_callback)
@@ -1690,12 +1673,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                 static_cast<size_t>(elem.read_rows / elapsed_seconds),
                                 ReadableSize(elem.read_bytes / elapsed_seconds));
                         }
-
-                        elem.thread_ids = std::move(info.thread_ids);
-                        elem.profile_counters = std::move(info.profile_counters);
-                        elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
-                        elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
-                        elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
 
                         if (elem.max_thread_io_profile_counters)
                         {
