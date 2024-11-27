@@ -533,6 +533,7 @@ void logStatusInfo(
     element.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
     element.max_io_time_thread_ms = info.max_io_time_thread_ms;
     element.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
+    element.query_settings = std::make_shared<Settings>(context->getSettingsRef());
 
     if (element.max_thread_io_profile_counters)
     {

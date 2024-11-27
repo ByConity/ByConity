@@ -32,7 +32,7 @@ TableFunctionCloudHive::getStorage(const ColumnsDescription & columns, ContextPt
     settings->ak_id = ctx_settings.s3_access_key_id;
     settings->ak_secret = ctx_settings.s3_access_key_secret;
 
-//     auto storage = std::make_shared<StorageCloudHive>(StorageID(getDatabaseName(), table_name), metadata, global_context, settings);
+    auto storage = std::make_shared<StorageCloudHive>(StorageID(getDatabaseName(), table_name), metadata, global_context, settings);
 
     /// prepare hive file
     auto format = FileScanInfo::parseFormatTypeFromString(arguments.format_name);

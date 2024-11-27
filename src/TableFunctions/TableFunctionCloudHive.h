@@ -1,28 +1,28 @@
-// #pragma once
+#pragma once
 
-// #include "Common/config.h"
-// #include "TableFunctions/ITableFunctionFileLike.h"
-// #if USE_HIVE
+#include "Common/config.h"
+#include "TableFunctions/ITableFunctionFileLike.h"
+#if USE_HIVE
 
-// namespace DB
-// {
+namespace DB
+{
 
-// class TableFunctionCloudHive : public ITableFunctionFileLike
-// {
-// public:
-//     static constexpr auto name = "cloudHive";
+class TableFunctionCloudHive : public ITableFunctionFileLike
+{
+public:
+    static constexpr auto name = "cloudHive";
 
-//     std::string getName() const override
-//     {
-//         return name;
-//     }
+    std::string getName() const override
+    {
+        return name;
+    }
 
-// private:
-//     StoragePtr getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const override;
+private:
+    StoragePtr getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const override;
 
-//     const char * getStorageTypeName() const override { return "CloudHive"; }
-// };
+    const char * getStorageTypeName() const override { return "CloudHive"; }
+};
 
-// }
+}
 
-// #endif
+#endif
