@@ -50,7 +50,7 @@ jobs:
           path: '.'
       - name: Build binary with build_bin.sh
         env:
-          CUSTOM_CMAKE_BUILD_TYPE: "Release"
+          CUSTOM_CMAKE_BUILD_TYPE: "Debug"
         run: |
           # git -C "$GITHUB_WORKSPACE" submodule sync
           # git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
