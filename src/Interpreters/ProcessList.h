@@ -124,7 +124,7 @@ constexpr uint32_t ProcessListQueryTypeNum = uint32_t(ProcessListQueryType::Prox
 struct QueryStatusInfo
 {
     String query;
-    double elapsed_seconds;
+    UInt64 elapsed_microseconds;
     size_t read_rows;
     size_t read_bytes;
     size_t total_rows;
@@ -165,8 +165,6 @@ protected:
     /// Info about all threads involved in query execution
     ThreadGroupStatusPtr thread_group;
 
-    Stopwatch watch;
-
     /// Progress of input stream
     Progress progress_in;
     /// Progress of output stream
@@ -183,6 +181,9 @@ protected:
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
     CurrentMetrics::Increment query_type_increment{CurrentMetrics::DefaultQuery};
     bool is_unlimited;
+
+    /// to measure query duration
+    Stopwatch watch;
 
     /// True if query cancellation is in progress right now
     /// ProcessListEntry should not be destroyed if is_cancelling is true
@@ -241,7 +242,8 @@ public:
         QueryPriorities::Handle && priority_handle_,
         IResourceGroup::Handle && resource_group_handle_,
         CurrentMetrics::Metric & query_type_metric,
-        const bool is_unlimited_);
+        const bool is_unlimited_,
+        UInt64 watch_start_nanoseconds);
 
     ~QueryStatus();
 
@@ -337,8 +339,11 @@ public:
     [[noreturn]] void throwKilledException();
     /// Same as checkTimeLimit but it never throws
     [[nodiscard]] bool checkTimeLimitSoft();
-    Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }
 
+    /// Get the reference for the start of the query. Used to synchronize with other Stopwatches
+    UInt64 getQueryCPUStartTime() { return watch.getStart(); }
+
+    Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }
 };
 
 
@@ -475,7 +480,7 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
-    EntryPtr insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force = false);
+    EntryPtr insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force = false, UInt64 watch_start_nanoseconds = 0);
 
     void checkRunningQuery(ContextPtr query_context, bool is_unlimited_query, bool force = false);
 

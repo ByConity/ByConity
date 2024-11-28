@@ -1022,6 +1022,28 @@ public:
 
     /// end of Metastore Proxy keying schema
 
+    /**
+     * @brief Remove keys by prefix. This is a very general function, which can
+     * be used to multiple type of data. By providing a function, users can
+     * `hook into` pre-commit process to delete the data.
+     *          This method is designed to be:
+     * 1. Memory-efficient, no more than batch_size keys will be loaded into memory.
+     * 2. Fast, because it will scan keys in batch.
+     * 3. Multi-thread friendly, because it returns KVs in batch, which can
+     *          be executed in parallel by caller.
+     *
+     * @param prefix A prefix of the keys to be scanned.
+     * @param kvs Metastore (Key, Value), caller need to parse it manually.
+     * @param func Will be called before removing the keys. Skip current batch when
+     *              func return `false`. And the procedure will continue until
+     *              all keys are processed.
+     * @param batch_size Data will be feed into func and committed in batch.
+     * @return Total number of keys scanned. (Useful for checking if the prefix is cleaned)
+     */
+    size_t removeByPrefix(
+        const String & prefix,
+        std::function<bool(const std::vector<std::pair<const String, const String>> & kvs)> func,
+        const size_t batch_size = 10000);
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
     void removeTransactionRecord(const String & name_space, const UInt64 & txn_id);
     void removeTransactionRecords(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
@@ -1212,7 +1234,7 @@ public:
 
     void multiDrop(const Strings & keys);
 
-    bool batchWrite(const BatchCommitRequest & request, BatchCommitResponse response);
+    bool batchWrite(const BatchCommitRequest & request, BatchCommitResponse & response);
     /// tmp api to help debug drop keys failed issue. remove this later.
     std::vector<String> multiDropAndCheck(const Strings & keys);
 

@@ -34,6 +34,7 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <Poco/StringTokenizer.h>
+#include "Parsers/ASTIdentifier.h"
 
 namespace DB
 {
@@ -46,6 +47,12 @@ Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, ContextMutablePt
 {
     PropertySet property_set;
     return deriveProperty(step, property_set, require, context);
+}
+
+Property PropertyDeriver::deriveProperty(PlanNodePtr node, ContextMutablePtr & context, CTEInfo & cte_info, bool ignore_null)
+{
+    PlanDeriverVisitor visitor{cte_info, ignore_null};
+    return VisitorUtil::accept(node, visitor, context);
 }
 
 Property
@@ -309,6 +316,67 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
                 }
                 catch (...)
                 {
+                }
+            }
+        }
+    }
+
+    if (context.isIgnoreNull() && !context.getInput()[0].getNodePartitioning().getColumns().empty()
+        && context.getContext()->getSettingsRef().enable_case_when_prop)
+    {
+        for (const auto & item : assignments)
+        {
+            auto extract_arg = [&](ASTPtr arg, String & col, bool & same_col) {
+                if (const auto * id = arg->as<ASTIdentifier>())
+                {
+                    if (col.empty())
+                    {
+                        col = id->name();
+                        same_col = true;
+                    }
+                    else
+                    {
+                        same_col &= (col == id->name());
+                    }
+                }
+                else if (const auto * field = arg->as<ASTLiteral>())
+                {
+                    same_col &= field->value.isNull();
+                }
+                else
+                {
+                    same_col = false;
+                }
+            };
+            if (const auto func = item.second->as<ASTFunction>())
+            {
+                String col;
+                bool same_col = false;
+                if (func->name == "if")
+                {
+                    if (func->arguments->children.size() == 3)
+                    {
+                        extract_arg(func->arguments->children[1], col, same_col);
+                        extract_arg(func->arguments->children[2], col, same_col);
+                    }
+                }
+                else
+                {
+                    if (func->name == "multiIf")
+                    {
+                        for (size_t i = 1; i < func->arguments->children.size(); i += 2)
+                        {
+                            extract_arg(func->arguments->children[i], col, same_col);
+                        }
+                        extract_arg(func->arguments->children.back(), col, same_col);
+                    }
+                }
+                const auto & node_partition = context.getInput()[0].getNodePartitioning();
+                if (same_col && node_partition.getColumns().size() == 1 && node_partition.getColumns()[0] == col)
+                {
+                    auto prop = context.getInput()[0];
+                    prop.getNodePartitioningRef().setColumns({item.first});
+                    return prop;
                 }
             }
         }
@@ -584,15 +652,24 @@ Property DeriverVisitor::visitRemoteExchangeSourceStep(const RemoteExchangeSourc
 
 Property DeriverVisitor::visitTableScanStep(const TableScanStep & step, DeriverContext & context)
 {
-    NameToNameMap translation;
-    for (const auto & item : step.getColumnAlias())
-        translation.emplace(item.first, item.second);
+    Property prop;
 
     if (!context.getRequire().getTableLayout().empty())
-        return PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire())
-            .translate(translation);
+    {
+        prop = PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire());
+    }
+    else
+    {
+        prop = PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getRequire(), context.getContext());
 
-    return PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getRequire(), context.getContext()).translate(translation);
+    }
+
+    auto result = prop.translate(step.getColumnToAliasMap(), true);
+    if (prop.getNodePartitioning().getColumns().size() != result.getNodePartitioning().getColumns().size())
+    {
+        result.setNodePartitioning({});
+    }
+    return result;
 }
 
 Property DeriverVisitor::visitReadNothingStep(const ReadNothingStep &, DeriverContext &)
@@ -753,6 +830,37 @@ Property DeriverVisitor::visitExpandStep(const ExpandStep &, DeriverContext & co
     prop.getNodePartitioningRef().resetIfPartitionHandle();
     prop.getStreamPartitioningRef().resetIfPartitionHandle();
     return prop;
+}
+
+Property PlanDeriverVisitor::visitPlanNode(PlanNodeBase & node, ContextMutablePtr & context)
+{
+    PropertySet input_properties;
+    Property require;
+
+    for (auto & child : node.getChildren())
+    {
+        input_properties.emplace_back(VisitorUtil::accept(child, *this, context));
+    }
+
+    DeriverContext deriver_context{input_properties, require, context, ignore_null};
+    DeriverVisitor visitor{};
+    auto result = VisitorUtil::accept(node.getStep(), visitor, deriver_context);
+    if (node.getStep()->getType() != IQueryPlanStep::Type::Exchange)
+    {
+        if (result.getNodePartitioning().getComponent() == Partitioning::Component::ANY && !input_properties.empty())
+        {
+            result.getNodePartitioningRef().setComponent(input_properties[0].getNodePartitioning().getComponent());
+        }
+    }
+
+    return result;
+}
+
+Property PlanDeriverVisitor::visitCTERefNode(CTERefNode & node, ContextMutablePtr & c)
+{
+    const auto * cte_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto cte_id = cte_step->getId();
+    return cte_helper.accept(cte_id, *this, c);
 }
 
 }

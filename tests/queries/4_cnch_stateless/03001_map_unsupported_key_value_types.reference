@@ -1,0 +1,18 @@
+a	Int32	true						
+b	Map(String, Int32)	true	 KV					
+a	Int32	true						
+b	Map(String, Int32)	true	 KV					
+a	Int32	true						
+b	Map(String, Int32)	false	 BYTE					
+a	Int32	true						
+b	Array(Map(String, Int32))	true	 KV					
+a	Int32	true						
+b	Array(Map(String, Int32))	true	 KV					
+a	Int32	true						
+b	Map(String, Map(String, Int32))	true	 KV					
+a	Int32	true						
+b	Map(String, Map(String, Int32))	true	 KV					
+a	Int32	true						
+b	Map(String, Map(String, Int32))	false	 KV					
+a	Int32	true						
+b	Map(String, Map(String, Int32))	false	 KV					

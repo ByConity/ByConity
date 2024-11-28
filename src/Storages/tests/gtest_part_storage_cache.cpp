@@ -319,7 +319,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     // mock insert part into cache
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1001", 10, 0);
     EXPECT_EQ(parts_models.parts().size(), 10);
-    (*it_p1)->part_cache_status.setToLoading();
+    (*it_p1)->part_cache_status.setToLoading(UInt64(1));
     cache_manager->insertDataPartsIntoCache(*storage, parts_models.parts(), false, false, topology_version);
     (*it_p1)->part_cache_status.setToLoaded();
 
@@ -328,7 +328,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
 
     parts_models = CacheTestMock::createPartBatch("1002", 20, 0);
     EXPECT_EQ(parts_models.parts().size(), 20);
-    (*it_p2)->part_cache_status.setToLoading();
+    (*it_p2)->part_cache_status.setToLoading(UInt64(1));
     cache_manager->insertDataPartsIntoCache(*storage, parts_models.parts(), false, false, topology_version);
     (*it_p2)->part_cache_status.setToLoaded();
 
@@ -455,7 +455,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
     TableMetaEntryPtr entry = cache_manager->getTableMeta(storage_1->getStorageUUID());
     auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(storage_1_uuid, nullptr, "1000", RWLockImpl::create())).first;
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1000", 10, 0);
-    (*it_p0)->part_cache_status.setToLoading();
+    (*it_p0)->part_cache_status.setToLoading(UInt64(1));
     cache_manager->insertDataPartsIntoCache(*storage_1, parts_models.parts(), false, false, topology_version);
     (*it_p0)->part_cache_status.setToLoaded();
 
@@ -510,7 +510,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
 
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1000", 10, 0);
     EXPECT_EQ(parts_models.parts().size(), 10);
-    (*it_p0)->part_cache_status.setToLoading();
+    (*it_p0)->part_cache_status.setToLoading(UInt64(1));
     cache_manager->insertDataPartsIntoCache(*storage, parts_models.parts(), false, false, current_topology_version);
     (*it_p0)->part_cache_status.setToLoaded();
 
@@ -541,7 +541,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     };
     EXPECT_EQ(parts_models.parts().size(), 10);
 
-    (*it_p0)->part_cache_status.setToLoading();
+    (*it_p0)->part_cache_status.setToLoading(UInt64(1));
     /// Cannot insert into the cache because the parts are from the old topology.
     cache_manager->insertDataPartsIntoCache(*storage, parts_models.parts(), false, false, PairInt64{1, 1});
     /// Cannot insert into the cache because cache is not loaded.
@@ -758,7 +758,7 @@ TEST_F(CacheManagerTest, DeleteBitmapsCacheShouldBeImmutable) {
     };
     auto parts = CacheTestMock::createPartBatch("123", 5);
 
-    (*it_p0)->delete_bitmap_cache_status.setToLoading();
+    (*it_p0)->delete_bitmap_cache_status.setToLoading(UInt64(1));
     cache_manager->insertDeleteBitmapsIntoCache(*storage, bitmaps, topology_version, parts);
     (*it_p0)->delete_bitmap_cache_status.setToLoaded();
 
@@ -813,6 +813,7 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
             lock = (*it)->getPartitionLock();
         }
 
+        std::mutex m;
 
         std::thread t1([&]() {
             cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
@@ -821,6 +822,7 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
                 = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
             auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::unique_lock<std::mutex> l(m);
                 return parts_models;
             };
             cache_manager->getOrSetServerDataPartsInPartitions(*storage, {"1001"}, load_func, TxnTimestamp::maxTS(), topology_version_2);
@@ -828,6 +830,14 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
 
         std::thread t2([&]() {
             cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
+            {
+                /// Commit to KV.
+                std::unique_lock<std::mutex> l(m);
+                for (std::shared_ptr<DB::DataModelPartWrapper> & part : parts_models)
+                {
+                    part->part_model->set_commit_time(9999);
+                }
+            }
             cache_manager->insertDataPartsIntoCache(*storage, parts_models_with_commit_time.parts(), false, false, topology_version_2);
         });
 

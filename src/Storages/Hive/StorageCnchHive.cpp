@@ -21,6 +21,7 @@
 #include "Parsers/ASTLiteral.h"
 #include "Parsers/ASTSelectQuery.h"
 #include "Parsers/ASTSetQuery.h"
+#include "Parsers/formatAST.cpp"
 #include "Parsers/queryToString.h"
 #include "Processors/Sources/NullSource.h"
 #include "QueryPlan/BuildQueryPipelineSettings.h"
@@ -409,13 +410,13 @@ HivePartitions StorageCnchHive::selectPartitions(
     if (query_info.partition_filter)
     {
         HiveWhereOptimizer where_optimizer(metadata_snapshot, query_info.partition_filter);
-        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : queryToString(where_optimizer.partition_key_conds);
+        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : serializeASTWithOutAlias(*where_optimizer.partition_key_conds);
         partition_filter = query_info.partition_filter;
     }
     else if (auto filters = getFilterFromQueryInfo(query_info, false); filters)
     {
         HiveWhereOptimizer where_optimizer(metadata_snapshot, filters);
-        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : queryToString(where_optimizer.partition_key_conds);
+        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : serializeASTWithOutAlias(*where_optimizer.partition_key_conds);
         partition_filter = where_optimizer.partition_key_conds;
     }
 

@@ -1,22 +1,43 @@
+SET enable_staging_area_for_write=0, enable_unique_partial_update = 1;
 DROP TABLE IF EXISTS unique_partial_update_with_dedup_sort;
+DROP TABLE IF EXISTS no_unique;
+CREATE TABLE no_unique
+(
+    `p_date` Date,
+    `id` UInt32,
+    `number` UInt32,
+    `content` String,
+    `extra` String,
+    `is_deleted` UInt32
+)
+ENGINE = CnchMergeTree
+PARTITION BY p_date
+ORDER BY id;
+
+-- 1000 insert
+insert into no_unique(p_date, id, number, is_deleted) select '2020-01-01', number, number, 0 from system.numbers limit 1000;
+-- 1000 delete
+insert into no_unique(p_date, id, number, is_deleted) select '2020-01-01', number, number+1000, 1 from system.numbers limit 1000;
+-- 1000 insert
+insert into no_unique(p_date, id, number, is_deleted) select '2020-01-01', number, number+2000, 0 from system.numbers limit 1000;
 
 CREATE TABLE unique_partial_update_with_dedup_sort
 (
-  `event_time` DateTime,
-  `product_id` UInt64,
-  `city` String,
-  `category` String,
-  `amount` UInt32,
-  `revenue` UInt64
+    `p_date` Date,
+    `id` UInt32,
+    `number` UInt32,
+    `content` String,
+    `extra` String
 )
-ENGINE = CnchMergeTree(event_time)
-ORDER BY city
-UNIQUE KEY product_id 
-SETTINGS enable_unique_partial_update = 1, partial_update_enable_merge_map = 0;
+ENGINE = CnchMergeTree
+PARTITION BY p_date
+ORDER BY id
+UNIQUE KEY id
+SETTINGS enable_unique_partial_update = 1;
 
-SET enable_staging_area_for_write=0, enable_unique_partial_update = 1;
-INSERT INTO unique_partial_update_with_dedup_sort (event_time, product_id, city, category, amount, revenue, _update_columns_) VALUES('2020-10-29 23:40:00', 10001, 'Beijing', '男装', 5, 500, 'event_time,product_id,city,category,amount,revenue'),('2020-10-29 23:40:00', 10002, 'Beijing', '男装', 2, 200, 'event_time,product_id,city,category,amount,revenue'),('2020-10-29 23:50:00', 10001, 'Shanghai', '童装', 8, 800, 'event_time,product_id,city'),('2020-10-29 23:50:00', 10002, 'Shanghai', '童装', 5, 500, 'event_time,product_id,city');
+insert into unique_partial_update_with_dedup_sort (p_date, id, number, content, extra, _delete_flag_) select * from no_unique order by number;
 
-SELECT * FROM unique_partial_update_with_dedup_sort;
+select count() from unique_partial_update_with_dedup_sort;
 
 DROP TABLE IF EXISTS unique_partial_update_with_dedup_sort;
+DROP TABLE IF EXISTS no_unique;

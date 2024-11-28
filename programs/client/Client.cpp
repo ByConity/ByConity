@@ -2567,6 +2567,9 @@ private:
 
         if (output_format)
         {
+            /// Do our best to estimate the start of the query so the output format matches the one reported by the server
+            output_format->setStartTime(
+                clock_gettime_ns(CLOCK_MONOTONIC) - static_cast<UInt64>(progress_indication.elapsedSeconds() * 1000000000), false);
             output_format->doWriteSuffix();
 
             if (outfile_target)

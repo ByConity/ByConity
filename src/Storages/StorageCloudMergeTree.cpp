@@ -114,8 +114,6 @@ void StorageCloudMergeTree::read(
 {
     if (data_version)
         prepareVersionedPartsForRead(local_context, query_info, column_names);
-    else
-        prepareDataPartsForRead();
 
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
             column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))

@@ -36,11 +36,10 @@ public:
         BRPC = 0,
         DISK_READER = 1
     };
-    explicit BrpcExchangeReceiverRegistryService(ContextMutablePtr context_)
-        : context(std::move(context_)), max_buf_size(context->getSettingsRef().exchange_stream_max_buf_size)
-    {
-    }
-    explicit BrpcExchangeReceiverRegistryService(int max_buf_size_) : max_buf_size(max_buf_size_)
+
+    BrpcExchangeReceiverRegistryService() = default;
+
+    explicit BrpcExchangeReceiverRegistryService(ContextMutablePtr context_) : context(std::move(context_))
     {
     }
 
@@ -86,7 +85,6 @@ public:
 
 private:
     ContextMutablePtr context;
-    int max_buf_size;
     LoggerPtr log = getLogger("BrpcExchangeReceiverRegistryService");
 
     /// stream will be accepted, but the host socket of the accpeted stream
@@ -94,6 +92,7 @@ private:
     void acceptStream(
         brpc::Controller * cntl,
         uint64_t accept_timeout_ms,
+        uint64_t max_buf_size,
         BroadcastSenderProxyPtr sender,
         const String & query_id,
         brpc::StreamId & sender_stream_id);

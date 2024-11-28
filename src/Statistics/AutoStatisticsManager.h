@@ -1,4 +1,5 @@
 #pragma once
+#include "Common/tests/gtest_global_context.h"
 #include <Common/Logger.h>
 #include <shared_mutex>
 #include <Interpreters/Context.h>
@@ -14,7 +15,9 @@
 namespace DB::Statistics::AutoStats
 {
 
-class AutoStatisticsManager : WithContext, boost::noncopyable
+ContextMutablePtr createContextWithAuth(ContextPtr global_context);
+
+class AutoStatisticsManager : boost::noncopyable
 {
 public:
     friend class AutoStatisticsCommand;
@@ -27,7 +30,7 @@ public:
 
     static void initialize(ContextMutablePtr context_, const Poco::Util::AbstractConfiguration & config);
 
-    explicit AutoStatisticsManager(ContextPtr context_);
+    explicit AutoStatisticsManager(ContextMutablePtr auth_context_);
 
     void markCollectableCandidates(const std::vector<StatsTableIdentifier> & candidates, bool force_collect_if_failed_to_query_row_count);
 
@@ -45,6 +48,11 @@ public:
     void writeMemoryRecord(const std::unordered_map<UUID, UInt64> & record);
 
     std::vector<TaskInfoCore> getAllTasks() { return task_queue.getAllTasks(); }
+
+    ContextMutablePtr getContext()
+    {
+        return auth_context;
+    }
 
 private:
     void run();
@@ -77,6 +85,9 @@ private:
     void logTaskIfNeeded(const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count);
 
     void createTask(const StatisticsScope & scope);
+    
+
+    ContextMutablePtr auth_context;
     LoggerPtr logger;
 
     // we don't have lock to protect internal_config since it will be accessed only single-threaded

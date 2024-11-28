@@ -20,7 +20,7 @@
 #define CORRECTNESS_TABLE_DDL_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/correctness/sql/create_table.sql"
 #define CORRECTNESS_EXPECTED_EXPLAIN_RESULT "${CMAKE_SOURCE_DIR}/tests/optimizers/correctness/explains/"
 
-#define PLAN_DUMP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/explains/plan_dump/"
-#define PLAN_DUMP_QUERIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/explains/plan_dump/queries/"
-#define PLAN_DUMP_TABLE_DDL_FILE "${CMAKE_CURRENT_SOURCE_DIR}/explains/plan_dump/create_table.sql"
-#define PLAN_DUMP_TABLE_STATISTICS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/explains/plan_dump/test_dump.bin"
+#define PLAN_DUMP_PATH "${CMAKE_SOURCE_DIR}/tests/optimizers/plandump/"
+#define PLAN_DUMP_QUERIES_DIR "${CMAKE_SOURCE_DIR}/tests/optimizers/plandump/queries/"
+#define PLAN_DUMP_TABLE_DDL_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/plandump/create_table.sql"
+#define PLAN_DUMP_TABLE_STATISTICS_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/plandump/test_dump.bin"

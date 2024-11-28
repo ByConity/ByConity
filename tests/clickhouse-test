@@ -1393,6 +1393,7 @@ if __name__ == '__main__':
     parser.add_argument('--s3', required=False, action='store_true', help='Only run tests for S3 environment')
     parser.add_argument('--single-server', required=False, action='store_true', help='Add some tests which will fail on multi-server')
     parser.add_argument('--tenant_id', default='', help='set the tenant id for test')
+    parser.add_argument('--disable_charset', default=True, help='disable character set for mysql pipeline')
 
     args = parser.parse_args()
 

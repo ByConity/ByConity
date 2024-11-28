@@ -1658,8 +1658,14 @@ void MetastoreProxy::multiDrop(const Strings & keys)
     metastore_ptr->adaptiveBatchWrite(batch_write);
 }
 
-bool MetastoreProxy::batchWrite(const BatchCommitRequest & request, BatchCommitResponse response)
+bool MetastoreProxy::batchWrite(const BatchCommitRequest & request, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (request.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
     return metastore_ptr->batchWrite(request, response);
 }
 
@@ -3661,4 +3667,49 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     }
 }
 
+size_t MetastoreProxy::removeByPrefix(
+    const String & prefix,
+    std::function<bool(const std::vector<std::pair<const String, const String>> & kvs)> func,
+    const size_t batch_size)
+{
+    String start_key;
+    size_t scanned_count = 0;
+    bool exclude_start_key = false;
+    const size_t scan_batch_size = std::min(static_cast<size_t>(DEFAULT_SCAN_BATCH_COUNT), batch_size);
+
+    /// For each batch.
+    while (true)
+    {
+        /// Scan keys in batch.
+        auto it = metastore_ptr->getByPrefix(prefix, batch_size, scan_batch_size, start_key, exclude_start_key);
+
+        BatchCommitRequest batch_write;
+        std::vector<std::pair<const String, const String>> kvs;
+
+        while (it->next())
+        {
+            kvs.emplace_back(it->key(), it->value());
+            batch_write.AddDelete(it->key());
+        }
+
+        /// Return if scanned to end.
+        if (kvs.size() == 0)
+            return scanned_count;
+
+        scanned_count += kvs.size();
+
+        bool need_commit = func(kvs);
+
+        /// Commit if there is any key to be removed.
+        if (need_commit)
+        {
+            BatchCommitResponse delete_result;
+            metastore_ptr->batchWrite(batch_write, delete_result);
+        } else {
+            /// Update start key for next batch.
+            start_key = kvs.back().first;
+            exclude_start_key = true;
+        }
+    }
+}
 } /// end of namespace DB::Catalog

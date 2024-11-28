@@ -36,6 +36,7 @@
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -104,6 +105,15 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
 {
     const auto & step = *node.getStep();
     const auto & assignments = step.getAssignments();
+    if (!predicate_context.context->getSettingsRef().enable_pushdown_filter_through_stateful)
+    {
+        for (const auto & assignment: assignments)
+        {
+            if (RedundantSortVisitor::isStateful(assignment.second, predicate_context.context))
+                return visitPlanNode(node, predicate_context);
+        }
+    }
+
     std::set<String> deterministic_symbols = ExpressionDeterminism::getDeterministicSymbols(assignments, context);
 
     // Push down conjuncts from the inherited predicate that only

@@ -178,7 +178,6 @@ void TemplateBlockOutputFormat::finalize()
     doWritePrefix();
 
     size_t parts = format.format_idx_to_column_idx.size();
-
     for (size_t i = 0; i < parts; ++i)
     {
         auto type = std::make_shared<DataTypeUInt64>();

@@ -314,7 +314,7 @@
     M(PerfFilterElapsedMicroseconds, "") \
 \
     M(QueryCreateTablesMicroseconds, "") \
-    M(QuerySendResourcesMicroseconds, "") \
+    M(QueryLoadResourcesMicroseconds, "") \
     M(CloudTableDefinitionCacheHits, "") \
     M(CloudTableDefinitionCacheMisses, "") \
 \
@@ -1216,6 +1216,7 @@
 \
     M(NumberOfMarkRangesBeforeBeMergedInPKFilter, "Number of mark ranges in primary index filtering before adjacent ranges be merged into more bigger ranges") \
     M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode") \
+    M(QueryBspRetryCount, "How many times the whole query has retried, only valid for server") \
 \
     M(OrcTotalStripes, "Total Stripes") \
     M(OrcReadStripes, "Total Read Stripes") \

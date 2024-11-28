@@ -108,6 +108,8 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     factory.registerAlias("DOUBLE PRECISION", "Float64", DataTypeFactory::CaseInsensitive);
 
     /// MySQL
+    factory.registerAlias("SIGNED INTEGER", "Int32", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("UNSIGNED INTEGER", "UInt32", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("TINYINT SIGNED", "Int8", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("INT1 SIGNED", "Int8", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("SMALLINT SIGNED", "Int16", DataTypeFactory::CaseInsensitive);

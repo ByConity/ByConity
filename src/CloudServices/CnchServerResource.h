@@ -211,6 +211,8 @@ public:
     void resendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
     void sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option = std::nullopt);
+    // prepare query resource buf for batch send plan segments
+    void prepareQueryResourceBuf(std::unordered_map<WorkerId, butil::IOBuf, WorkerIdHash> & resource_buf_map, const ContextPtr & context);
 
     /// WorkerAction should not throw
     using WorkerAction

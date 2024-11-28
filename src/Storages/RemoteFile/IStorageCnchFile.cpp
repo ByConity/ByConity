@@ -1,14 +1,16 @@
 #include "IStorageCnchFile.h"
 
 #include <utility>
+#include <CloudServices/CnchServerResource.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
 #include <Core/Settings.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Databases/DatabaseOnDisk.h>
 #include <Databases/DatabasesCommon.h>
 #include <Formats/FormatFactory.h>
-#include <Storages/HDFS/HDFSCommon.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -20,10 +22,18 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/queryToString.h>
+#include <Processors/Sources/NullSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/ISourceStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <ResourceManagement/CommonData.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/IStorageCloudFile.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -31,15 +41,7 @@
 #include <Common/Exception.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/parseAddress.h>
-#include <QueryPlan/BuildQueryPipelineSettings.h>
-#include <QueryPlan/ISourceStep.h>
-#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/Sources/NullSource.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/queryToString.h>
-#include <Databases/DatabaseOnDisk.h>
-#include <CloudServices/CnchServerResource.h>
+#include <DataTypes/DataTypesNumber.h>
 
 namespace DB
 {
@@ -100,7 +102,10 @@ IStorageCnchFile::IStorageCnchFile(
 
     file_list.emplace_back(arguments.url);
 
-    auto default_virtuals = NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
+    auto default_virtuals = NamesAndTypesList{
+        {"_path", std::make_shared<DataTypeString>()},
+        {"_file", std::make_shared<DataTypeString>()},
+        {"_size", std::make_shared<DataTypeUInt64>()}};
     virtual_columns = getVirtualsForStorage(metadata.getSampleBlock().getNamesAndTypesList(), default_virtuals);
     for (const auto & column : virtual_columns)
         virtual_header.insert({column.type->createColumn(), column.type, column.name});
@@ -202,6 +207,10 @@ PrepareContextResult IStorageCnchFile::prepareReadContext(
 
     auto filter_files = getPrunedFiles(query_context, query_info.query);
     LOG_INFO(log, "Number of files to read: {}", filter_files.size());
+
+    // We sort files in descending order by file size, so that big files can be processes at first to avoid long-tail
+    if (filter_files.size() > 1)
+        std::sort(filter_files.begin(), filter_files.end(), [](const FilePartInfo & a, const FilePartInfo & b) { return a.size > b.size; });
 
     FileDataPartsCNCHVector parts;
     for (const auto & file : filter_files)
@@ -330,9 +339,9 @@ void IStorageCnchFile::checkAlterSettings(const AlterCommands & commands) const
     }
 }
 
-Strings IStorageCnchFile::getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query)
+FilePartInfos IStorageCnchFile::getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query)
 {
-    Strings total_files = readFileList(query_context);
+    FilePartInfos total_files = readFileList(query_context);
 
     if (query && virtual_header)
     {
@@ -354,6 +363,7 @@ Strings IStorageCnchFile::getPrunedFiles(const ContextPtr & query_context, const
         block = virtual_header.cloneEmpty();
         MutableColumnPtr path_column;
         MutableColumnPtr file_column;
+        MutableColumnPtr size_column;
         MutableColumnPtr key_column = block.getByName("_key").column->assumeMutable();
 
         if (block.has("_path"))
@@ -362,24 +372,30 @@ Strings IStorageCnchFile::getPrunedFiles(const ContextPtr & query_context, const
         if (block.has("_file"))
             file_column = block.getByName("_file").column->assumeMutable();
 
+        if (block.has("_size"))
+            size_column = block.getByName("_size").column->assumeMutable();
+
         for (const auto & file : total_files)
         {
-            FileURI file_uri(file);
+            FileURI file_uri(file.name);
             if (path_column)
                 path_column->insert(file_uri.file_path);
             if (file_column)
                 file_column->insert(file_uri.file_name);
+            if (size_column)
+                size_column->insert(file.size);
             key_column->insert(file_uri.file_path); // todo(jiashuo): maybe duplicated
         }
 
-        Strings filtered_files;
+        FilePartInfos filtered_files;
         VirtualColumnUtils::filterBlockWithQuery(query, block, query_context, filter_ast);
         const ColumnString & keys_col = typeid_cast<const ColumnString &>(*block.getByName("_key").column);
+        const ColumnUInt64 & size_col = typeid_cast<const ColumnUInt64 &>(*block.getByName("_size").column);
         size_t rows = block.rows();
         filtered_files.reserve(rows);
         for (size_t i = 0; i < rows; ++i)
             // todo(jiashuo): github version via insert to append new file into `files`
-            filtered_files.emplace_back(keys_col.getDataAt(i).toString());
+            filtered_files.emplace_back(keys_col.getDataAt(i).toString(), size_col.getElement(i));
         return filtered_files;
     }
     return total_files;

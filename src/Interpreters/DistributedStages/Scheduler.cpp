@@ -59,6 +59,7 @@ void Scheduler::dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const Segm
                .plan_segment_buf_size = plan_segment_buf_ptr->size(),
                .plan_segment_buf_ptr = plan_segment_buf_ptr};
         batch_segment_headers[{address, worker_id}].emplace_back(std::move(header));
+        LOG_TRACE(log, "Worker id {} -> plan_segment_buf_size {}", worker_id.toString(), plan_segment_buf_ptr->size());
     }
     else
     {

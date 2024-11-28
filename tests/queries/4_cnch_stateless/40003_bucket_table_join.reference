@@ -28,3 +28,26 @@ Projection Est. ? rows
             └─ Broadcast Exchange Est. ? rows
                └─ TableScan default.daily_misc Est. ? rows
                         Outputs: [p_date], hash_uid_1:=hash_uid
+Projection
+│     Expressions: int_col_1:=int_col, int_col_2:=int_col_1
+└─ Gather Exchange
+   └─ Inner Join
+      │     Condition: int_col_1 == int_col_2
+      ├─ Repartition Exchange
+      │  │     Partition by: {int_col_1}
+      │  └─ Projection
+      │     │     Expressions: [int_col, int_col_1]
+      │     └─ Filter
+      │        │     Condition: (int_col > 98) AND (date_col = cast(20016, \'Date\')) AND (int_col_1 > 98)
+      │        └─ TableScan default.join_1
+      │                 Where: (int_col_1 > 98) AND (date_col = cast(20016, \'Date\')) AND (int_col_2 > 98)
+      │                 Outputs: [date_col], int_col:=int_col_1, int_col_1:=int_col_2
+      └─ Repartition Exchange
+         │     Partition by: {int_col_2}
+         └─ Projection
+            │     Expressions: [int_col_2]
+            └─ Filter
+               │     Condition: (int_col_2 > 98) AND (date_col_1 = cast(20016, \'Date\'))
+               └─ TableScan default.join_1
+                        Where: (int_col_1 > 98) AND (date_col = cast(20016, \'Date\'))
+                        Outputs: int_col_2:=int_col_1, date_col_1:=date_col

@@ -93,7 +93,12 @@ namespace
     {
     }
 
-    TwoLevelIterator::~TwoLevelIterator() = default;
+    TwoLevelIterator::~TwoLevelIterator()
+    {
+        Table * table = reinterpret_cast<Table *>(arg_);
+        if (table != nullptr)
+            table->releaseRemoteFD();
+    }
 
     void TwoLevelIterator::Seek(const Slice & target)
     {
@@ -157,7 +162,7 @@ namespace
             // move to the next block
             index_iter_.Next();
 
-            // Filter data using min max index. 
+            // Filter data using min max index.
             // If target is greater than index.key(max), then find target in next data block
             if (index_iter_.Valid() && Compare(index_iter_.key(), target) < 0)
                 continue; // skip the next block

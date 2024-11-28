@@ -100,7 +100,12 @@ PlanSegmentExecutionInfo MPPScheduler::schedule()
             }
         }
         if (batch_schedule)
+        {
             batchScheduleTasks();
+            // Batch sendPlanSegments rpc can clean resource by self
+            if (query_context->getSettingsRef().enable_clean_resources_by_worker)
+                query_context->getCnchServerResource()->skipCleanWorker();
+        }
     }
 
     dag_graph_ptr->joinAsyncRpcAtLast();

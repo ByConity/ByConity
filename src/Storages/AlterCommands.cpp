@@ -1394,6 +1394,8 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             if (!command.data_type)
                 throw Exception{"Data type have to be specified for column " + backQuote(column_name) + " to add", ErrorCodes::BAD_ARGUMENTS};
 
+            MergeTreeMetaBase::checkTypeInComplianceWithRecommendedUsage(command.data_type);
+
             if (command.codec)
                 CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(command.codec, command.data_type, !context->getSettingsRef().allow_suspicious_codecs, context->getSettingsRef().allow_experimental_codecs);
 
@@ -1497,6 +1499,9 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             if (command.data_type && command.data_type->isMap() && column.type->isMap()
                 && command.data_type->isKVMap() != column.type->isKVMap())
                 throw Exception("Not support modifying map column between KV Map and Byte Map", ErrorCodes::TYPE_MISMATCH);
+
+            if (command.data_type)
+                MergeTreeMetaBase::checkTypeInComplianceWithRecommendedUsage(command.data_type);
 
             modified_columns.emplace(column_name);
         }

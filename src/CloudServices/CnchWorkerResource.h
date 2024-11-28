@@ -1,3 +1,4 @@
+#pragma once
 /*
  * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +47,7 @@ public:
         const String & underlying_dictionary_tables,
         const ColumnsDescription & object_columns);
 
-    StoragePtr getTable(const StorageID & table_id) const;
+    StoragePtr tryGetTable(const StorageID & table_id, bool load_data_parts = true) const;
     DatabasePtr getDatabase(const String & database_name) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;
 

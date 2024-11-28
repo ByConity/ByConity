@@ -78,6 +78,8 @@ public:
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type);
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type, MutableColumnPtr && keys);
 
+    bool hasNestedMap() const override { return dictionary_type->isMap() || dictionary_type->hasNestedMap(); }
+
     /// Key can not be null because it's meaningless
     bool canBeMapKeyType() const override { return dictionary_type->canBeMapKeyType(); }
     /// Due to LowCardinality can not be inside nullable, so if dictionary_type is not nullable, 

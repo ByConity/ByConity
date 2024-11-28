@@ -103,7 +103,7 @@ void registerStorageCloudHDFS(StorageFactory & factory)
                 arguments.format_name,
                 arguments.compression_method));
 
-        Strings files{arguments.url};
+        FilePartInfos files{FilePartInfo(arguments.url)};
         return StorageCloudHDFS::create(args.getContext(), args.table_id, args.columns, args.constraints, files, args.storage_def->settings->ptr(), arguments, settings);
     },
     features);

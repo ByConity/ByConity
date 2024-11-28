@@ -288,7 +288,8 @@ std::unique_ptr<ManipulationTaskRecord> FutureManipulationTask::moveRecord()
     if (!record->transaction)
         throw Exception("The transaction of manipulation task is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-    record->parts = std::move(parts);
+    record->parts.clear();
+    std::swap(record->parts, parts);
     return std::move(record);
 }
 

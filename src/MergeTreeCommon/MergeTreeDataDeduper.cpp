@@ -505,16 +505,16 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             auto it = std::find_if(new_parts.begin(), new_parts.end(), [&](const auto & part) { return part->needPartialUpdateProcess(); });
             bool has_partial_update_part = it != new_parts.end();
 
-            std::vector<bool> need_dump_bitmap(visible_parts.size() + new_parts.size());
-            std::fill_n(need_dump_bitmap.begin(), need_dump_bitmap.size(), true);
-
+            /// Used to obtain the part name after processDedupSubTaskInPartialUpdateMode, as partial_update_parts iteration may generate new part
+            /// Subsequent prepareBitmapsForPartialUpdate depends on this variable
+            IMergeTreeDataPartsVector partial_update_processed_parts;
             DeleteBitmapVector bitmaps = has_partial_update_part ?
-                processDedupSubTaskInPartialUpdateMode(visible_parts, new_parts, dedup_task_local, need_dump_bitmap) :
+                processDedupSubTaskInPartialUpdateMode(visible_parts, new_parts, dedup_task_local, partial_update_processed_parts) :
                 dedupImpl(visible_parts, new_parts, dedup_task_local);
 
             std::lock_guard lock(mutex);
             size_t num_bitmaps_to_dump = has_partial_update_part ?
-                prepareBitmapsForPartialUpdate(visible_parts, new_parts, bitmaps, txn_id, res, need_dump_bitmap) :
+                prepareBitmapsForPartialUpdate(visible_parts, bitmaps, txn_id, res, partial_update_processed_parts) :
                 prepareBitmapsToDump(visible_parts, new_parts, bitmaps, txn_id, res);
 
             LOG_DEBUG(
@@ -869,11 +869,10 @@ size_t MergeTreeDataDeduper::prepareBitmapsToDump(
 
 size_t MergeTreeDataDeduper::prepareBitmapsForPartialUpdate(
     const IMergeTreeDataPartsVector & visible_parts,
-    const IMergeTreeDataPartsVector & new_parts,
     const DeleteBitmapVector & bitmaps,
     TxnTimestamp txn_id,
     LocalDeleteBitmaps & res,
-    const std::vector<bool> & need_dump_bitmap)
+    const IMergeTreeDataPartsVector & partial_update_processed_parts)
 {
     size_t num_bitmaps = 0;
     for (size_t i = 0; i < bitmaps.size(); ++i)
@@ -897,44 +896,34 @@ size_t MergeTreeDataDeduper::prepareBitmapsForPartialUpdate(
         }
         else /// new part
         {
-            if (need_dump_bitmap[i] == false)
-            {
-                LOG_DEBUG(
-                    log,
-                    "Skip preparing bitmap for new part: {}, txn_id: {}",
-                    new_parts[i - visible_parts.size()]->name,
-                    txn_id.toUInt64());
-                continue;
-            }
-
             LOG_DEBUG(
                 log,
                 "Preparing bitmap for new part: {}, total bitmap cardinality: {}, txn_id: {}",
-                new_parts[i - visible_parts.size()]->name,
+                partial_update_processed_parts[i]->name,
                 bitmap->cardinality(),
                 txn_id.toUInt64());
 
-            UInt64 bitmap_version = new_parts[i - visible_parts.size()]->getDeleteBitmapMetaDepth() > 0 ? new_parts[i - visible_parts.size()]->getDeleteBitmapVersion() : 0;
+            UInt64 bitmap_version = partial_update_processed_parts[i]->getDeleteBitmapMetaDepth() > 0 ? partial_update_processed_parts[i]->getDeleteBitmapVersion() : 0;
             if (bitmap_version == txn_id.toUInt64())
             {
                 LOG_TRACE(
                     log,
                     "Part {} already have delete bitmap meta in txn_id {} due to delete flag, here must generate a delta bitmap",
-                    new_parts[i - visible_parts.size()]->name,
+                    partial_update_processed_parts[i]->name,
                     txn_id);
                 res.push_back(LocalDeleteBitmap::createDelta(
-                    new_parts[i - visible_parts.size()]->info,
+                    partial_update_processed_parts[i]->info,
                     bitmap,
                     txn_id.toUInt64(),
-                    new_parts[i - visible_parts.size()]->bucket_number));
+                    partial_update_processed_parts[i]->bucket_number));
             }
             else
             {
                 res.push_back(LocalDeleteBitmap::createBase(
-                    new_parts[i - visible_parts.size()]->info,
+                    partial_update_processed_parts[i]->info,
                     bitmap,
                     txn_id.toUInt64(),
-                    new_parts[i - visible_parts.size()]->bucket_number));
+                    partial_update_processed_parts[i]->bucket_number));
             }
         }
         num_bitmaps++;
@@ -1172,7 +1161,7 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             to_block.erase(StorageInMemoryMetadata::DEDUP_SORT_COLUMN);
         }
 
-        /// We need to add a part_id column for commit of different partial parts
+        /// We need to add a part_id column for replaceColumnsAndFilterData, as different part may have different column order
         auto part_id_column = ColumnUInt64::create();
         part_id_column->insertMany(part_id, to_block.rows());
         to_block.insert(
@@ -1219,7 +1208,7 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
     return blocks_from_current_dedup_new_parts;
 }
 
-DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, std::vector<bool> & need_dump_bitmap)
+DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, IMergeTreeDataPartsVector & partial_update_processed_parts)
 {
     IMergeTreeDataPartsVector current_dedup_visible_parts;
     current_dedup_visible_parts.insert(current_dedup_visible_parts.end(), visible_parts.begin(), visible_parts.end());
@@ -1234,7 +1223,6 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
     /// After partial_update_parts iteration, the processed partial_update_parts' will be then treated as normal_parts.
     /// It may take several iterations until all new_parts are processed.
     /// A portion of the bitmap information will be generated for each iteration, which needs to be collected and finally integrated together.
-    /// XXX: One iterate cannot handle too many partial_update_parts because they need to be read into blocks in memory.
     while (true)
     {
         bool partial_update_iteration = false;
@@ -1247,7 +1235,23 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
         iterate_end = std::find_if(iterate_end, new_parts.end(), [&](const auto & part) { return part->needPartialUpdateProcess() != partial_update_iteration; });
 
         IMergeTreeDataPartsVector current_dedup_new_parts;
-        current_dedup_new_parts.insert(current_dedup_new_parts.end(), iterate_begin, iterate_end);
+        UInt64 current_part_number{0};
+        UInt64 current_part_row_count{0};
+        auto pick_current_dedup_new_parts = [&](const IMergeTreeDataPartPtr & part) -> void {
+            current_part_number++;
+            current_part_row_count += part->rows_count;
+            current_dedup_new_parts.push_back(part);
+        };
+        for (auto it = iterate_begin; it != iterate_end;)
+        {
+            pick_current_dedup_new_parts(*it);
+            it++;
+            if (current_part_number >= data.getSettings()->partial_update_max_process_parts || current_part_row_count >= data.getSettings()->partial_update_max_process_rows)
+            {
+                iterate_end = it;
+                break;
+            }
+        }
 
         logDedupDetail(current_dedup_visible_parts, current_dedup_new_parts, dedup_task, /*is_sub_iteration*/true);
 
@@ -1298,7 +1302,7 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             if (data.merging_params.partitionValueAsVersion())
                 cur_version = current_dedup_visible_parts[0]->getVersionFromPartition();
 
-            DeleteBitmapVector delta_bitmaps(current_dedup_visible_parts.size() + current_dedup_new_parts.size());
+            DeleteBitmapVector delta_bitmaps(current_dedup_visible_parts.size());
             PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
             /// XXX: could use FilterInfo struct
             IColumn::Filter filter(block_size, 1);
@@ -1485,7 +1489,7 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             replace_src_indexes = std::move(tmp_replace_src_indexes);
 
             record_and_restart_timer(phase_watch);
-            /// XXX: Consider optimizing for the case if (block_size == num_filtered)
+
             /// Phase 4: Query data from previous parts parallel
             size_t valid_query_parts_num = 0, total_query_row = 0;
             for (const auto & part_rowid_pair : part_rowid_pairs)
@@ -1539,15 +1543,21 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                             for (size_t i = 0, size = columns_from_storage_vector[thread_id].columns(); i < size; ++i)
                             {
                                 String column_name = columns_from_storage_vector[thread_id].getByPosition(i).name;
-                                if (!columns_to_read.has(column_name))
+                                if (columns_to_read.has(column_name))
+                                {
+                                    const auto source_column = columns_to_read.getByName(column_name).column;
+                                    auto mutable_column = IColumn::mutate(std::move(columns_from_storage_vector[thread_id].getByPosition(i).column));
+                                    mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+
+                                    columns_from_storage_vector[thread_id].getByPosition(i).column = std::move(mutable_column);
+                                }
+                                else
                                 {
                                     auto mutable_column = IColumn::mutate(std::move(columns_from_storage_vector[thread_id].getByPosition(i).column));
                                     mutable_column->insertManyDefaults(part_rowid_pairs[j].size());
 
                                     columns_from_storage_vector[thread_id].getByPosition(i).column = std::move(mutable_column);
                                 }
-                                else
-                                    columns_from_storage_vector[thread_id].getByPosition(i).column = std::move(columns_to_read.getByName(column_name).column);
                             }
                             if (columns_to_read.columns() == 0)
                             {
@@ -1615,10 +1625,14 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
 
             record_and_restart_timer(phase_watch);
             /// Phase 6: Generate partial part
-            IMergeTreeDataPartsVector iteration_visible_parts = generateAndCommitPartialPartInPartialUpdateMode(block_to_process, current_dedup_new_parts, dedup_task);
+            IMergeTreeDataPartPtr iteration_visible_part = generateAndCommitPartInPartialUpdateMode(block_to_process, current_dedup_new_parts, dedup_task);
 
             current_iteration_bitmaps = generateNextIterationBitmaps(current_dedup_visible_parts, current_dedup_new_parts, delta_bitmaps, dedup_task->txn_id);
-            current_dedup_visible_parts.insert(current_dedup_visible_parts.end(), iteration_visible_parts.begin(), iteration_visible_parts.end());
+            if (!iteration_visible_part->deleted)
+            {
+                current_dedup_visible_parts.insert(current_dedup_visible_parts.end(), iteration_visible_part);
+                current_iteration_bitmaps.push_back(std::make_shared<Roaring>());
+            }
             /// Assign bitmaps for next sub iteration
             for (size_t i = 0; i < current_dedup_visible_parts.size(); ++i)
             {
@@ -1662,11 +1676,7 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             }
         }
     }
-    for (size_t i = 0; i < need_dump_bitmap.size(); ++i)
-    {
-        if (i >= visible_parts.size() && current_dedup_visible_parts[i]->deleted)
-            need_dump_bitmap[i] = false;
-    }
+    partial_update_processed_parts = current_dedup_visible_parts;
     return current_iteration_bitmaps;
 }
 
@@ -2276,7 +2286,7 @@ void MergeTreeDataDeduper::parseUpdateColumns(
     }
 }
 
-IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPartialUpdateMode(
+IMergeTreeDataPartPtr MergeTreeDataDeduper::generateAndCommitPartInPartialUpdateMode(
     Block & block,
     const IMergeTreeDataPartsVector & new_parts,
     const DedupTaskPtr & dedup_task)
@@ -2289,6 +2299,7 @@ IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPa
 
     /// Generate into one large block.
     size_t split_block_num = new_parts.size();
+    chassert(split_block_num > 0);
     bool need_dump_part = block.rows() > 0;
 
     /// Remove column not in header
@@ -2307,42 +2318,23 @@ IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPa
     bool use_thread_pool = write_part_thread_num > 1;
 
     IMutableMergeTreeDataPartsVector mutable_partial_update_parts{split_block_num};
-    auto write_delta_part = [&](size_t split_block_id) {
-        if (!need_dump_part || split_block_id != 0)
-        {
-            auto drop_part_info = new_parts[split_block_id]->info;
-            drop_part_info.level += 1;
-            drop_part_info.hint_mutation = 0;
-            drop_part_info.mutation = context->getCurrentTransactionID().toUInt64();
-            auto disk = data.getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
-            auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
+    auto generate_drop_part = [&](size_t split_block_id) {
+        auto drop_part_info = new_parts[split_block_id]->info;
+        drop_part_info.level += 1;
+        drop_part_info.hint_mutation = 0;
+        drop_part_info.mutation = context->getCurrentTransactionID().toUInt64();
+        auto disk = data.getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
+        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
 
-            auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
-                data, drop_part_info.getPartName(), drop_part_info, single_disk_volume, std::nullopt);
+        auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
+            data, drop_part_info.getPartName(), drop_part_info, single_disk_volume, std::nullopt);
 
-            drop_part->partition = std::move(new_parts[split_block_id]->partition);
-            drop_part->bucket_number = new_parts[split_block_id]->bucket_number;
-            drop_part->deleted = true;
-            drop_part->partial_update_state = PartialUpdateState::RWProcessFinished;
+        drop_part->partition = std::move(new_parts[split_block_id]->partition);
+        drop_part->bucket_number = new_parts[split_block_id]->bucket_number;
+        drop_part->deleted = true;
+        drop_part->partial_update_state = PartialUpdateState::RWProcessFinished;
 
-            mutable_partial_update_parts[split_block_id] = drop_part;
-        }
-        if (need_dump_part && split_block_id == 0)
-        {
-            LOG_TRACE(
-                log,
-                "Part id: {}, part name: {}, delta part size: {}, txn id: {}, dedup info: {}",
-                split_block_id,
-                new_parts[split_block_id]->name,
-                block.rows(),
-                dedup_task->txn_id,
-                dedup_task->getDedupLevelInfo());
-            mutable_partial_update_parts[split_block_id] = writer.writeTempPartialUpdatePart(
-                block,
-                data.getInMemoryMetadataPtr(),
-                context,
-                new_parts[split_block_id]);
-        }
+        mutable_partial_update_parts[split_block_id] = drop_part;
     };
 
     for (size_t i = 0; i < split_block_num; ++i)
@@ -2355,23 +2347,47 @@ IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPa
                 });
                 if (thread_group)
                     CurrentThread::attachToIfDetached(thread_group);
-                setThreadName("WriteDeltaPart");
-                write_delta_part(i);
+                setThreadName("GenerateDropPart");
+                generate_drop_part(i);
             });
         else
-            write_delta_part(i);
+            generate_drop_part(i);
     }
     if (use_thread_pool)
         write_part_pool.wait();
     write_part_ms = watch.elapsedMilliseconds();
     watch.restart();
 
+    if (need_dump_part)
+    {
+        BlockWithPartition partial_processed_block{Block(block), Row(new_parts[0]->partition.value)};
+        partial_processed_block.bucket_info.bucket_number = new_parts[0]->bucket_number;
+        auto new_part_generated = writer.writeTempPart(
+            partial_processed_block,
+            data.getInMemoryMetadataPtr(),
+            context,
+            context->getTimestamp(),
+            context->getCurrentTransactionID().toUInt64(),
+            /*hint_mutation*/0,
+            /*partial_update_state*/PartialUpdateState::RWProcessFinished);
+
+        mutable_partial_update_parts.push_back(new_part_generated);
+        LOG_TRACE(
+            log,
+            "New part name generated: {}, part size: {}, txn id: {}, dedup info: {}",
+            new_part_generated->name,
+            block.rows(),
+            dedup_task->txn_id,
+            dedup_task->getDedupLevelInfo());
+    }
     auto dumped_data = cnch_writer.dumpAndCommitCnchParts(mutable_partial_update_parts);
     for (size_t i = 0; i < split_block_num; ++i)
     {
         dumped_data.parts[i]->setPreviousPart(new_parts[i]);
         partial_update_parts.push_back(dumped_data.parts[i]);
     }
+    if (need_dump_part)
+        partial_update_parts[0] = dumped_data.parts[split_block_num];
 
     dump_part_ms = watch.elapsedMilliseconds();
     LOG_DEBUG(
@@ -2385,7 +2401,7 @@ IMergeTreeDataPartsVector MergeTreeDataDeduper::generateAndCommitPartialPartInPa
         dedup_task->txn_id,
         dedup_task->getDedupLevelInfo());
 
-    return partial_update_parts;
+    return partial_update_parts[0];
 }
 
 DeleteBitmapVector

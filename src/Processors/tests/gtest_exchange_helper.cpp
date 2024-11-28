@@ -3,7 +3,7 @@
 
 brpc::Server * ExchangeRemoteTest::server = new brpc::Server;
 Coordination::BrpcExchangeReceiverRegistryService * ExchangeRemoteTest::service_impl
-    = new Coordination::BrpcExchangeReceiverRegistryService(73400320);
+    = new Coordination::BrpcExchangeReceiverRegistryService();
 
 DB::HostWithPortsVec MockServiceDiscoveryClient::lookup(const String & /*psm_name*/, DB::ComponentType /*type*/, const String & /*vw_name*/)
 {

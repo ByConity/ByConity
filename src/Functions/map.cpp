@@ -415,6 +415,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         bool is_const = isColumnConst(*arguments[0].column);
+        const ColumnConst * arg1_const = typeid_cast<const ColumnConst *>(arguments[1].column.get());
         const ColumnMap * col_map = typeid_cast<const ColumnMap *>(arguments[0].column.get());
 
         //It may not be necessary to check this condition, cause it will be checked in getReturnTypeImpl function
@@ -447,6 +448,7 @@ public:
 
             ColumnsWithTypeAndName new_arguments;
             ColumnPtr sub_map_column;
+            ColumnPtr sub_arg1_column;
             DataTypePtr data_type;
 
             if (keys_string_column)
@@ -460,17 +462,18 @@ public:
                 data_type =std::make_shared<DataTypeFixedString>(checkAndGetColumn<ColumnFixedString>(sub_map_column.get())->getN());
             }
 
+            if (arg1_const)
+                sub_arg1_column = ColumnConst::create(arg1_const->getDataColumnPtr(), element_size);
+            else
+                sub_arg1_column = ColumnConst::create(arguments[1].column->cut(row, 1), element_size);
+
             size_t col_key_size = sub_map_column->size();
             auto column = is_const? ColumnConst::create(std::move(sub_map_column), std::move(col_key_size)) : std::move(sub_map_column);
 
             new_arguments = {
-                    {
-                        column,
-                        data_type,
-                        ""
-                        },
-                    arguments[1]
-                    };
+                {column, data_type, ""},
+                {sub_arg1_column, arguments[1].type, ""}
+            };
 
             auto res = func_like.executeImpl(new_arguments, result_type, input_rows_count);
             const auto & container = checkAndGetColumn<ColumnUInt8>(res.get())->getData();
@@ -479,13 +482,8 @@ public:
             {
                 if (container[row_num] == 1)
                 {
-                    auto key_ref = keys_string_column ?
-                                   keys_string_column->getDataAt(element_start_row + row_num) :
-                                   keys_fixed_string_column->getDataAt(element_start_row + row_num);
-                    auto value_ref = values_column.getDataAt(element_start_row + row_num);
-
-                    keys_data->insertData(key_ref.data, key_ref.size);
-                    values_data->insertData(value_ref.data, value_ref.size);
+                    keys_data->insertFrom(keys_column, element_start_row + row_num);
+                    values_data->insertFrom(values_column, element_start_row + row_num);
                     current_offset += 1;
                 }
             }
@@ -583,9 +581,9 @@ public:
         for (size_t row_idx = 0; row_idx < input_rows_count; ++row_idx)
         {
             size_t left_it_begin = col_const_map_left_flag ? 0 : offsets_left[row_idx - 1];
-            size_t left_it_end = col_const_map_left_flag ? offsets_left.size() : offsets_left[row_idx];
+            size_t left_it_end = col_const_map_left_flag ? offsets_left[0] : offsets_left[row_idx];
             size_t right_it_begin = col_const_map_right_flag ? 0 : offsets_right[row_idx - 1];
-            size_t right_it_end = col_const_map_right_flag ? offsets_right.size() : offsets_right[row_idx];
+            size_t right_it_end = col_const_map_right_flag ? offsets_right[0] : offsets_right[row_idx];
 
             for (size_t i = left_it_begin; i < left_it_end; ++i)
             {
@@ -832,7 +830,8 @@ public:
         if (null_presence.has_null_constant)
             return makeNullable(std::make_shared<DataTypeNothing>());
 
-        const DataTypeMap * map = checkAndGetDataType<DataTypeMap>(arguments[0].type.get());
+        auto arg0_no_null = removeNullable(arguments[0].type);
+        const DataTypeMap * map = checkAndGetDataType<DataTypeMap>(arg0_no_null.get());
 
         if (!map)
             throw Exception(
@@ -851,13 +850,31 @@ public:
         if (null_presence.has_null_constant)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
 
-        const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
-        const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
-        const DataTypeMap * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].type.get());
+        ColumnsWithTypeAndName tmp_args = arguments;
+        if (null_presence.has_nullable)
+        {
+            /// if index is const null -> return directly
+            if (null_presence.has_null_constant)
+            {
+                /// Default implementation for nulls returns null result for null arguments,
+                /// so the result type must be nullable.
+                if (!result_type->isNullable())
+                    throw Exception(ErrorCodes::LOGICAL_ERROR,
+                                    "Function {} with Null argument and default implementation for Nulls "
+                                    "is expected to return Nullable result, got {}", getName(), result_type->getName());
+                return result_type->createColumnConstWithDefaultValue(input_rows_count);
+            }
+
+            tmp_args = createBlockWithNestedColumns(arguments);
+        }
+
+        const auto * col_map = checkAndGetColumn<ColumnMap>(tmp_args[0].column.get());
+        const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(tmp_args[0].column.get());
+        const DataTypeMap * map_type = checkAndGetDataType<DataTypeMap>(tmp_args[0].type.get());
         if ((!col_map && !col_const_map) || !map_type)
             throw Exception(ErrorCodes::LOGICAL_ERROR,
                 "First argument for function '{}' must be map, got '{}' instead",
-                getName(),arguments[0].type->getName());
+                getName(),tmp_args[0].type->getName());
 
         if (col_const_map)
             col_map = typeid_cast<const ColumnMap *>(&col_const_map->getDataColumn());
@@ -872,14 +889,14 @@ public:
         auto & indices_data = assert_cast<ColumnVector<UInt64> &>(*indices_column).getData();
 
         bool executed = false;
-        if (!isColumnConst(*arguments[1].column))
+        if (!isColumnConst(*tmp_args[1].column))
         {
-            executed = FunctionArrayElement::matchKeyToIndexNumber(key_column, offsets, !!col_const_map, *arguments[1].column, indices_data)
-                || FunctionArrayElement::matchKeyToIndexString(key_column, offsets, !!col_const_map, *arguments[1].column, indices_data);
+            executed = FunctionArrayElement::matchKeyToIndexNumber(key_column, offsets, !!col_const_map, *tmp_args[1].column, indices_data)
+                || FunctionArrayElement::matchKeyToIndexString(key_column, offsets, !!col_const_map, *tmp_args[1].column, indices_data);
         }
         else
         {
-            Field index = (*arguments[1].column)[0];
+            Field index = (*tmp_args[1].column)[0];
 
             /// try convert const index to right type
             auto index_lit = std::make_shared<ASTLiteral>(index);
@@ -893,7 +910,7 @@ public:
         if (!executed)
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Illegal types of arguments: {}, {} for function {}",
-                arguments[0].type->getName(), arguments[1].type->getName(), getName());
+                tmp_args[0].type->getName(), tmp_args[1].type->getName(), getName());
 
         auto col_res = IColumn::mutate(result_type->createColumn());
         auto & col_res_ref = typeid_cast<ColumnNullable &>(*col_res);
@@ -915,7 +932,13 @@ public:
             }
         }
 
-        return col_res;
+        ColumnPtr res = std::move(col_res);
+
+        /// If arg0 is nullable, merge it's null map.
+        if (arguments[0].type->isNullable())
+            return wrapInNullable(res, arguments, result_type, input_rows_count);
+
+        return res;
     }
 };
 
@@ -1024,8 +1047,8 @@ public:
         {
             // TODO(shiyuze): maybe add a new function to get result in different rows, just like arrayJoin(getMapKeys(xxx))
 
-            /// Total map key number in result may exceed max_array_size_as_field (for example, 
-            /// each pratition or bucket has different key sets), so we need to avoid calling 
+            /// Total map key number in result may exceed max_array_size_as_field (for example,
+            /// each pratition or bucket has different key sets), so we need to avoid calling
             /// ColumnArray::[] or ColumnArray::get() to get array as a Field here.
             return ColumnConst::create(res.getByName("keys").column, input_rows_count)->convertToFullColumnIfConst();
         }

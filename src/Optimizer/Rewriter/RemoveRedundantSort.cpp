@@ -182,7 +182,11 @@ PlanNodePtr RedundantSortVisitor::visitCTERefNode(CTERefNode & node, RedundantSo
 void StatefulVisitor::visitNode(const ConstASTPtr & node, ContextMutablePtr & context)
 {
     for (ConstASTPtr child : node->children)
+    {
         ASTVisitorUtil::accept(child, *this, context);
+        if (is_stateful)
+            return;
+    }
 }
 
 void StatefulVisitor::visitASTFunction(const ConstASTPtr & node, ContextMutablePtr & context)

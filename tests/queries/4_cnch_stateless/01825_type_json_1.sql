@@ -1,6 +1,6 @@
 -- Tags: no-fasttest
-set enable_optimizer = 0;
 SET allow_experimental_object_type = 1;
+SET block_json_query_in_optimizer = 0;
 
 DROP TABLE IF EXISTS t_json;
 

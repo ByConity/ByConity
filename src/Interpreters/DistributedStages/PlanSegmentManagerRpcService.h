@@ -154,6 +154,8 @@ private:
         std::shared_ptr<Protos::QueryCommon> & query_common,
         std::shared_ptr<SettingsChanges> & settings_changes);
 
+    void prepareQueryResource(UInt32 query_resource_buf_size, brpc::Controller * cntl);
+
     // can be call both sync or async
     static ContextMutablePtr createQueryContext(
         ContextMutablePtr global_context,

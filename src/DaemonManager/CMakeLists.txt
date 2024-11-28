@@ -23,6 +23,9 @@ set(CLICKHOUSE_DAEMONMANAGER_SOURCE
 
 add_library(daemon_manager_lib ${CLICKHOUSE_DAEMONMANAGER_SOURCE})
 target_include_directories(daemon_manager_lib SYSTEM BEFORE PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories(daemon_manager_lib SYSTEM BEFORE PUBLIC ${ClickHouse_SOURCE_DIR}/contrib/libfarmhash/)
+target_include_directories(daemon_manager_lib SYSTEM BEFORE PUBLIC ${ClickHouse_SOURCE_DIR}/contrib/libmetrohash/src)
+target_include_directories(daemon_manager_lib SYSTEM BEFORE PUBLIC ${ClickHouse_SOURCE_DIR}/contrib/murmurhash/include)
 target_link_libraries(daemon_manager_lib daemon dbms)
 # add_subdirectory(tests)
 

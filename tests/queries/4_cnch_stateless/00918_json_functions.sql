@@ -64,6 +64,14 @@ SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', 4, 'Nullable(
 SELECT JSONExtract('{"passed": true}', 'passed', 'UInt8');
 SELECT JSONExtract('{"day": "Thursday"}', 'day', 'Enum8(\'Sunday\' = 0, \'Monday\' = 1, \'Tuesday\' = 2, \'Wednesday\' = 3, \'Thursday\' = 4, \'Friday\' = 5, \'Saturday\' = 6)');
 SELECT JSONExtract('{"day": 5}', 'day', 'Enum8(\'Sunday\' = 0, \'Monday\' = 1, \'Tuesday\' = 2, \'Wednesday\' = 3, \'Thursday\' = 4, \'Friday\' = 5, \'Saturday\' = 6)');
+SELECT JSONExtract('{"a":"-123456789"}', 'a', 'Int32') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"123456789"}', 'a', 'UInt32') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"-1234567890123456789"}', 'a', 'Int64') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"1234567890123456789"}', 'a', 'UInt64') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"-1234567899999"}', 'a', 'Int32') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"1234567899999"}', 'a', 'UInt32') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"-1234567890123456789999"}', 'a', 'Int64') as a, toTypeName(a);
+SELECT JSONExtract('{"a":"1234567890123456789999"}', 'a', 'UInt64') as a, toTypeName(a);
 
 SELECT '--JSONExtractKeysAndValues--';
 SELECT JSONExtractKeysAndValues('{"a": "hello", "b": [-100, 200.0, 300]}', 'String');

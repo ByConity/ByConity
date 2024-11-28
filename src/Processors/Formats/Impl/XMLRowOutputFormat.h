@@ -70,7 +70,6 @@ protected:
     Names field_tag_names;
 
     Progress progress;
-    Stopwatch watch;
     const FormatSettings format_settings;
 };
 

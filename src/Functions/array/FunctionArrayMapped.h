@@ -135,7 +135,12 @@ public:
         DataTypes nested_types(nested_types_count);
         for (size_t i = 0; i < arguments.size() - 1 - num_fixed_params; ++i)
         {
-            const auto * array_type = checkAndGetDataType<typename Impl::data_type>(&*arguments[i + 1 + num_fixed_params]);
+            DataTypePtr arg_array = arguments[i + 1 + num_fixed_params];
+            if (useDefaultImplementationForNulls())
+                arg_array = removeNullable(arg_array);
+
+            const auto * array_type = checkAndGetDataType<typename Impl::data_type>(&*arg_array);
+
             if (!array_type)
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,

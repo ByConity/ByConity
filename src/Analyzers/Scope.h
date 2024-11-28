@@ -68,19 +68,32 @@ struct FieldDescription
     /// s.a. https://clickhouse.com/docs/zh/sql-reference/statements/create/table/#materialized
     bool substituted_by_asterisk;
 
+    bool can_be_array_joined;
+
+    // constructor for computed columns
     FieldDescription(String name_, DataTypePtr type_, QualifiedName prefix_ = {})
-        : FieldDescription(std::move(name_), std::move(type_), std::move(prefix_), {}, true)
+        : FieldDescription(std::move(name_), std::move(type_), std::move(prefix_), {}, true, true)
     {
     }
 
-    FieldDescription(String name_, DataTypePtr type_, QualifiedName prefix_, OriginColumns origin_columns_, bool substituted_by_asterisk_)
+    // full costructor
+    FieldDescription(
+        String name_,
+        DataTypePtr type_,
+        QualifiedName prefix_,
+        OriginColumns origin_columns_,
+        bool substituted_by_asterisk_,
+        bool can_be_array_joined_)
         : name(std::move(name_))
         , type(std::move(type_))
         , prefix(std::move(prefix_))
         , origin_columns(std::move(origin_columns_))
         , substituted_by_asterisk(substituted_by_asterisk_)
+        , can_be_array_joined(can_be_array_joined_)
     {
     }
+
+    // constructor for table columns
     FieldDescription(
         String name_,
         DataTypePtr type_,
@@ -90,7 +103,8 @@ struct FieldDescription
         IAST * origin_table_ast_,
         String origin_column_,
         size_t index_of_origin_scope_,
-        bool substituted_by_asterisk_)
+        bool substituted_by_asterisk_,
+        bool can_be_array_joined_)
         : name(std::move(name_))
         , type(std::move(type_))
         , prefix(std::move(prefix_))
@@ -101,6 +115,7 @@ struct FieldDescription
               std::move(origin_column_),
               index_of_origin_scope_}}
         , substituted_by_asterisk(substituted_by_asterisk_)
+        , can_be_array_joined(can_be_array_joined_)
     {
     }
 

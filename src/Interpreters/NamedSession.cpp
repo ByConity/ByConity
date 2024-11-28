@@ -198,6 +198,17 @@ void NamedCnchSession::release()
     LOG_DEBUG(getLogger("NamedCnchSession"), "Release CnchWorkerResource {}", key);
 }
 
+void NamedCnchSession::registerPlanSegmentsCount(size_t _plan_segments_count)
+{
+    plan_segments_count = _plan_segments_count;
+}
+
+void NamedCnchSession::eliminateCurrentPlanSegment()
+{
+    if (plan_segments_count && --(*plan_segments_count) == 0)
+        release();
+}
+
 template class NamedSessionsImpl<NamedSession>;
 template class NamedSessionsImpl<NamedCnchSession>;
 

@@ -32,11 +32,12 @@
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 
+#include <CloudServices/QueryResourceUtils.h>
+#include <Storages/MergeTree/MarkRange.h>
 #include <brpc/callback.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
-#include <Storages/MergeTree/MarkRange.h>
 
 namespace ProfileEvents
 {
@@ -383,134 +384,14 @@ brpc::CallId CnchWorkerClient::sendResources(
 {
     auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     Protos::SendResourcesReq request;
-
-    const auto & settings = context->getSettingsRef();
-    auto max_execution_time = settings.max_execution_time.value.totalSeconds();
-
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID());
-    /// recycle_timeout refers to the time when the session is recycled under abnormal case,
-    /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
-    UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
-    request.set_timeout(recycle_timeout);
-    if (!settings.session_timezone.value.empty())
-        request.set_session_timezone(settings.session_timezone.value);
-
-    bool require_worker_info = false;
-    for (const auto & resource: resources_to_send)
-    {
-        if (!resource.sent_create_query)
-        {
-            const auto & def = resource.table_definition;
-            if (resource.table_definition.cacheable)
-            {
-                auto * cacheable = request.add_cacheable_create_queries();
-                RPCHelpers::fillStorageID(resource.storage->getStorageID(), *cacheable->mutable_storage_id());
-                cacheable->set_definition(def.definition);
-                if (!resource.object_columns.empty())
-                    cacheable->set_dynamic_object_column_schema(resource.object_columns.toString());
-                cacheable->set_local_engine_type(static_cast<UInt32>(def.engine_type));
-                cacheable->set_local_table_name(def.local_table_name);
-                if (!def.underlying_dictionary_tables.empty())
-                    cacheable->set_local_underlying_dictionary_tables(def.underlying_dictionary_tables);
-            }
-            else
-            {
-                request.add_create_queries(def.definition);
-                request.add_dynamic_object_column_schema(resource.object_columns.toString());
-            }
-        }
-
-        /// parts
-        auto & table_data_parts = *request.mutable_data_parts()->Add();
-
-        /// Send storage's mutations to worker if needed.
-        if (with_mutations)
-        {
-            auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(resource.storage.get());
-            if (cnch_merge_tree)
-            {
-                for (auto const & mutation_str : cnch_merge_tree->getPlainMutationEntries())
-                {
-                    LOG_TRACE(log, "Send mutations to worker: {}", mutation_str);
-                    table_data_parts.add_cnch_mutation_entries(mutation_str);
-                }
-            }
-        }
-
-        table_data_parts.set_database(resource.storage->getDatabaseName());
-        table_data_parts.set_table(resource.table_definition.local_table_name);
-        if (resource.table_version)
-        {
-            require_worker_info = true;
-            table_data_parts.set_table_version(resource.table_version);
-        }
-
-        if (settings.query_dry_run_mode != QueryDryRunMode::SKIP_SEND_PARTS)
-        {
-            if (!resource.server_parts.empty())
-            {
-                // todo(jiashuo): bitmap need handler?
-                fillBasePartAndDeleteBitmapModels(
-                    *resource.storage,
-                    resource.server_parts,
-                    *table_data_parts.mutable_server_parts(),
-                    *table_data_parts.mutable_server_part_bitmaps());
-            }
-
-            if (!resource.virtual_parts.empty())
-            {
-                fillPartsModelForSend(*resource.storage, resource.virtual_parts, *table_data_parts.mutable_virtual_parts());
-                auto * bitmaps_model = table_data_parts.mutable_virtual_part_bitmaps();
-                for (const auto & virtual_part : resource.virtual_parts)
-                {
-                    for (auto & bitmap_meta : virtual_part->part->delete_bitmap_metas)
-                    {
-                        bitmaps_model->Add()->CopyFrom(*bitmap_meta);
-                    }
-                }
-            }
-        }
-
-        if (!resource.lake_scan_info_parts.empty())
-        {
-            auto * mutable_lake_scan_infos = table_data_parts.mutable_lake_scan_info_parts();
-            auto & cnch_lake = dynamic_cast<StorageCnchLakeBase &>(*resource.storage);
-            cnch_lake.serializeLakeScanInfos(*mutable_lake_scan_infos, resource.lake_scan_info_parts);
-        }
-
-        if (!resource.file_parts.empty())
-        {
-            fillCnchFilePartsModel(resource.file_parts, *table_data_parts.mutable_file_parts());
-        }
-
-        /// bucket numbers
-        for (const auto & bucket_num : resource.bucket_numbers)
-            *table_data_parts.mutable_bucket_numbers()->Add() = bucket_num;
-    }
-
-    // need add worker info if query by table version
-    if (require_worker_info)
-    {
-        auto current_wg = context->getCurrentWorkerGroup();
-        auto * worker_info = request.mutable_worker_info();
-        worker_info->set_worker_id(worker_id.id);
-        worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
-        worker_info->set_num_workers(current_wg->workerNum());
-
-        if (worker_info->num_workers() <= worker_info->index())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.",
-                toString(worker_info->index()),
-                current_wg->getVWName(),
-                toString(current_wg->workerNum()));
-    }
-
-    request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
+    prepareQueryResource(request, worker_id, resources_to_send, context, with_mutations, log);
 
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
-    auto send_timeout_ms = max_execution_time ? max_execution_time * 1000L : settings.brpc_data_parts_timeout_ms.totalMilliseconds();
+    auto max_execution_time = context->getSettingsRef().max_execution_time.value.totalSeconds();
+    auto send_timeout_ms
+        = max_execution_time ? max_execution_time * 1000L : context->getSettingsRef().brpc_data_parts_timeout_ms.totalMilliseconds();
     cntl->set_timeout_ms(send_timeout_ms);
     const auto call_id = cntl->call_id();
     auto * response = new Protos::SendResourcesResp();

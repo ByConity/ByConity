@@ -148,6 +148,16 @@ static void addElementSafe(const DataTypes & elems, IColumn & column, F && impl)
     }
 }
 
+bool DataTypeTuple::hasNestedMap() const
+{
+    for (const auto & elem_type: elems)
+    {
+        if(elem_type->isMap() || elem_type->hasNestedMap())
+            return true;
+    }
+    return false;
+}
+
 MutableColumnPtr DataTypeTuple::createColumn() const
 {
     size_t size = elems.size();

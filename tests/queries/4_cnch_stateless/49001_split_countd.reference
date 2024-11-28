@@ -1,0 +1,31 @@
+Projection Est. 1000 rows, cost 1.495000e+02
+│     Expressions: _1700037075267:=`expr#CAST(uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL)), \'Nullable(Int64)\')`, _1700043852272:=`expr#divide(sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))), plus(sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))), divide(sum(pay_amt), 100)))`, _sum_1700037075233:=`expr#sum(pay_order_cnt)`, _sum_1700037153441:=`expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))`, _time_8_1_1700037075152:=`expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\')`
+└─ Projection Est. 1000 rows, cost 7.550000e+01
+   │     Expressions: [expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\'), expr#sum(pay_order_cnt), expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))], expr#CAST(uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL)), \'Nullable(Int64)\'):=CAST(`expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL))`, \'Nullable(Int64)\'), expr#divide(sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))), plus(sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))), divide(sum(pay_amt), 100))):=`expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))` / (`expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))` + (`expr#sum(pay_amt)` / 100))
+   └─ Limit Est. 1000 rows, cost 1.500000e+00
+      │     Limit: 1000
+      └─ Sorting Est. 1000 rows, cost 1.500000e+00
+         │     Order by: {expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\') ASC NULLS LAST}
+         │     Limit: 1000
+         └─ Gather Exchange Est. 1000 rows, cost 1.500000e+00
+            └─ Sorting Est. 1000 rows, cost 1.500000e+00
+               │     Order by: {expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\') ASC NULLS LAST}
+               │     Limit: 1000
+               └─ Aggregating Est. ? rows, cost 1.500000e+00
+                  │     Group by: {expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\')}
+                  │     Aggregates: expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL)):=AggNull(sumMerge)(expr#initializeAggregation(\'sumState\', finalizeAggregation(expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL))State))), expr#sum(pay_order_cnt):=AggNull(sumMerge)(expr#sum(pay_order_cnt)State), expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))):=AggNull(sumMerge)(expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))State), expr#sum(pay_amt):=AggNull(sumMerge)(expr#sum(pay_amt)State)
+                  └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
+                     │     Partition by: {expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\')}
+                     └─ Projection Est. ? rows, cost 0.000000e+00
+                        │     Expressions: [expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\'), expr#sum(pay_amt)State, expr#sum(pay_order_cnt)State, expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))State], expr#initializeAggregation(\'sumState\', finalizeAggregation(expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL))State)):=initializeAggregation(\'sumState\', finalizeAggregation(`expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL))State`))
+                        └─ Aggregating Est. ? rows, cost 0.000000e+00
+                           │     Group by: {expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\')}
+                           │     Aggregates: expr#uniqExact(multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL))State:=AggNull(uniqExactState)(expr#multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL)), expr#sum(pay_order_cnt)State:=AggNull(sumState)(pay_order_cnt), expr#sum(plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)))State:=AggNull(sumState)(expr#plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100))), expr#sum(pay_amt)State:=AggNull(sumState)(pay_amt)
+                           └─ Projection Est. ? rows, cost 0.000000e+00
+                              │     Expressions: [pay_amt, pay_order_cnt], expr#formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\'):=formatDateTime(toStartOfInterval(p_date, toIntervalDay(1)), \'%Y-%m-%d\'), expr#multiIf(greater(channel_visit_cnt_1d, 0), user_id, NULL):=multiIf(channel_visit_cnt_1d > 0, user_id, NULL), expr#plus(divide(campaign_platform_cost_amt, 100), divide(CAST(platform_coupon_amt_1d, \'Nullable(Int64)\'), 100)):=(campaign_platform_cost_amt / 100) + (platform_coupon_amt_1d / 100)
+                              └─ Filter Est. ? rows, cost 0.000000e+00
+                                 │     Condition: (app_name = \'aweme\') AND ((previous_page LIKE \'%UG_MIAOSHA_DNLH_2024_NN_CSJ%\') OR (previous_page LIKE \'%tfx_feeds_ad_buy_limited_offer_CSJ%\'))
+                                 └─ TableScan default.aeolus_data_table_2_1634191_prod Est. ? rows, cost 0.000000e+00
+                                          Partition filter: (p_date >= \'2024-08-13\') AND (p_date <= \'2024-08-20\')
+                                          Where: (app_name = \'aweme\') AND ((previous_page LIKE \'%UG_MIAOSHA_DNLH_2024_NN_CSJ%\') OR (previous_page LIKE \'%tfx_feeds_ad_buy_limited_offer_CSJ%\'))
+                                          Outputs: [user_id, p_date, pay_order_cnt, pay_amt, campaign_platform_cost_amt, previous_page, channel_visit_cnt_1d, platform_coupon_amt_1d, app_name]

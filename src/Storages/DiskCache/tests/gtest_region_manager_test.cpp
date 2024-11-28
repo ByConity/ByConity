@@ -18,8 +18,8 @@
 #include <Storages/DiskCache/tests/MockPolicy.h>
 #include <Storages/DiskCache/tests/SeqPoints.h>
 #include "Common/CurrentMetrics.h"
+#include <Common/InjectPause.h>
 #include <common/types.h>
-
 
 namespace DB::HybridCache
 {
@@ -126,49 +126,42 @@ TEST(RegionManager, ReadWrite)
         0,
         kFlushRetryLimit);
 
-    constexpr UInt32 k_local_offset = 3 * 1024;
-    constexpr UInt32 k_size = 1024;
-    BufferGen gen;
+    ENABLE_INJECT_PAUSE_IN_SCOPE();
+    injectPauseSet("pause_reclaim_done");
+
+    constexpr uint32_t k_local_offset = 3 * 1024;
+    constexpr uint32_t k_size = 1024;
+    BufferGen bg;
     RegionId rid;
-
-    {
-        auto [status, waiter] = rm->getCleanRegion(rid, true);
-        if (status == OpenStatus::Retry && waiter)
-        {
-            waiter->baton.wait();
-            status = rm->getCleanRegion(rid, true).first;
-        }
-        ASSERT_EQ(OpenStatus::Ready, status);
-    }
+    // do reclaim couple of times to get RegionId of 1
+    rm->startReclaim();
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_done"));
+    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid, false).first);
     ASSERT_EQ(0, rid.index());
-
-    {
-        auto [status, waiter] = rm->getCleanRegion(rid, true);
-        if (status == OpenStatus::Retry && waiter)
-        {
-            waiter->baton.wait();
-            status = rm->getCleanRegion(rid, true).first;
-        }
-        ASSERT_EQ(OpenStatus::Ready, status);
-    }
+    rm->startReclaim();
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_done"));
+    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid, false).first);
     ASSERT_EQ(1, rid.index());
 
+
     auto & region = rm->getRegion(rid);
-    auto [wdesc, addr] = region.openAndAllocate(4 * k_size);
-    EXPECT_EQ(OpenStatus::Ready, wdesc.getStatus());
-    auto buf = gen.gen(k_size);
-    auto waddr = RelAddress{rid, k_local_offset};
-    rm->write(waddr, buf.copy());
-    auto rdesc = rm->openForRead(rid, 1);
-    auto buf_read = rm->read(rdesc, waddr, k_size);
+    auto [wDesc, addr] = region.openAndAllocate(4 * k_size);
+    EXPECT_EQ(OpenStatus::Ready, wDesc.getStatus());
+    auto buf = bg.gen(k_size);
+    auto w_addr = RelAddress{rid, k_local_offset};
+    rm->write(w_addr, buf.copy());
+    auto r_desc = rm->openForRead(rid, 1);
+    auto buf_read = rm->read(r_desc, w_addr, k_size);
     EXPECT_TRUE(buf_read.size() == k_size);
     EXPECT_EQ(buf.view(), buf_read.view());
 
-    region.close(std::move(wdesc));
+    // flush buffer
+    region.close(std::move(wDesc));
     EXPECT_EQ(Region::FlushRes::kSuccess, rm->flushBuffer(rid));
-    auto expected_offset = k_base_offset + k_region_size + k_local_offset;
+    // Check device directly at the offset we expect data to be written
+    auto expected_ofs = k_base_offset + k_region_size + k_local_offset;
     Buffer buf_read_direct{k_size};
-    EXPECT_TRUE(device_ptr->read(expected_offset, k_size, buf_read_direct.data()));
+    EXPECT_TRUE(device_ptr->read(expected_ofs, k_size, buf_read_direct.data()));
     EXPECT_EQ(buf.view(), buf_read_direct.view());
 }
 
@@ -197,52 +190,66 @@ TEST(RegionManager, cleanupRegionFailureSync)
         0,
         kFlushRetryLimit);
 
+    ENABLE_INJECT_PAUSE_IN_SCOPE();
+    injectPauseSet("pause_reclaim_done");
+    injectPauseSet("pause_flush_failure");
+
     BufferGen generator;
     RegionId rid;
-    {
-        auto [status, waiter] = rm->getCleanRegion(rid, true);
-        if (status == OpenStatus::Retry && waiter)
-        {
-            waiter->baton.wait();
-            status = rm->getCleanRegion(rid, true).first;
-        }
-        ASSERT_EQ(OpenStatus::Ready, status);
-    }
+    rm->startReclaim();
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_done"));
+
+    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid, false).first);
     ASSERT_EQ(0, rid.index());
 
+    // Write to Region 0
     auto & region = rm->getRegion(rid);
-    auto [wdesc, addr] = region.openAndAllocate(k_region_size);
-    ASSERT_EQ(OpenStatus::Ready, wdesc.getStatus());
+    auto [wDesc, addr] = region.openAndAllocate(k_region_size);
+    EXPECT_EQ(OpenStatus::Ready, wDesc.getStatus());
     auto buf = generator.gen(1024);
-    auto waddr = RelAddress{rid, 0};
-    rm->write(waddr, buf.copy());
-    region.close(std::move(wdesc));
+    auto w_addr = RelAddress{rid, 0};
+    rm->write(w_addr, buf.copy());
+    region.close(std::move(wDesc));
 
     SeqPoints sp;
-    std::thread read_thread([&sp, &region] {
-        auto rdesc = region.openForRead();
-        EXPECT_EQ(OpenStatus::Ready, rdesc.getStatus());
-        sp.reached(0);
+    std::thread read_thread{[&sp, &region] {
+        auto r_desc = region.openForRead();
+        EXPECT_EQ(OpenStatus::Ready, r_desc.getStatus());
+        sp.reached(0); // unblock flush
 
-        sp.wait(1);
-        region.close(std::move(rdesc));
-    });
+        sp.wait(1); // block here
+        region.close(std::move(r_desc));
+    }};
 
-    std::thread flush_thread([&sp, &device, &rm, &rid] {
+    std::thread flush_thread{[&sp, &device, &rm, &rid] {
         EXPECT_CALL(*device, writeImpl(_, _, _)).WillRepeatedly(Return(false));
-        sp.wait(0);
-        rm->doFlush(rid, false);
-    });
+        sp.wait(0); // Flush after active reader
+        rm->doFlush(rid, false /* async */);
+    }};
 
-    std::thread cthread([&sp] {
-        for (int i = 0; i < 20; i++)
+    std::thread count_thread{[&sp] {
+        // bool retried = false;
+        for (int i = 0; i < 100; i++)
+        {
+            // if (retried)
+            // {
+            //     break;
+            // }
             std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        }
+        // EXPECT_TRUE(retried);
+
+        EXPECT_FALSE(injectPauseWait("pause_flush_failure", 1, true, 1000));
+
         sp.reached(1);
-    });
+    }};
+
+    // Flush can complete now
+    EXPECT_TRUE(injectPauseWait("pause_flush_failure"));
 
     read_thread.join();
     flush_thread.join();
-    cthread.join();
+    count_thread.join();
 }
 
 TEST(RegionManager, cleanupRegionFailureAsync)
@@ -268,17 +275,18 @@ TEST(RegionManager, cleanupRegionFailureAsync)
         0,
         kFlushRetryLimit);
 
+    ENABLE_INJECT_PAUSE_IN_SCOPE();
+
+    injectPauseSet("pause_reclaim_done");
+    injectPauseSet("pause_flush_begin");
+    injectPauseSet("pause_flush_failure");
+
     BufferGen generator;
     RegionId rid;
-    {
-        auto [status, waiter] = rm->getCleanRegion(rid, true);
-        if (status == OpenStatus::Retry && waiter)
-        {
-            waiter->baton.wait();
-            status = rm->getCleanRegion(rid, true).first;
-        }
-        ASSERT_EQ(OpenStatus::Ready, status);
-    }
+    rm->startReclaim();
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_done"));
+
+    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid, false).first);
     ASSERT_EQ(0, rid.index());
 
     auto & region = rm->getRegion(rid);
@@ -306,10 +314,24 @@ TEST(RegionManager, cleanupRegionFailureAsync)
     });
 
     std::thread cthread([&sp] {
-        for (int i = 0; i < 20; i++)
+        // bool retried = false;
+        EXPECT_TRUE(injectPauseWait("pause_flush_begin"));
+
+        for (int i = 0; i < 100; i++)
+        {
+            // if (retried)
+            // {
+            //     break;
+            // }
             std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        }
+
+        // EXPECT_TRUE(retried);
+        EXPECT_FALSE(injectPauseWait("pause_flush_failure", 1, true, 1000));
         sp.reached(1);
     });
+
+    EXPECT_TRUE(injectPauseWait("pause_flush_failure"));
 
     read_thread.join();
     flush_thread.join();

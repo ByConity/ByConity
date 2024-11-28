@@ -3,14 +3,14 @@ drop table if exists 52018_mysql_map;
 set dialect_type = 'MYSQL';
 set enable_implicit_arg_type_convert = 1;
 
-create table 52018_mysql_map (a Nullable(int), b Map(String, String) not NULL, c Map(String, String) not NULL KV) engine=CnchMergeTree() order by a;
-insert into 52018_mysql_map values (0, {'k1': 'v1', 'k2': 'v2'}, {'k1': 'v1', 'k2': 'v2'});
-insert into 52018_mysql_map values (NULL, {'k1': 'v1', 'k2': 'v2'}, {'k1': 'v1', 'k2': 'v2'});
+create table 52018_mysql_map (a Nullable(int), m1 Map(String, String) not NULL BYTE, m2 Map(String, String) not NULL, m3 Map(String, String), m4 Map(String, Map(String, String)) not NULL) engine=CnchMergeTree() order by a;
+
+insert into 52018_mysql_map values (0, {'k1': 'v1'}, {'k1': 'v1'}, {'k1': 'v1'}, {'k1': {}}) (2, {'k1': 'v1'}, {'k1': 'v1'}, {'k1': 'v1'}, {'k1': {'k1': 'v1'}}) (NULL, {}, {}, NULL, {});
 
 select 'element_at';
-select element_at(b, 'k1') as eb, element_at(c, 'k1') as ec, toTypeName(eb), toTypeName(ec) from 52018_mysql_map;
-select element_at(b, 'k2') as eb, element_at(c, 'k2') as ec, toTypeName(eb), toTypeName(ec) from 52018_mysql_map;
-select element_at(b, 'k3') as eb, element_at(c, 'k3') as ec, toTypeName(eb), toTypeName(ec) from 52018_mysql_map;
+select element_at(m1, NULL) e1, element_at(m2, NULL) e2, element_at(m3, NULL) e3, element_at(m4, NULL) as e4, toTypeName(e1), toTypeName(e2), toTypeName(e3), toTypeName(e4) from 52018_mysql_map order by a;
+select element_at(m1, 'k1') e1, element_at(m2, 'k1') e2, element_at(m3, 'k1') e3, element_at(m4, 'k1') as e4, toTypeName(e1), toTypeName(e2), toTypeName(e3), toTypeName(e4) from 52018_mysql_map order by a;
+select element_at(m1, 'k2') e1, element_at(m2, 'k2') e2, element_at(m3, 'k2') e3, element_at(m4, 'k2') as e4, toTypeName(e1), toTypeName(e2), toTypeName(e3), toTypeName(e4) from 52018_mysql_map order by a;
 
 select element_at(NULL, '5');
 select element_at(NULL, 5);
@@ -48,18 +48,18 @@ WITH materialize(map(0, 1)) AS m, materialize(cast(NULL, 'Nullable(Int)')) AS k 
 
 
 select 'map_keys';
-select map_keys(b), map_keys(c) from 52018_mysql_map;
+select map_keys(m1), map_keys(m2), map_keys(m3), map_keys(m4) from 52018_mysql_map;
 select map_keys(map());
 select map_keys(NULL);
 
 
 select 'map_values';
-select map_values(b), map_values(c) from 52018_mysql_map;
+select map_values(m1), map_values(m2), map_values(m3), map_values(m4) from 52018_mysql_map;
 select map_values(map());
 select map_values(NULL);
 
 select 'size';
-select size(b), size(c) from 52018_mysql_map;
+select size(m1), size(m2), size(m3), size(m4) from 52018_mysql_map;
 select size(map());
 select size(NULL);
 

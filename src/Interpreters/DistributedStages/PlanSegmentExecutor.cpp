@@ -277,7 +277,7 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
     query_log_element->written_bytes = query_status_info.written_bytes;
     query_log_element->written_rows = query_status_info.written_rows;
     query_log_element->memory_usage = query_status_info.peak_memory_usage > 0 ? query_status_info.peak_memory_usage : 0;
-    query_log_element->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+    query_log_element->query_duration_ms = query_status_info.elapsed_microseconds / 1000;
     query_log_element->max_io_time_thread_ms = query_status_info.max_io_time_thread_ms;
     query_log_element->max_io_time_thread_name = query_status_info.max_io_time_thread_name;
     query_log_element->thread_ids = std::move(query_status_info.thread_ids);
@@ -314,7 +314,7 @@ void fillPlanSegmentProfile(
         auto query_status_info = query_status->getInfo(true, context->getSettingsRef().log_profile_events);
         segment_profile->read_bytes = query_status_info.read_bytes;
         segment_profile->read_rows = query_status_info.read_rows;
-        segment_profile->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+        segment_profile->query_duration_ms = query_status_info.elapsed_microseconds;
         segment_profile->io_wait_ms = query_status_info.max_io_time_thread_ms;
     }
 
@@ -492,9 +492,11 @@ void PlanSegmentExecutor::doExecute()
         if (!processors_profile_log)
             return;
 
+        auto current_time = std::chrono::system_clock::now();
         processors_profile_log->addLogs(pipeline.get(),
                                         context->getClientInfo().initial_query_id,
-                                        std::chrono::system_clock::now(),
+                                        timeInSeconds(current_time),
+                                        timeInMicroseconds(current_time),
                                         plan_segment->getPlanSegmentId());
     }
 }
@@ -570,7 +572,12 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             if (settings.bsp_mode)
             {
                 data_key->parallel_index = plan_segment_instance->info.parallel_id;
-                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
+                ExtendedExchangeDataKey extended_key{
+                    .key = data_key,
+                    .write_segment_id = plan_segment->getPlanSegmentId(),
+                    .read_segment_id = cur_plan_segment_output->getPlanSegmentId(),
+                    .exchange_mode = exchange_mode};
+                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, extended_key);
                 auto instance_id = context->getPlanSegmentInstanceId();
                 disk_exchange_mgr->submitWriteTask(current_tx_id, instance_id, writer, thread_group);
                 sender = writer;

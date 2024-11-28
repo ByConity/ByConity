@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cerrno>
 #include <unordered_set>
 #include <vector>
@@ -266,10 +267,12 @@ class ExceptionHandler
 public:
     bool setException(std::exception_ptr && exception);
     void throwIfException();
+    bool testException();
     bool hasException() const;
 
 protected:
     std::exception_ptr first_exception;
+    std::atomic<bool> has_exception{false};
     mutable std::mutex mutex;
 };
 

@@ -45,7 +45,7 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    virtual Strings readFileList(ContextPtr query_context) = 0;
+    virtual FilePartInfos readFileList(ContextPtr query_context) = 0;
 
     virtual void clear(ContextPtr query_context) = 0;
 
@@ -90,7 +90,7 @@ public:
     StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
 
 private:
-    Strings getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query);
+    FilePartInfos getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query);
 
     void collectResource(const ContextPtr & query_context, const FileDataPartsCNCHVector & parts, const String & local_table_name);
 
@@ -100,7 +100,7 @@ public:
     CnchFileArguments arguments;
     CnchFileSettings settings;
 
-    Strings file_list;
+    FilePartInfos file_list;
     NamesAndTypesList virtual_columns;
     Block virtual_header;
 

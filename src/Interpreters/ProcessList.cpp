@@ -198,7 +198,7 @@ static bool isMonitoredCnchQuery(const IAST * ast)
         return false;
 }
 
-ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force)
+ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force, UInt64 watch_start_nanoseconds)
 {
     EntryPtr res;
 
@@ -288,7 +288,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
 
         CurrentMetrics::Metric query_type_metric = getQueryTypeMetric(query_type);
         auto query_status = std::make_shared<QueryStatus>(query_context, query_, client_info, priorities.insert(settings.priority),
-            resource_group == nullptr ? nullptr : resource_group->insert(group_it), query_type_metric, is_vw_unlimited);
+            resource_group == nullptr ? nullptr : resource_group->insert(group_it), query_type_metric, is_vw_unlimited, watch_start_nanoseconds);
 
         auto processes_ret = processes.try_emplace(client_info.current_query_id, query_status);
         if (!processes_ret.second)
@@ -478,7 +478,8 @@ QueryStatus::QueryStatus(
     QueryPriorities::Handle && priority_handle_,
     IResourceGroup::Handle && resource_group_handle_,
     CurrentMetrics::Metric & query_type_metric_,
-    const bool is_unlimited_)
+    const bool is_unlimited_,
+    UInt64 watch_start_nanoseconds)
     : WithContext(context_)
     , query(query_)
     , client_info(client_info_)
@@ -487,12 +488,15 @@ QueryStatus::QueryStatus(
     , num_queries_increment{CurrentMetrics::Query}
     , query_type_increment{query_type_metric_}
     , is_unlimited(is_unlimited_)
+    , watch(CLOCK_MONOTONIC, watch_start_nanoseconds, true)
 {
     auto settings = getContext()->getSettings();
     limits.max_execution_time = settings.max_execution_time;
     overflow_mode = settings.timeout_overflow_mode;
     graphviz = std::make_shared<std::vector<std::pair<String, String>>>();
     thread_group.reset();
+    if (watch_start_nanoseconds == 0)
+        watch.restart();
 }
 
 QueryStatus::~QueryStatus()
@@ -784,7 +788,7 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     /// TODO @canh: fix me for union query
     res.client_info       = client_info;
     res.query_rewrite_by_view = query_rewrite_by_view;
-    res.elapsed_seconds   = watch.elapsedSeconds();
+    res.elapsed_microseconds   = watch.elapsedMicroseconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
     res.read_rows         = progress_in.read_rows;
     res.read_bytes        = progress_in.read_bytes;

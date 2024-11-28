@@ -121,10 +121,6 @@ IndexDescription IndexDescription::getIndexFromAST(const ASTPtr & definition_ast
     for (size_t i = 0; i < block_without_columns.columns(); ++i)
     {
         const auto & column = block_without_columns.getByPosition(i);
-        if (column.type->hasDynamicSubcolumns())
-            throw Exception(
-                fmt::format("Column {} with type {} is not allowed in index expression.", column.name, column.type->getName()),
-                ErrorCodes::TYPE_MISMATCH);
         result.column_names.emplace_back(column.name);
         result.data_types.emplace_back(column.type);
         result.sample_block.insert(ColumnWithTypeAndName(column.type->createColumn(), column.type, column.name));

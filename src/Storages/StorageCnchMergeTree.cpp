@@ -105,6 +105,12 @@
 #include <common/logger_useful.h>
 
 
+namespace
+{
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS           = 2;
+}
+
 namespace ProfileEvents
 {
 extern const Event CatalogTime;
@@ -137,6 +143,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT_VERSION;
     extern const int NOT_IMPLEMENTED;
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
+    extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
 }
 
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
@@ -2530,70 +2537,6 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
 void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) const
 {
-    static std::set<String> supported_settings = {
-        "cnch_vw_default",
-        "cnch_vw_read",
-        "cnch_vw_write",
-        "cnch_vw_task",
-        "cnch_server_vw",
-
-        /// Setting for memory buffer
-        "cnch_enable_memory_buffer",
-        "cnch_memory_buffer_size",
-        "min_time_memory_buffer_to_flush",
-        "max_time_memory_buffer_to_flush",
-        "min_bytes_memory_buffer_to_flush",
-        "max_bytes_memory_buffer_to_flush",
-        "min_rows_memory_buffer_to_flush",
-        "max_rows_memory_buffer_to_flush",
-        "max_block_size_in_memory_buffer",
-        "max_bytes_to_write_wal",
-        "enable_flush_buffer_with_multi_threads",
-        "max_flush_threads_num",
-
-        "gc_remove_bitmap_batch_size",
-        "gc_remove_bitmap_thread_pool_size",
-
-        "insertion_label_ttl",
-        "enable_local_disk_cache",
-        "enable_cloudfs", // table level setting for cloudfs
-        "enable_nexus_fs",
-        "enable_preload_parts",
-        "enable_parts_sync_preload",
-        "parts_preload_level",
-        "cnch_parallel_prefetching",
-        "enable_prefetch_checksums",
-        "disk_cache_stealing_mode",
-        "cnch_part_allocation_algorithm",
-
-        "enable_addition_bg_task",
-        "max_addition_bg_task_num",
-        "max_addition_mutation_task_num",
-        "max_partition_for_multi_select",
-        "max_partitions_per_insert_block",
-
-        "cnch_merge_parts_cache_timeout",
-        "cnch_merge_parts_cache_min_count",
-        "cnch_merge_enable_batch_select",
-        "cnch_merge_max_total_rows_to_merge",
-        "cnch_merge_max_total_bytes_to_merge",
-        "cnch_merge_max_parts_to_merge",
-        "cnch_merge_only_realtime_partition",
-        "cnch_merge_select_nonadjacent_parts",
-        "cnch_merge_pick_worker_algo",
-        "max_refresh_materialized_view_task_num",
-        "cnch_merge_round_robin_partitions_interval",
-        "cnch_gc_round_robin_partitions_interval",
-        "cnch_gc_round_robin_partitions_number",
-        "gc_remove_part_thread_pool_size",
-        "gc_remove_part_batch_size",
-        "cluster_by_hint",
-
-        "enable_hybrid_allocation",
-        "min_rows_per_virtual_part",
-        "part_to_vw_size_ratio"
-    };
-
     /// Check whether the value is legal for Setting.
     /// For example, we have a setting item, `SettingBool setting_test`
     /// If you submit a Alter query: "Alter table test modify setting setting_test='abc'"
@@ -3228,16 +3171,29 @@ const String & StorageCnchMergeTree::getRelativeDataPath(StorageLocation locatio
 
 std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
+    UInt64 force = local_context->getSettingsRef().force_optimize_skip_unused_shards;
+
     if (!isBucketTable())
+    {
+        if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS)
+            throw Exception("Not a bucket table", ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
         return {};
+    }
 
     std::set<Int64> bucket_numbers;
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
+    ASTSelectQuery & select = *(query_info.query->as<ASTSelectQuery>());
+    ASTPtr where_expression;
+    if (select.prewhere() && select.where())
+    {
+        where_expression = makeASTFunction("and", select.prewhere()->clone(), select.where()->clone());
+    }
+    else if (select.prewhere() || select.where())
+    {
+        where_expression = select.prewhere() ? select.prewhere()->clone() : select.where()->clone();
+    }
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    // if number of bucket columns of this table > 1, skip optimisation
-    if (settings.optimize_skip_unused_shards && where_expression
-        && metadata_snapshot->getColumnsForClusterByKey().size() == 1)
+    if (settings.optimize_skip_unused_shards && where_expression)
     {
         // get constant actions of the expression
         Block sample_block = metadata_snapshot->getSampleBlock();
@@ -3307,6 +3263,16 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
                 bucket_numbers.insert(bucket_number);
             }
         }
+    }
+    if (bucket_numbers.empty() && force)
+    {
+        WriteBufferFromOwnString exception_message;
+        if (metadata_snapshot->getColumnsForClusterByKey().size() == 1)
+            exception_message << "Cluster by key is not used";
+        else
+            exception_message << "Cluster by keys are not used";
+        if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS || force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY)
+            throw Exception(exception_message.str(), ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
     }
     return bucket_numbers;
 }

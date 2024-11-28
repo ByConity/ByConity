@@ -4081,6 +4081,8 @@ namespace Catalog
 
     void Catalog::clearUndoBuffersByKeys(const TxnTimestamp & txnID, const std::vector<String> & keys)
     {
+        if (keys.empty())
+            return;
         runWithMetricSupport(
             [&] {
                 const String undo_buffer_key_prefix = meta_proxy->undoBufferKeyPrefix(name_space, txnID, false);
@@ -7301,8 +7303,7 @@ namespace Catalog
         }
     }
 
-    ServerDataPartsVector Catalog::listDetachedParts(const MergeTreeMetaBase& storage,
-        const AttachFilter& filter)
+    ServerDataPartsVector Catalog::listDetachedParts(const MergeTreeMetaBase & storage, const AttachFilter & filter)
     {
         IMetaStore::IteratorPtr iter = nullptr;
         switch (filter.mode)
@@ -8055,6 +8056,46 @@ namespace Catalog
 
         // then, clear manifest list metadata from kv.
         meta_proxy->getMetastore()->adaptiveBatchWrite(clear_manifest_list_request);
+    }
+
+    size_t Catalog::removePartsInBatch(
+        const MergeTreeMetaBase & storage, std::function<bool(const ServerDataPartsVector &)> func, const size_t batch_size)
+    {
+        const String prefix = meta_proxy->dataPartPrefix(name_space, UUIDHelpers::UUIDToString(storage.getStorageUUID()));
+        return meta_proxy->removeByPrefix(
+            prefix,
+            [&storage, &func](const std::vector<std::pair<const String, const String>> & kvs) {
+                ServerDataPartsVector parts;
+                for (const auto & kv : kvs)
+                {
+                    Protos::DataModelPart part_model;
+                    part_model.ParseFromString(kv.second);
+                    parts.emplace_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, std::move(part_model))));
+                }
+
+                return func(parts);
+            },
+            batch_size);
+    }
+
+    size_t
+    Catalog::removeDeleteBitmapsInBatch(const MergeTreeMetaBase & storage, std::function<bool(const DeleteBitmapMetaPtrVector &)> func, const size_t batch_size)
+    {
+        const String prefix = meta_proxy->deleteBitmapPrefix(name_space, UUIDHelpers::UUIDToString(storage.getStorageUUID()));
+        return meta_proxy->removeByPrefix(
+            prefix,
+            [&func, &storage](const std::vector<std::pair<const String, const String>> & kvs) {
+                DeleteBitmapMetaPtrVector bitmaps;
+                for (const auto & kv : kvs)
+                {
+                    std::shared_ptr<Protos::DataModelDeleteBitmap> bitmap_model = std::make_shared<Protos::DataModelDeleteBitmap>();
+                    bitmap_model->ParseFromString(kv.second);
+                    bitmaps.emplace_back(std::make_shared<DeleteBitmapMeta>(storage, bitmap_model));
+                }
+
+                return func(bitmaps);
+            },
+            batch_size);
     }
 }
 }

@@ -179,15 +179,19 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         else
             res_columns[i++]->insert(column.type->getName());
 
-        auto get_flags = [&]() {
-            std::ostringstream os;
-            if (column.type->isByteMap())
-                os << " BYTE";
-            else if (column.type->isKVMap())
-                os << " KV";
-            return os.str();
-        };
-        res_columns[i++]->insert(get_flags());
+        /// Data type flags if contains map
+        {
+            String flags_str;
+            if (column.type->isMap() || column.type->hasNestedMap())
+            {
+                /// Map can only be Byte Map or KV Map, all nested map is KV Map
+                if (column.type->isByteMap())
+                    flags_str = " BYTE";
+                else
+                    flags_str = " KV";
+            }
+            res_columns[i++]->insert(flags_str);
+        }
 
         if (column.default_desc.expression)
         {

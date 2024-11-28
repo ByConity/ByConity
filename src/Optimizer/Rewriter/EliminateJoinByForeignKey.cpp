@@ -1119,6 +1119,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitAggregatingNode(AggregatingNode 
             step->getAggregates(),
             step->getGroupingSetsParams(),
             step->isFinal(),
+            AggregateStagePolicy::DEFAULT,
             step->getGroupBySortDescription(),
             step->getGroupings(),
             false,

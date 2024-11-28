@@ -463,6 +463,8 @@ enum StealingCacheMode : UInt64
     M(Seconds, duplicate_repair_interval, 600, "Interval of check duplicate key", 0) \
     M(Bool, enable_unique_partial_update, false, "Enable partial update", 0) \
     M(Bool, enable_unique_row_store, false, "TODO: support further to enhance point query perf", 0) \
+    M(UInt64, partial_update_max_process_parts, 100, "Max process parts for partial update sub iteration", 0) \
+    M(UInt64, partial_update_max_process_rows, 15000000, "Max process rows for partial update sub iteration", 0) \
     M(MaxThreads, partial_update_query_parts_thread_size, 8, "The thread size of query data parts.", 0) \
     M(MaxThreads, partial_update_query_columns_thread_size, 1, "The thread size of query columns for each part.", 0) \
     M(MaxThreads, partial_update_replace_columns_thread_size, 8, "The thread size of replace columns.", 0) \
@@ -474,7 +476,7 @@ enum StealingCacheMode : UInt64
     /** CI settings || test settings **/               \
     M(Bool, disable_dedup_parts, false, "Whether block the actual dedup progress.", 0) \
     M(Bool, partial_update_detail_logging, false, "Whether print some detailed troubleshooting information, only used for test scenarios.", 0) \
-    M(Bool, pick_first_worker_to_dedup, false, "[deprecated, use dedup_pick_worker_algo] Whether always pick the first worker(for dedup stage) in vw for stress test.", 0) \
+    M(Bool, pick_first_worker_to_dedup, false, "[Deprecated, use dedup_pick_worker_algo] Whether always pick the first worker(for dedup stage) in vw for stress test.", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \

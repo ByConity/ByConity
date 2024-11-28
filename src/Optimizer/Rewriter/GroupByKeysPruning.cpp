@@ -158,6 +158,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
         new_aggregators,
         agg_step->getGroupingSetsParams(),
         agg_step->isFinal(),
+        agg_step->getStagePolicy(),
         agg_step->getGroupBySortDescription(),
         agg_step->getGroupings(),
         false,

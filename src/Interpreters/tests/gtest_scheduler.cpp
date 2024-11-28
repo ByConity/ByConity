@@ -247,7 +247,7 @@ TEST(GtestScheduler, RetryTestCase1)
     std::unordered_map<std::string, DB::Field> settings{
         {"bsp_mode", 1},
         {"distributed_max_parallel_size", parallel_size},
-        {"bsp_max_retry_num", 3},
+        {"bsp_max_retry_num", 2},
         {"enable_disk_shuffle_partition_coalescing", 0}};
     auto scheduler_context = createSchedulerTestContext(parallel_size, settings);
     auto bsp_scheduler = scheduler_context.bsp_scheduler;

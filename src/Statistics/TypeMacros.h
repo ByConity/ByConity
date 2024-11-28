@@ -57,4 +57,5 @@
     X_(DummyBeta) \
     X_(TableBasic) \
     X_(ColumnBasic) \
-    X_(HllSketch)
+    X_(HllSketch) \
+    X_(UdiCounter) \

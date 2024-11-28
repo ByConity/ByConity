@@ -88,12 +88,7 @@ public:
         UInt64 block_id = 0,
         Int64 mutation = 0,
         Int64 hint_mutation = 0,
-        bool enable_partial_update = false);
-
-    /// For partial update mode: write partial part with certain columns
-    /// XXX: Currently the entire block with all columns has been regenerated, needs to be optimized later
-    MergeTreeMetaBase::MutableDataPartPtr
-    writeTempPartialUpdatePart(Block & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, const IMergeTreeDataPartPtr & source_part);
+        PartialUpdateState partial_update_state = PartialUpdateState::NotPartialUpdate);
 
     MergeTreeMetaBase::MutableDataPartPtr writeProjectionPart(
         Block block, const ProjectionDescription & projection, const IMergeTreeDataPart * parent_part);

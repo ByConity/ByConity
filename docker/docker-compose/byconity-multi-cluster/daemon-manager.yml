@@ -111,3 +111,5 @@ daemon_manager:
 
 hdfs_addr: "hdfs://hdfs-namenode:9000"
 cnch_config: "/config/cnch-config.yml"
+cnch_data_retention_time_in_sec: 0
+s3_gc_batch_size: 10

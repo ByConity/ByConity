@@ -47,7 +47,12 @@ Status IndexFileReader::Open(const RemoteFileInfo & remote_file)
     std::unique_ptr<RandomAccessFile> file;
     Status s = rep->options.env->NewRandomAccessRemoteFileWithCache(remote_file, rep->options.remote_file_cache, &file);
     if (s.ok())
+    {
         s = Table::Open(rep->options, std::move(file), remote_file.size, &rep->table_reader);
+        /// directly release remote FD, as SSTable read from footer, meta, etc, then data block
+        if (rep->table_reader)
+            rep->table_reader->releaseRemoteFD();
+    }
     return s;
 }
 

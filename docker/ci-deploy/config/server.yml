@@ -43,6 +43,9 @@ default_session_timeout: 60
 dictionaries_config: "*_dictionary.xml"
 format_schema_path: /var/byconity/format_schemas/
 perQuery: 1
+merge_tree:
+  old_parts_lifetime: 0
+  ttl_for_trash_items: 30
 storage_configuration:
   disks:
     hdfs_disk:

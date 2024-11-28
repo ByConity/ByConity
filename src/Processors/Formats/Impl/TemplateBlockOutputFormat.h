@@ -62,7 +62,6 @@ protected:
     Chunk totals;
     Chunk extremes;
     Progress progress;
-    Stopwatch watch;
 
     size_t row_count = 0;
     bool need_write_prefix = true;

@@ -296,7 +296,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     {
         if (auto worker_resource = context_->tryGetCnchWorkerResource())
         {
-            if (auto table = worker_resource->getTable(table_id))
+            if (auto table = worker_resource->tryGetTable(table_id))
             {
                 LOG_INFO(log, "got table {} from worker resource", table_id.getNameForLogs());
                 return {nullptr, table};

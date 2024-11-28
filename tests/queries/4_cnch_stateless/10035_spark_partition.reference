@@ -1,0 +1,46 @@
+--------------------Check illegal input-----------
+--------------------Check const-----------
+-- 0-4
+113
+208
+147
+-- 5-7
+375
+-- 8-16
+100
+306
+-- 17-32
+387
+-- 33-64
+320
+-- 64+
+214
+-- CN
+141
+312
+-- Int
+208
+147
+333
+159
+-- BigInt
+332
+176
+--------------------Check column-----------
+abc	113
+111	208
+-111	147
+abcabc	375
+abcabcabc	100
+e43970221139c	306
+abcabcabcabcabcabcabcabc	387
+abcabcabcabcabcabcabcabcabcabcabcabc	320
+abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc	214
+中国人	141
+中国人中国人中国人中国人中国人中国人中国人中国人中国人中国人	312
+340282366920938463463374607431768211457	332
+-340282366920938463463374607431768211457	176
+111	208
+-111	147
+4294967297	333
+-4294967297	159

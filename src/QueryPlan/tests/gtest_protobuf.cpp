@@ -977,6 +977,7 @@ TEST_F(ProtobufTest, AggregatingStep)
             params,
             grouping_sets_params,
             final,
+            AggregateStagePolicy::DEFAULT,
             max_block_size,
             merge_threads,
             temporary_data_merge_threads,

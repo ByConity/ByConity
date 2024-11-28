@@ -4,6 +4,9 @@ profiles:
     log_queries: 1
     max_execution_time: 180
     exchange_timeout_ms: 300000
+    cnch_data_retention_time_in_sec: 10
+    s3_gc_batch_size: 10
+    enable_lazy_load_data_parts: 1
   point_lookup:
     max_threads: 1
     exchange_source_pipeline_threads: 1

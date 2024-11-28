@@ -52,7 +52,7 @@ public:
         return "Array";
     }
 
-    /// Map support array key
+    /// Map support array value
     bool canBeInsideNullable() const override
     {
         return true;
@@ -87,6 +87,8 @@ public:
 
     /// 1 for plain array, 2 for array of arrays and so on.
     size_t getNumberOfDimensions() const;
+
+    bool hasNestedMap() const override { return nested->isMap() || nested->hasNestedMap(); }
 
     bool canBeByteMapValueType() const override { return nested->canBeByteMapValueType(); }
 

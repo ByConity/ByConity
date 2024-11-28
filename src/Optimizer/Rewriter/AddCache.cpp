@@ -129,6 +129,7 @@ PlanNodePtr AddCacheVisitor::visitAggregatingNode(AggregatingNode & node, Void &
             partial_agg_step->getAggregates(),
             partial_agg_step->getGroupingSetsParams(),
             /* final */ false,
+            AggregateStagePolicy::DEFAULT,
             partial_agg_step->getGroupBySortDescription(),
             partial_agg_step->getGroupings(),
             partial_agg_step->needOverflowRow(),

@@ -93,6 +93,7 @@ protected:
     /// guard for loading received data_parts and virtual_data_parts.
     std::mutex load_data_parts_mutex;
     bool data_parts_loaded{false};
+    bool versioned_data_parts_loaded{false};
     MutableDataPartsVector received_data_parts;
     MutableDataPartsVector received_virtual_data_parts;
 

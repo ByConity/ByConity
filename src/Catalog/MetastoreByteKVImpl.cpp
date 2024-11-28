@@ -186,6 +186,13 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
 
 bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (req.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
+
     auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     bytekv::sdk::WriteBatchRequest wb_req;
     bytekv::sdk::WriteBatchResponse wb_resp;
@@ -289,13 +296,14 @@ MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getAll()
     return getByPrefix("");
 }
 
-MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String & partition_id, const size_t & limit, uint32_t scan_batch_size, const String & start_key)
+MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String & partition_id, const size_t & limit, uint32_t scan_batch_size, const String & start_key, const bool exclude_start_key)
 {
     auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     ScanRequest scan_req;
     scan_req.scan_batch_count = scan_batch_size;
     scan_req.limit = limit;
     scan_req.table = table_name;
+    scan_req.exclude_start_key = exclude_start_key;
     if (likely(start_key.empty()))
     {
         scan_req.start_key = partition_id;

@@ -2338,4 +2338,29 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || snapshot_p.parse(pos, node, expected);
 }
 
+bool containsMap(const ASTPtr & ast)
+{
+    auto * ast_function = ast->as<ASTFunction>();
+    if (ast_function)
+    {
+        String type_name_upper = Poco::toUpper(ast_function->name);
+        if (type_name_upper == "MAP")
+            return true;
+
+        if (ast_function->arguments)
+        {
+            bool res = false;
+            for (const auto & child: ast_function->arguments->children)
+            {
+                res |= containsMap(child);
+                if (res)
+                    break;
+            }
+            return res;
+        }
+    }
+
+    return false;
+}
+
 }

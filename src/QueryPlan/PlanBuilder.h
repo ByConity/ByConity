@@ -98,7 +98,7 @@ struct PlanBuilder
     // utils
     Names translateToSymbols(ASTs & expressions) const;
     Names translateToUniqueSymbols(ASTs & expressions) const;
-    Names applyProjection(ASTs & expressions);
+    Names applyArrayJoinProjection(const ArrayJoinDescriptions & array_join_descs);
     template <typename T>
     void appendProjection(const T & expressions);
     // project expressions and cast their types

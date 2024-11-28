@@ -2,8 +2,8 @@
 -- create database 002_merge_and_complex_json;
 -- use 002_merge_and_complex_json;
 SET allow_experimental_object_type = 1;
-set enable_optimizer = 0;
 set describe_extend_object_types=1;
+SET block_json_query_in_optimizer = 0;
 CREATE TABLE if not exists t_alter_ids_8(
             `id` UInt64,
             `date` Date,

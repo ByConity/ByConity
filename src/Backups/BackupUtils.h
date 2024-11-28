@@ -7,6 +7,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTBackupQuery.h>
 #include <Protos/data_models.pb.h>
+#include <Interpreters/executeSubQuery.h>
 
 #define BACKUP_SCHEMA_VERSION 1
 
@@ -109,6 +110,4 @@ ASTPtr readCreateQueryFromBackup(const DatabaseAndTableName & table_name, const 
 
 std::optional<std::vector<ASTPtr>> readTableHistoryFromBackup(const DatabaseAndTableName & table_name, const DiskPtr & backup_disk, const String & base_backup_path);
 
-// Return a context copy with new transcation
-ContextMutablePtr getContextWithNewTransaction(const ContextPtr & context, bool read_only);
 }

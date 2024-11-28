@@ -106,6 +106,7 @@ size_t CacheParamBuilder::computeAggregatingHash(std::shared_ptr<AggregatingStep
         aggregating_step->getAggregates(),
         aggregating_step->getGroupingSetsParams(),
         /* final */ false,
+        aggregating_step->getStagePolicy(),
         aggregating_step->getGroupBySortDescription(),
         aggregating_step->getGroupings(),
         aggregating_step->needOverflowRow(),

@@ -18,21 +18,22 @@
 
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <Core/Names.h>
+#include <Databases/DatabaseMemory.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
-#include <Poco/Logger.h>
-#include <Databases/DatabaseMemory.h>
 #include <Storages/ForeignKeysDescription.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageDictCloudMergeTree.h>
+#include <Poco/Logger.h>
 
 
 namespace DB
@@ -178,18 +179,25 @@ void CnchWorkerResource::executeCacheableCreateQuery(
     insertCloudTable({res_table_id.getDatabaseName(), res_table_id.getTableName()}, res, context, /*throw_if_exists=*/ false);
 }
 
-StoragePtr CnchWorkerResource::getTable(const StorageID & table_id) const
+StoragePtr CnchWorkerResource::tryGetTable(const StorageID & table_id, bool load_data_parts) const
 {
     String tenant_db = formatTenantDatabaseName(table_id.getDatabaseName());
-    auto lock = getLock();
+    StoragePtr res = {};
 
-    auto it = cloud_tables.find({tenant_db, table_id.getTableName()});
-    if (it != cloud_tables.end())
     {
-        return it->second;
+        auto lock = getLock();
+        auto it = cloud_tables.find({tenant_db, table_id.getTableName()});
+        if (it != cloud_tables.end())
+            res = it->second;
     }
 
-    return {};
+    if (load_data_parts)
+    {
+        if (auto cloud_table = dynamic_pointer_cast<StorageCloudMergeTree>(res))
+            cloud_table->prepareDataPartsForRead();
+    }
+
+    return res;
 }
 
 DatabasePtr CnchWorkerResource::getDatabase(const String & database_name) const

@@ -25,6 +25,7 @@ ContextMutablePtr createContextForSubQuery(ContextPtr context, String sub_query_
     auto parent_initial_query_id = context->getInitialQueryId();
     auto uuid = UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
     String initial_query_id;
+
     if (sub_query_tag.empty())
         initial_query_id = fmt::format("{}_{}", context->getCurrentQueryId(), uuid);
     else
@@ -35,6 +36,49 @@ ContextMutablePtr createContextForSubQuery(ContextPtr context, String sub_query_
     query_context->setCurrentQueryId(initial_query_id);
 
     return query_context;
+}
+
+// Return a context copy with new transcation
+ContextMutablePtr getContextWithNewTransaction(const ContextPtr & context, bool read_only, bool with_auth)
+{
+    ContextMutablePtr new_context;
+    if (context->hasSessionContext())
+    {
+        new_context = Context::createCopy(context->getSessionContext());
+    }
+    else
+    {
+        new_context = Context::createCopy(context->getGlobalContext());
+    }
+
+    if (with_auth)
+    {
+        auto [user, pass] = new_context->getCnchInterserverCredentials();
+        new_context->setUser(user, pass, Poco::Net::SocketAddress{});
+    }
+    new_context->setSettings(context->getSettings());
+
+    if (context->tryGetCurrentWorkerGroup())
+    {
+        new_context->setCurrentVW(context->getCurrentVW());
+        new_context->setCurrentWorkerGroup(context->getCurrentWorkerGroup());
+    }
+
+    auto txn = new_context->getCnchTransactionCoordinator().createTransaction(
+        CreateTransactionOption()
+            .setContext(new_context)
+            .setForceCleanByDM(context->getSettingsRef().force_clean_transaction_by_dm)
+            .setAsyncPostCommit(context->getSettingsRef().async_post_commit)
+            .setReadOnly(read_only));
+    if (txn)
+    {
+        new_context->setCurrentTransaction(txn);
+    }
+    else
+    {
+        throw Exception("Failed to create transaction", ErrorCodes::LOGICAL_ERROR);
+    }
+    return new_context;
 }
 
 void modifyQueryContext(ContextMutablePtr query_context, bool internal)

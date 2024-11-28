@@ -1,3 +1,4 @@
+String type
 1
 1
 0
@@ -17,6 +18,7 @@
 [1000]
 [1001]
 [1002]
+Const column
 {'aa':4,'bb':5}	['aa','bb']	[4,5]
 {'aa':4,'bb':5}	1	0
 {0:0}	1
@@ -25,8 +27,11 @@
 v1
 \N
 v1
+\N
+v1
 
 v1
+mapElement with null arguments
 \N
 \N
 \N
@@ -35,6 +40,7 @@ v1
 \N
 \N
 \N
+arrayElement with null arguments
 \N
 \N
 \N
@@ -43,6 +49,7 @@ v1
 \N
 \N
 \N
+arrayElement with nullable types
 2	\N	\N
 2	\N	\N
 2	\N	\N
@@ -59,3 +66,8 @@ v1
 2	\N	\N
 2	\N	\N
 2	\N	\N
+mapExtractKeyLike
+{'k1':'v1','k2':'v2'}	{'k1':'v1'}
+{'k1':'v1','k2':'v2'}	{'k1':'v1'}
+{'k1':['v1'],'k2':['v2']}	{'k1':['v1']}
+{'k1':['v1'],'k2':['v2']}	{'k1':['v1']}

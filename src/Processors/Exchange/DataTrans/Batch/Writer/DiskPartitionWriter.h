@@ -24,7 +24,7 @@ namespace DB
 class DiskPartitionWriter : public IBroadcastSender
 {
 public:
-    DiskPartitionWriter(ContextPtr context, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExchangeDataKeyPtr key_);
+    DiskPartitionWriter(ContextPtr context, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExtendedExchangeDataKey key_);
     ~DiskPartitionWriter() override;
     /// send data to queue
     BroadcastStatus sendImpl(Chunk chunk) override;
@@ -42,14 +42,14 @@ public:
     BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
     inline ExchangeDataKeyPtr getKey() const
     {
-        return key;
+        return extended_key.key;
     }
     void waitDone(size_t timeout_ms)
     {
         std::unique_lock<bthread::Mutex> lock(done_mutex);
         if (!done_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&]() { return done; }))
         {
-            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, fmt::format("wait for {} done timeout", *key));
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, fmt::format("wait for {} done timeout", *extended_key.key));
         }
     }
 
@@ -69,7 +69,7 @@ private:
     std::weak_ptr<DiskExchangeDataManager> mgr;
     DiskPtr disk;
     Block header;
-    ExchangeDataKeyPtr key;
+    ExtendedExchangeDataKey extended_key;
     LoggerPtr log;
     /// data_queue is used here to ensure thread-safety(by background write task) when multiple write/finish are called from different threads
     /// TODO @lianxuechao optimize for single-thread case

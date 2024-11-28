@@ -17,7 +17,7 @@ struct WorkerId
 
     inline bool operator==(WorkerId const & rhs) const
     {
-        return (this->vw_name == rhs.vw_name && this->wg_name == wg_name && this->id == id);
+        return vw_name == rhs.vw_name && wg_name == rhs.wg_name && id == rhs.id;
     }
 
 };

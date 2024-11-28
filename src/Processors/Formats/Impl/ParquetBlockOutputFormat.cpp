@@ -133,27 +133,38 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
 
 void ParquetBlockOutputFormat::finalize()
 {
-    if (!staging_chunks.empty())
-        writeRowGroup(std::move(staging_chunks));
-
-    if (!file_writer)
-    {
-        Block header = materializeBlock(getPort(PortKind::Main).getHeader());
-        std::vector<Chunk> chunks;
-        chunks.push_back(Chunk(header.getColumns(), 0));
-        writeRowGroup(std::move(chunks));
-    }
+    writeRowGroup(std::move(staging_chunks));
 
     if (file_writer)
     {
         auto status = file_writer->Close();
         if (!status.ok())
             throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Error while closing a table: {}", status.ToString());
+
+        file_writer.reset();
     }
+
+    written_chunks = 0;
+}
+
+void ParquetBlockOutputFormat::customReleaseBuffer()
+{
+    finalize();
 }
 
 void ParquetBlockOutputFormat::writeRowGroup(std::vector<Chunk> chunks)
 {
+    if (chunks.empty())
+    {
+        if (!written_chunks)
+        {
+            Block header = materializeBlock(getPort(PortKind::Main).getHeader());
+            chunks.push_back(Chunk(header.getColumns(), 0));
+        }
+        else
+            return;
+    }
+
     const size_t columns_num = chunks.at(0).getNumColumns();
     std::shared_ptr<arrow::Table> arrow_table;
 
@@ -169,6 +180,8 @@ void ParquetBlockOutputFormat::writeRowGroup(std::vector<Chunk> chunks)
     }
 
     ch_column_to_arrow_column->chChunkToArrowTable(arrow_table, chunks, columns_num);
+
+    written_chunks += chunks.size();
 
     if (!file_writer)
     {
@@ -199,18 +212,6 @@ void ParquetBlockOutputFormat::writeRowGroup(std::vector<Chunk> chunks)
 
     if (!status.ok())
         throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Error while writing a table: {}", status.ToString());
-}
-
-void ParquetBlockOutputFormat::customReleaseBuffer()
-{
-    if (file_writer)
-    {
-        auto status = file_writer->Close();
-        if (!status.ok())
-            throw Exception{"Error while closing a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
-
-        file_writer.reset();
-    }
 }
 
 void registerOutputFormatProcessorParquet(FormatFactory & factory)

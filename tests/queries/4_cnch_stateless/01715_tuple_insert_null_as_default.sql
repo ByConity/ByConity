@@ -64,7 +64,7 @@ DROP TABLE test_tuple_nested_in_map;
 SELECT 'Tuple nested in Map nested in Tuple';
 
 DROP TABLE IF EXISTS test_tuple_nested_in_map_nested_in_tuple;
-CREATE TABLE test_tuple_nested_in_map_nested_in_tuple (value Tuple(UInt8, Map(String, Tuple(UInt8, UInt8)))) ENGINE=CnchMergeTree ORDER BY tuple();
+CREATE TABLE test_tuple_nested_in_map_nested_in_tuple (value Tuple(UInt8, Map(String, Tuple(UInt8, UInt8))) KV) ENGINE=CnchMergeTree ORDER BY tuple();
 
 SET input_format_null_as_default = 1;
 INSERT INTO test_tuple_nested_in_map_nested_in_tuple VALUES ( (NULL, map('test', (NULL, 1))) );

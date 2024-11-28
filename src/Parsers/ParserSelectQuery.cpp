@@ -20,7 +20,9 @@
  */
 
 #include <memory>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/IParserBase.h>
 #include <Parsers/CommonParsers.h>
@@ -34,6 +36,7 @@
 #include <Parsers/ParserHints.h>
 #include <Poco/Logger.h>
 #include <Parsers/formatAST.h>
+#include <Poco/String.h>
 
 
 namespace DB
@@ -285,6 +288,14 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (!order_list.parse(pos, order_expression_list, expected))
             return false;
+
+        if (order_expression_list->children.size() == 1)
+        {
+            /// ORDER BY ALL
+            auto * identifier = order_expression_list->children[0]->as<ASTOrderByElement>()->children[0]->as<ASTIdentifier>();
+            if (identifier != nullptr && Poco::toUpper(identifier->name()) == "ALL")
+                select_query->order_by_all = true;
+        }
     }
 
     /// This is needed for TOP expression, because it can also use WITH TIES.

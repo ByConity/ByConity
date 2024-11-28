@@ -2,6 +2,7 @@
 #include <limits>
 #include <memory>
 #include <utility>
+#include <vector>
 #include <string.h>
 #include <Core/Block.h>
 #include <Core/Field.h>
@@ -21,7 +22,10 @@
 #include <Storages/MergeTree/RPNBuilder.h>
 #include <Interpreters/ITokenExtractor.h>
 #include <Common/config.h>
-#include "Storages/MergeTree/GINStoreCommon.h"
+#include <Columns/IColumn.h>
+#include <DataTypes/IDataType.h>
+#include <Storages/MergeTree/GINStoreCommon.h>
+#include <Storages/MergeTree/MergeTreeIndexInvertedHelper.h>
 
 #if USE_TSQUERY
 #include <Common/TextSreachQuery.h>
@@ -202,7 +206,8 @@ MergeTreeIndexAggregatorInverted::MergeTreeIndexAggregatorInverted(
     const String & index_name_,
     const GinFilterParameters & params_,
     TokenExtractorPtr token_extractor_,
-    ChineseTokenExtractorPtr nlp_extractor_)
+    ChineseTokenExtractorPtr nlp_extractor_,
+    const std::vector<String> & subcolumn_names_)
     : writer(writer_)
     , index_columns(index_columns_)
     , index_name(index_name_)
@@ -210,7 +215,12 @@ MergeTreeIndexAggregatorInverted::MergeTreeIndexAggregatorInverted(
     , token_extractor(token_extractor_)
     , nlp_extractor(nlp_extractor_)
     , granule(std::make_shared<MergeTreeIndexGranuleInverted>(index_name, index_columns.size(), params))
+    , subcolumn_names(subcolumn_names_)
 {
+    if (!subcolumn_names.empty())
+    {
+        initAggregator();
+    }
 }
 
 MergeTreeIndexGranulePtr MergeTreeIndexAggregatorInverted::getGranuleAndReset()
@@ -249,6 +259,100 @@ void MergeTreeIndexAggregatorInverted::addToGinFilter(UInt32 rowID, const char *
 
 }
 
+void MergeTreeIndexAggregatorInverted::initAggregator()
+{
+    indexed_path_builder = std::make_shared<IndexColumnPath>(index_columns[0], subcolumn_names);
+}
+
+void MergeTreeIndexAggregatorInverted::buildIndexForString(
+    const size_t & rows_read,
+    const size_t & current_position,
+    const ColumnPtr & column,
+    const size_t & col,
+    UInt32 & row_id,
+    size_t & processed_bytes)
+{
+    for (size_t i = 0; i < rows_read; ++i)
+    {
+        auto ref = column->getDataAt(current_position + i);
+        addToGinFilter(row_id, ref.data, ref.size, granule->gin_filters[col]);
+        processed_bytes += ref.size;
+        row_id++;
+    }
+}
+
+void MergeTreeIndexAggregatorInverted::buildIndexForArrayString(
+    const size_t & rows_read,
+    const size_t & current_position,
+    const ColumnPtr & column,
+    const size_t & col,
+    UInt32 & row_id,
+    size_t & processed_bytes)
+{
+    const auto & column_array = assert_cast<const ColumnArray &>(*column);
+    const auto & column_offsets = column_array.getOffsets();
+    const auto & column_data = column_array.getData();
+    for (size_t i = 0; i < rows_read; ++i)
+    {
+        size_t element_start_row = column_offsets[current_position + i - 1];
+        size_t element_size = column_offsets[current_position + i] - element_start_row;
+        for (size_t row_num = 0; row_num < element_size; ++row_num)
+        {
+            auto ref = column_data.getDataAt(element_start_row + row_num);
+            addToGinFilter(row_id, ref.data, ref.size, granule->gin_filters[col]);
+            processed_bytes += ref.size;
+        }
+        row_id++;
+    }
+}
+
+// we assume only one json column in inverted
+void MergeTreeIndexAggregatorInverted::buildIndexForSubcolumnInTuple(
+    const size_t & rows_read,
+    const size_t & current_position,
+    const ColumnPtr & indexed_column,
+    const std::vector<const ColumnPtr> & offsets_vector,
+    const size_t & col,
+    UInt32 row_id,
+    size_t & processed_bytes)
+{
+    if (indexed_column->empty())
+    {
+        return;
+    }
+    if(isStringOrFixedString(indexed_column->getDataType()))
+    {
+        for (size_t i = 0 ; i < rows_read; ++i)
+        {
+            size_t sub_element_start_row = current_position + i;
+            size_t sub_element_size = 1;
+            for(const auto & offsets_column : offsets_vector)
+            {
+                const IColumn::Offsets & off = assert_cast<const ColumnArray::ColumnOffsets &>(*offsets_column).getData();
+                if(sub_element_start_row >= off.size())
+                {
+                    sub_element_size = 0 ;
+                    break;
+                }
+                size_t current_sub_element_start_row = off[sub_element_start_row - 1 ];
+                sub_element_size = off[sub_element_start_row + sub_element_size - 1 ] - current_sub_element_start_row;
+                if (sub_element_size == 0)
+                {
+                    break;
+                }
+                sub_element_start_row = current_sub_element_start_row;
+            }
+            for (size_t row_num = 0; row_num < sub_element_size; row_num++)
+            {
+                auto ref = indexed_column->getDataAt(sub_element_start_row + row_num);
+                addToGinFilter(row_id, ref.data, ref.size, granule->gin_filters[col]);
+                processed_bytes+=ref.size;
+            }
+            row_id++;
+        }
+    }
+}
+
 void MergeTreeIndexAggregatorInverted::update(const Block & block, size_t * pos, size_t limit)
 {
     if (*pos >= block.rows())
@@ -271,12 +375,23 @@ void MergeTreeIndexAggregatorInverted::update(const Block & block, size_t * pos,
         size_t current_position = *pos;
 
         size_t processed_bytes = 0;
-        for (size_t i = 0; i < rows_read; ++i)
+
+        if(isTuple(column_with_type.type))
         {
-            auto ref = column->getDataAt(current_position + i);
-            addToGinFilter(row_id, ref.data, ref.size, granule->gin_filters[col]);
-            processed_bytes += ref.size;
-            row_id++;
+            IndexColumnPath::RecursiveColumnBuildCallback callback
+                = [&](const ColumnPtr & indexed_column, const std::vector<const ColumnPtr> & offsets_vector) {
+                    buildIndexForSubcolumnInTuple(rows_read, current_position, indexed_column, offsets_vector, col, row_id, processed_bytes);
+                };
+
+            indexed_path_builder->buildIndexFromTuple(column_with_type, callback);
+        }
+        else if(isArray(column_with_type.type))
+        {
+            buildIndexForArrayString(rows_read, current_position, column, col, row_id, processed_bytes);
+        }
+        else
+        {
+            buildIndexForString(rows_read, current_position, column, col, row_id, processed_bytes);
         }
 
         writer.incrementProcessedBytes(processed_bytes);
@@ -300,12 +415,14 @@ MergeTreeConditionInverted::MergeTreeConditionInverted(
     const Block & index_sample_block,
     const GinFilterParameters & params_,
     TokenExtractorPtr token_extractor_,
-    ChineseTokenExtractorPtr nlp_extractor_)
+    ChineseTokenExtractorPtr nlp_extractor_,
+    const std::vector<String> & subcolumn_names_)
     : header(index_sample_block)
     , params(params_)
     , token_extractor(token_extractor_)
     , nlp_extractor(nlp_extractor_)
     , prepared_sets(query_info.sets)
+    , subcolumn_names(subcolumn_names_)
 
 {
     skip_size = context_->getSettingsRef().skip_inverted_index_term_size;
@@ -333,6 +450,7 @@ bool MergeTreeConditionInverted::alwaysUnknownOrTrue() const
         else if (
             element.function == RPNElement::FUNCTION_EQUALS || element.function == RPNElement::FUNCTION_NOT_EQUALS
             || element.function == RPNElement::FUNCTION_IN || element.function == RPNElement::FUNCTION_NOT_IN
+            || element.function == RPNElement::FUNCTION_HAS || element.function == RPNElement::FUNCTION_HAS_ANY
             || element.function == RPNElement::FUNCTION_MULTI_SEARCH || element.function == RPNElement::ALWAYS_FALSE
             #if USE_TSQUERY
             || element.function == RPNElement::FUNCTION_TEXT_SEARCH
@@ -397,7 +515,9 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(MergeTreeIndexGranuleP
                 filter_stack.emplace_back(nullptr);
             }
         }
-        else if (element.function == RPNElement::FUNCTION_EQUALS || element.function == RPNElement::FUNCTION_NOT_EQUALS)
+        else if (element.function == RPNElement::FUNCTION_EQUALS
+                || element.function == RPNElement::FUNCTION_NOT_EQUALS
+                || element.function == RPNElement::FUNCTION_HAS)
         {
             std::unique_ptr<roaring::Roaring> operator_filter = result_filter ?
                 std::make_unique<roaring::Roaring>() : nullptr;
@@ -477,7 +597,7 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(MergeTreeIndexGranuleP
                 }
             }
         }
-        else if (element.function == RPNElement::FUNCTION_MULTI_SEARCH)
+        else if (element.function == RPNElement::FUNCTION_MULTI_SEARCH || element.function == RPNElement::FUNCTION_HAS_ANY)
         {
             const auto & gin_filters = element.set_gin_filters[0];
 
@@ -666,12 +786,42 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(MergeTreeIndexGranuleP
 bool MergeTreeConditionInverted::getKey(const ASTPtr & node, size_t & key_column_num)
 {
     Names index_columns = header.getNames();
-    auto it = std::find(index_columns.begin(), index_columns.end(), node->getColumnName());
-    if (it == index_columns.end())
-        return false;
 
-    key_column_num = static_cast<size_t>(it - index_columns.begin());
-    return true;
+    if(!subcolumn_names.empty())
+    {
+        for ( auto it = index_columns.begin() ; it != index_columns.end(); ++it)
+        {
+            if (subcolumn_names[0] == "*")
+            {
+                if (boost::starts_with(node->getColumnName(), *it))
+                {
+                    key_column_num = static_cast<size_t>(it - index_columns.begin());
+                    return true;
+                }
+            }
+            else
+            {
+                for (const auto & subcolumn_name : subcolumn_names)
+                {
+                    if (boost::starts_with(node->getColumnName(), fmt::format("{}.{}", *it, subcolumn_name)))
+                    {
+                        key_column_num = static_cast<size_t>(it - index_columns.begin());
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    else
+    {
+        auto it = std::find(index_columns.begin(), index_columns.end(), node->getColumnName());
+        if (it == index_columns.end())
+            return false;
+
+        key_column_num = static_cast<size_t>(it - index_columns.begin());
+        return true;
+    }
 }
 
 bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_with_constants, RPNElement & out)
@@ -881,6 +1031,48 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             out.function = RPNElement::FUNCTION_IN;
             return true;
         }
+        else if (func_name == "has")
+        {
+            out.key_column = key_column_num;
+            out.function = RPNElement::FUNCTION_HAS;
+            out.gin_filter = std::make_unique<GinFilter>(params);
+            auto & value = const_value.get<String>();
+            if (token_extractor != nullptr)
+            {
+                ITokenExtractor::stringToGinFilter(value.data(), value.size(), token_extractor, *out.gin_filter);
+            }
+            else
+            {
+                ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, *out.gin_filter);
+            }
+            return true;
+        }
+        else if (func_name == "hasAny" || func_name == "arraySetCheck")
+        {
+            out.key_column = key_column_num;
+            out.function = RPNElement::FUNCTION_HAS_ANY;
+
+            std::vector<std::vector<GinFilter>> gin_filters;
+            gin_filters.emplace_back();
+            for (const auto & element : const_value.get<Array>())
+            {
+                if (element.getType() != Field::Types::String)
+                    return false;
+
+                gin_filters.back().emplace_back(params);
+                const auto & value = element.get<String>();
+                if (token_extractor != nullptr)
+                {
+                    ITokenExtractor::stringLikeToGinFilter(value.data(), value.size(), token_extractor, gin_filters.back().back());
+                }
+                else
+                {
+                    ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, gin_filters.back().back());
+                }
+            }
+            out.set_gin_filters = std::move(gin_filters);
+            return true;
+        }
 
         return false;
     }
@@ -999,18 +1191,45 @@ MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregator() cons
 
 MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(GINStoreWriter * writer) const
 {
-    return std::make_shared<MergeTreeIndexAggregatorInverted>(*writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get());
+    return std::make_shared<MergeTreeIndexAggregatorInverted>(*writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get(), subcolumn_names);
 }
 
 MergeTreeIndexConditionPtr MergeTreeIndexInverted::createIndexCondition(const SelectQueryInfo & query, ContextPtr context) const
 {
-    return std::make_shared<MergeTreeConditionInverted>(query, context, index.sample_block, params, token_extractor.get(), nlp_extractor.get());
+    return std::make_shared<MergeTreeConditionInverted>(query, context, index.sample_block, params, token_extractor.get(), nlp_extractor.get(), subcolumn_names);
 };
 
 bool MergeTreeIndexInverted::mayBenefitFromIndexForIn(const ASTPtr & node) const
 {
-    return std::find(std::cbegin(index.column_names), std::cend(index.column_names), node->getColumnName())
-        != std::cend(index.column_names);
+    if (!subcolumn_names.empty())
+    {
+        for ( const auto & column_name: index.column_names)
+        {
+            if (subcolumn_names[0] == "*")
+            {
+                if (boost::starts_with(node->getColumnName(), column_name))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                for (const auto & subcolumn_name : subcolumn_names)
+                {
+                    if (boost::starts_with(node->getColumnName(), fmt::format("{}.{}", column_name, subcolumn_name)))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    else
+    {
+        return std::find(std::cbegin(index.column_names), std::cend(index.column_names), node->getColumnName())
+            != std::cend(index.column_names);
+    }
 }
 
 MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
@@ -1068,8 +1287,22 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
                 throw Exception(fmt::format("Unknown config type {} in inverted index defintion", config_type),
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
             }
-            return std::make_unique<MergeTreeIndexInverted>(index, version,
+
+            auto inverted_index = std::make_unique<MergeTreeIndexInverted>(index, version,
                 GinFilterParameters(0, 1.0), std::move(tokenizer));
+
+            if (!parsed_obj->get("subkey").isEmpty()) // JSON INDEX
+            {
+                auto subcolumn_array = parsed_obj->getArray("subkey");
+                std::vector<String> subcolumn_names;
+
+                for (const auto & element : *subcolumn_array)
+                {
+                    subcolumn_names.push_back(element.extract<String>());
+                }
+                inverted_index->subcolumn_names = std::move(subcolumn_names);
+            }
+            return inverted_index;
         }
         else
         {
@@ -1095,12 +1328,28 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
 
 void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
 {
+    bool is_json_index = false;
     for (const auto & index_data_type : index.data_types)
     {
         WhichDataType data_type(index_data_type);
 
+        if(data_type.isTuple() || data_type.isObject())
+        {
+            if (index.data_types.size() != 1)
+                throw Exception("inverted index only support one data_type with json/tuple ", ErrorCodes::INCORRECT_QUERY);
+
+            is_json_index = true;
+            break;
+        }
+
+        if (data_type.isArray())
+        {
+            const auto & gin_type = assert_cast<const DataTypeArray &>(*index_data_type);
+            data_type = WhichDataType(gin_type.getNestedType());
+        }
+
         if (!data_type.isString() && !data_type.isFixedString())
-            throw Exception("Inverted index can be used only with `String`, `FixedString`", ErrorCodes::INCORRECT_QUERY);
+            throw Exception("Inverted index can be used only with `String`, `FixedString`,`Array(String)`,`JSON`", ErrorCodes::INCORRECT_QUERY);
     }
 
     if (index.arguments.size() > 2) /// NLP tokenizer [type_name , config_name , density]
@@ -1160,6 +1409,11 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
             {
                 throw Exception(fmt::format("Unknown config type {} in inverted index defintion", config_type),
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
+            }
+
+            if (is_json_index && (parsed_obj->get("subkey").isEmpty() || parsed_obj->getArray("subkey")->size() == 0))
+            {
+                throw Exception("'subkey' elements in JSON inverted index should not be empty", ErrorCodes::INVALID_CONFIG_PARAMETER);
             }
         }
         else

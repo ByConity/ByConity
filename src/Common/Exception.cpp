@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include <cxxabi.h>
+#include <atomic>
 #include <cstdlib>
 #include <Poco/String.h>
 #include <common/getFQDNOrHostName.h>
@@ -699,9 +700,14 @@ void ExceptionHandler::throwIfException()
         std::rethrow_exception(first_exception);
 }
 
+bool ExceptionHandler::testException()
+{
+    bool expected_value = false;
+    return has_exception.compare_exchange_strong(expected_value, true);
+}
+
 bool ExceptionHandler::hasException() const
 {
-    std::unique_lock lock(mutex);
-    return first_exception != nullptr;
+    return has_exception;
 }
 }

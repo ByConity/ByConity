@@ -172,6 +172,7 @@ message SubmitPlanSegmentsRequest {
   required uint32 query_common_buf_size = 3;
   required uint32 query_settings_buf_size = 4;
   repeated PlanSegmentHeader plan_segment_headers = 5;
+  optional uint32 query_resource_size = 6;
 }
 
 message ExecutePlanSegmentResponse {

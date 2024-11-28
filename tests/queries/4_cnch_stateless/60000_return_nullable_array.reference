@@ -1,1 +1,2 @@
-1	{1:2}
+1	Nullable(UInt64)	{1:2}	Nullable(Map(UInt8, UInt8))
+1	UInt64	{1:2}	Map(UInt8, UInt8)

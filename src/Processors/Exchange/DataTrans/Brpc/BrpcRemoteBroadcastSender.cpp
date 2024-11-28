@@ -169,9 +169,10 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
     size_t overcrowded_retry = 0;
     Stopwatch s;
     bool success = false;
+    size_t max_wait_ms = context->getSettingsRef().exchange_stream_back_pressure_max_wait_ms;
     timespec query_expiration_ts = context->getQueryExpirationTimeStamp();
     size_t query_expiration_ms_ts = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
-    while (time_in_milliseconds(std::chrono::system_clock::now()) < query_expiration_ms_ts)
+    while (auto now = time_in_milliseconds(std::chrono::system_clock::now()) < query_expiration_ms_ts)
     {
         int rect_code = brpc::StreamWrite(stream_id, io_buffer);
         if (rect_code == 0)
@@ -181,7 +182,13 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         }
         else if (rect_code == EAGAIN)
         {
-            int wait_res_code = brpc::StreamWait(stream_id, &query_expiration_ts);
+            timespec wait_ts = query_expiration_ts;
+            if (max_wait_ms)
+            {
+                size_t wait_ms_ts = std::min(now + max_wait_ms, query_expiration_ms_ts);
+                wait_ts = {.tv_sec = time_t(wait_ms_ts / 1000), .tv_nsec = long((wait_ms_ts % 1000) * 1000000)};
+            }
+            int wait_res_code = brpc::StreamWait(stream_id, &wait_ts);
             if (wait_res_code == EINVAL)
             {
                 // TODO: retain stream object before finish code is read.
@@ -207,13 +214,14 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         }
         else if (rect_code == 1011) //EOVERCROWDED   | 1011 | The server is overcrowded
         {
-            size_t now = time_in_milliseconds(std::chrono::system_clock::now());
             if (now < query_expiration_ms_ts)
             {
                 if (enable_sender_metrics)
                     sender_metrics.overcrowded_retry << 1;
                 overcrowded_retry += 1;
                 size_t sleep_time = std::min(1000 * overcrowded_retry, query_expiration_ms_ts - now);
+                if (max_wait_ms)
+                    sleep_time = std::min(sleep_time, max_wait_ms);
 
                 bthread_usleep(1000 * sleep_time);
             }

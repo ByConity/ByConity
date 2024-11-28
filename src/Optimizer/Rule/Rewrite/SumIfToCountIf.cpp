@@ -143,6 +143,7 @@ TransformResult SumIfToCountIf::transformImpl(PlanNodePtr node, const Captures &
         aggregates,
         agg_step.getGroupingSetsParams(),
         agg_step.isFinal(),
+        AggregateStagePolicy::DEFAULT,
         agg_step.getGroupBySortDescription(),
         agg_step.getGroupings(),
         agg_step.needOverflowRow(),

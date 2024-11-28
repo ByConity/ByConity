@@ -8,7 +8,9 @@
 #include <CloudServices/CnchServerResource.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
+#include <Common/CurrentThread.h>
 #include <Common/ErrorCodes.h>
+#include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -30,6 +32,11 @@
 #include <unordered_set>
 #include <utility>
 #include <CloudServices/CnchServerResource.h>
+
+namespace ProfileEvents
+{
+extern const Event QueryBspRetryCount;
+}
 
 namespace DB
 {
@@ -354,7 +361,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         attempt_id = segment_instance_attempts[instance_id];
-        if (attempt_id >= query_context->getSettingsRef().bsp_max_retry_num)
+        if (attempt_id > query_context->getSettingsRef().bsp_max_retry_num)
             return false;
         auto running_worker_maybe = segment_parallel_locations[segment_id][parallel_index];
         if (!running_worker_maybe.has_value())
@@ -435,6 +442,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
             postEvent(std::make_shared<TriggerDispatchEvent>());
         }
     }
+    CurrentThread::getProfileEvents().increment(ProfileEvents::QueryBspRetryCount, 1);
     return true;
 }
 

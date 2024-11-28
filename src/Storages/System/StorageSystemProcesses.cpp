@@ -116,7 +116,7 @@ void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr c
         {
             continue;
         }
-    
+
         size_t i = 0;
 
         res_columns[i++]->insert(process.client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY);
@@ -148,7 +148,7 @@ void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr c
 
         res_columns[i++]->insert(process.client_info.quota_key);
 
-        res_columns[i++]->insert(process.elapsed_seconds);
+        res_columns[i++]->insert(static_cast<double>(process.elapsed_microseconds) / 1000000.0);
         res_columns[i++]->insert(process.is_cancelled);
         res_columns[i++]->insert(process.read_rows);
         res_columns[i++]->insert(process.read_bytes);

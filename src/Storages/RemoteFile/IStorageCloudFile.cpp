@@ -8,6 +8,7 @@
 #include <DataStreams/PartitionedBlockOutputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Formats/FormatFactory.h>
 #include <IO/CompressionMethod.h>
 #include <Interpreters/Context.h>
@@ -19,15 +20,16 @@
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/getVirtualsForStorage.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
-#include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/parseGlobs.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -44,7 +46,7 @@ namespace ErrorCodes
 class FileBlockInputStream : public SourceWithProgress
 {
 public:
-    using IteratorWrapper = std::function<String()>;
+    using IteratorWrapper = std::function<const FilePartInfo *()>;
 
     FileBlockInputStream(
         const ContextPtr & context_,
@@ -72,16 +74,17 @@ public:
 
     bool initialize(const ContextPtr & query_context)
     {
-        current_path = (*file_iterator)();
-        if (current_path.empty())
+        current_file = (*file_iterator)();
+        if (!current_file)
             return false;
 
-        LOG_TRACE(getLogger("FileBlockInputStream"), "{} start to read {}", client->type(), current_path);
-        auto current_compression = chooseCompressionMethod(current_path, compression_method);
-        auto current_format = FormatFactory::instance().getFormatFromFileName(current_path, true, format_name);
+        String current_file_name = current_file->name;
+        LOG_TRACE(getLogger("FileBlockInputStream"), "{} start to read {}", client->type(), current_file_name);
+        auto current_compression = chooseCompressionMethod(current_file_name, compression_method);
+        auto current_format = FormatFactory::instance().getFormatFromFileName(current_file_name, true, format_name);
         FormatFactory::instance().checkFormatName(current_format);
 
-        auto read_buffer = client->createReadBuffer(current_path);
+        auto read_buffer = client->createReadBuffer(current_file_name);
         auto compressed_read_buf = wrapReadBufferWithCompressionMethod(std::move(read_buffer), current_compression);
         auto input_stream = query_context->getInputFormat(current_format, *compressed_read_buf, block_for_format, max_block_size);
         reader = std::make_shared<OwningBlockInputStream<ReadBuffer>>(input_stream, std::move(compressed_read_buf));
@@ -105,16 +108,21 @@ public:
                 {
                     if (virtual_column.name == "_path")
                     {
-                        auto column = std::make_shared<DataTypeString>()->createColumnConst(rows, current_path);
+                        auto column = std::make_shared<DataTypeString>()->createColumnConst(rows, current_file->name);
                         columns_data.insert({column->convertToFullColumnIfConst(), std::make_shared<DataTypeString>(), "_path"});
                     }
                     else if (virtual_column.name == "_file")
                     {
-                        size_t last_slash_pos = current_path.find_last_of('/');
-                        auto file_name = current_path.substr(last_slash_pos + 1);
+                        size_t last_slash_pos = current_file->name.find_last_of('/');
+                        auto file_name = current_file->name.substr(last_slash_pos + 1);
 
                         auto column = std::make_shared<DataTypeString>()->createColumnConst(rows, std::move(file_name));
                         columns_data.insert({column->convertToFullColumnIfConst(), std::make_shared<DataTypeString>(), "_file"});
+                    }
+                    else if (virtual_column.name == "_size")
+                    {
+                        auto column = std::make_shared<DataTypeUInt64>()->createColumnConst(rows, current_file->size);
+                        columns_data.insert({column->convertToFullColumnIfConst(), std::make_shared<DataTypeUInt64>(), "_size"});
                     }
                 }
                 return Chunk(columns_data.getColumns(), columns_data.rows());
@@ -138,7 +146,7 @@ public:
         return header;
     }
 
-    bool empty() { return current_path.empty(); }
+    bool empty() { return !current_file; }
 
 private:
     ContextPtr global_context;
@@ -152,7 +160,7 @@ private:
     String format_name;
 
     std::mutex reader_mutex;
-    String current_path;
+    const FilePartInfo * current_file;
 
     BlockInputStreamPtr reader;
 };
@@ -355,7 +363,7 @@ IStorageCloudFile::IStorageCloudFile(
     const ColumnsDescription & required_columns_,
     const ConstraintsDescription & constraints_,
     const FileClientPtr & client_,
-    Strings files_,
+    FilePartInfos files_,
     const ASTPtr & setting_changes_,
     const CnchFileArguments & arguments_,
     const CnchFileSettings & settings_)
@@ -377,7 +385,10 @@ IStorageCloudFile::IStorageCloudFile(
     String path = arguments.url.substr(arguments.url.find('/', arguments.url.find("//") + 2));
     arguments.is_glob_path = path.find_first_of("*?{") != std::string::npos;
 
-    auto default_virtuals = NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
+    auto default_virtuals = NamesAndTypesList{
+        {"_path", std::make_shared<DataTypeString>()},
+        {"_file", std::make_shared<DataTypeString>()},
+        {"_size", std::make_shared<DataTypeUInt64>()}};
     virtual_columns = getVirtualsForStorage(metadata.getSampleBlock().getNamesAndTypesList(), default_virtuals);
 }
 
@@ -435,7 +446,7 @@ void IStorageCloudFile::read(
 
 BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, const ContextPtr query_context)
 {
-    String current_uri = file_list.front();
+    String current_uri = file_list.front().name;
     bool has_wildcards = current_uri.find(PartitionedFileBlockOutputStream::PARTITION_ID_WILDCARD) != String::npos;
     const auto * insert_query = dynamic_cast<const ASTInsertQuery *>(query.get());
     auto partition_by_ast = insert_query ? (insert_query->partition_by ? insert_query->partition_by : arguments.partition_by) : nullptr;
@@ -478,7 +489,7 @@ BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const Storag
                     ++index;
                 } while (client->exist(new_uri));
 
-                file_list.push_back(new_uri);
+                file_list.emplace_back(new_uri);
                 current_uri = new_uri;
             }
             else

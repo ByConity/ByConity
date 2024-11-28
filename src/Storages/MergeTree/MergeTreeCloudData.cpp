@@ -281,10 +281,10 @@ void MergeTreeCloudData::prepareVersionedPartsForRead(ContextPtr local_context, 
     Stopwatch watch;
 
     std::lock_guard<std::mutex> lock(load_data_parts_mutex);
-    if (data_parts_loaded)
+    if (versioned_data_parts_loaded)
         return;
 
-    SCOPE_EXIT_SAFE(data_parts_loaded=true);
+    SCOPE_EXIT_SAFE(versioned_data_parts_loaded=true);
 
     std::unordered_map<String, ServerDataPartsWithDBM> server_parts_by_partition;
     std::vector<std::shared_ptr<MergeTreePartition>> partition_list;

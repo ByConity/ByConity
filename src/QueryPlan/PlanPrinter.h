@@ -42,11 +42,11 @@ class PlanPrinter
 public:
     PlanPrinter() = delete;
 
-    static String textPlanNode(PlanNodePtr plan, ContextPtr context)
+    static String textPlanNode(PlanNodePtr plan, ContextPtr context, const QueryPlanSettings & settings = {})
     {
-        return textPlanNode(*plan, std::move(context));
+        return textPlanNode(*plan, std::move(context), settings);
     }
-    static String textPlanNode(PlanNodeBase & node, ContextPtr context);
+    static String textPlanNode(PlanNodeBase & node, ContextPtr context, const QueryPlanSettings & settings = {});
     static String textLogicalPlan(
         QueryPlan & plan,
         ContextMutablePtr context,

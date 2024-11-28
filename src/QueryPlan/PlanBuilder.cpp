@@ -47,18 +47,37 @@ Names PlanBuilder::translateToUniqueSymbols(ASTs & expressions) const
     return symbols;
 }
 
-Names PlanBuilder::applyProjection(ASTs & expressions)
+Names PlanBuilder::applyArrayJoinProjection(const ArrayJoinDescriptions & array_join_descs)
 {
     Names output_symbols;
     Assignments assignments;
     NameToType types;
     putIdentities(getOutputNamesAndTypes(), assignments, types);
 
-    for (auto & expr : expressions)
+    for (const auto & desc : array_join_descs)
     {
-        String symbol = symbol_allocator->newSymbol(expr);
-        assignments.emplace_back(symbol, translate(expr));
-        types[symbol] = analysis.getExpressionType(expr);
+        ASTPtr expression;
+        String symbol;
+        DataTypePtr type;
+
+        if (std::holds_alternative<size_t>(desc.source))
+        {
+            size_t source_field_index = std::get<size_t>(desc.source);
+            String field_symbol = getFieldSymbol(source_field_index);
+            expression = toSymbolRef(field_symbol);
+            symbol = symbol_allocator->newSymbol(field_symbol);
+            type = translation->scope->at(source_field_index).type;
+        }
+        else
+        {
+            ASTPtr source_ast = std::get<ASTPtr>(desc.source);
+            expression = translate(source_ast);
+            symbol = symbol_allocator->newSymbol(source_ast);
+            type = analysis.getExpressionType(source_ast);
+        }
+
+        assignments.emplace_back(symbol, std::move(expression));
+        types[symbol] = type;
         output_symbols.push_back(symbol);
     }
 

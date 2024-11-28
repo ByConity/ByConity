@@ -102,6 +102,7 @@ struct DAGGraph
     std::unordered_map<size_t, UInt64> segment_parallel_size_map;
     butil::IOBuf query_common_buf;
     butil::IOBuf query_settings_buf;
+    std::unordered_map<WorkerId, butil::IOBuf, WorkerIdHash> query_resource_map;
     SourcePrunerPtr source_pruner;
 
     LoggerPtr log;

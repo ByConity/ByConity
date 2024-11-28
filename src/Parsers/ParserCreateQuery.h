@@ -146,6 +146,8 @@ protected:
 using ParserColumnDeclaration = IParserColumnDeclaration<ParserIdentifier>;
 using ParserCompoundColumnDeclaration = IParserColumnDeclaration<ParserCompoundIdentifier>;
 
+bool containsMap(const ASTPtr & ast);
+
 template <typename NameParser>
 bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -373,6 +375,18 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         /// map kv flag and map byte flag cannot be set at the same time
         if ((flags & TYPE_MAP_KV_STORE_FLAG) && (flags & TYPE_MAP_BYTE_STORE_FLAG))
             return false;
+    }
+
+    if (dt.parse_mysql_ddl && type)
+    {
+        if (containsMap(type))
+        {
+            /// If Map type is not declared as Byte Map explicity, use KV Map in MYSQL.
+            if (!(flags & TYPE_MAP_KV_STORE_FLAG) && !(flags & TYPE_MAP_BYTE_STORE_FLAG))
+            {
+                flags |= TYPE_MAP_KV_STORE_FLAG;
+            }
+        }
     }
 
     column_declaration->flags = flags;

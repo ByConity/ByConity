@@ -36,6 +36,9 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"exchange_id", std::make_shared<DataTypeUInt64>()},
         {"partition_id", std::make_shared<DataTypeUInt64>()},
         {"parallel_index", std::make_shared<DataTypeUInt64>()},
+        {"write_segment", std::make_shared<DataTypeUInt64>()},
+        {"read_segment", std::make_shared<DataTypeUInt64>()},
+        {"exchange_mode", std::make_shared<DataTypeUInt16>()},
         {"coordinator_address", std::make_shared<DataTypeString>()},
 
         {"finish_code", std::make_shared<DataTypeInt32>()},
@@ -91,6 +94,9 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(exchange_id);
     columns[i++]->insert(partition_id);
     columns[i++]->insert(parallel_index);
+    columns[i++]->insert(write_segment);
+    columns[i++]->insert(read_segment);
+    columns[i++]->insert(exchange_mode);
     columns[i++]->insert(coordinator_address);
 
     columns[i++]->insert(finish_code);

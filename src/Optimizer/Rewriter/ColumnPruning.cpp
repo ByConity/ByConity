@@ -673,6 +673,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, C
         aggs,
         step->getGroupingSetsParams(),
         step->isFinal(),
+        step->getStagePolicy(),
         step->getGroupBySortDescription(),
         step->getGroupings(),
         step->needOverflowRow(),
@@ -1064,6 +1065,10 @@ PlanNodePtr ColumnPruningVisitor::visitExchangeNode(ExchangeNode & node, ColumnP
     if (require.empty())
     {
         require.insert(step->getOutputStream().header.getByPosition(0).name);
+    }
+    for (const auto & shuffle_key : step->getSchema().getColumns())
+    {
+        require.insert(shuffle_key);
     }
 
     PlanNodes children;

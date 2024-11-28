@@ -141,3 +141,35 @@ INSERT INTO bucket VALUES (1, 1), (2, 2);
 ALTER TABLE bucket MODIFY CLUSTER BY n INTO 2 BUCKETS;
 SELECT cluster_status FROM system.cnch_table_info WHERE database = currentDatabase(0) AND table = 'bucket';
 DROP TABLE bucket;
+
+--- Check force_optimize_skip_unused_shards and multiple cluster by keys
+SET optimize_skip_unused_shards = 1;
+CREATE TABLE bucket (d UInt32, n UInt32) Engine = CnchMergeTree PARTITION BY d CLUSTER BY n INTO 2 BUCKETS ORDER BY n;
+INSERT INTO bucket VALUES (1, 1), (2, 2);
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1;
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2;
+SELECT * FROM bucket PREWHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1;
+SELECT * FROM bucket PREWHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2;
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1 ; -- { serverError 507 };
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2 ; -- { serverError 507 };
+DROP TABLE bucket;
+
+CREATE TABLE bucket (d UInt32, n UInt32) Engine = CnchMergeTree PARTITION BY d ORDER BY n;
+INSERT INTO bucket VALUES (1, 1), (2, 2);
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1;
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2; -- { serverError 507 };
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1 ;
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2 ; -- { serverError 507 };
+DROP TABLE bucket;
+
+CREATE TABLE bucket (d UInt32, n UInt32, v UInt32) Engine = CnchMergeTree PARTITION BY d CLUSTER BY (n,v) INTO 2 BUCKETS ORDER BY n;
+INSERT INTO bucket VALUES (1, 1, 1), (2, 2, 2);
+SELECT * FROM bucket WHERE n = 1 and v = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1;
+SELECT * FROM bucket WHERE n = 1 and v = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2;
+SELECT * FROM bucket PREWHERE n = 1 WHERE v = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1;
+SELECT * FROM bucket PREWHERE n = 1 WHERE v = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2;
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1; -- { serverError 507 };
+SELECT * FROM bucket WHERE n = 1 ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2; -- { serverError 507 };
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 1 ; -- { serverError 507 };
+SELECT * FROM bucket ORDER BY n FORMAT CSV SETTINGS force_optimize_skip_unused_shards = 2 ; -- { serverError 507 };
+DROP TABLE bucket;

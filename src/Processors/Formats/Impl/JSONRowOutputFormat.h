@@ -81,7 +81,6 @@ protected:
     NamesAndTypes fields;
 
     Progress progress;
-    Stopwatch watch;
     FormatSettings settings;
 
     bool yield_strings;

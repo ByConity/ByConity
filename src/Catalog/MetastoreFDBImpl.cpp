@@ -130,7 +130,7 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getAll()
     return std::make_shared<FDBIterator>(fdb_iter);
 }
 
-MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByPrefix(const String & prefix, const size_t & limit, uint32_t, const String & start_key)
+MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByPrefix(const String & prefix, const size_t & limit, uint32_t, const String & start_key, const bool exclude_start_key)
 {
     FDB::ScanRequest scan_req;
 
@@ -144,6 +144,7 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByPrefix(const String & prefi
     }
     scan_req.row_limit = limit;
     scan_req.end_key = getNextKey(prefix);
+    scan_req.exclude_start_key = exclude_start_key;
 
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
@@ -165,6 +166,13 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByRange(const String & range_
 
 bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (req.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
+
     for (auto & single_put : req.puts)
     {
         assertNotReadonly(single_put.key);

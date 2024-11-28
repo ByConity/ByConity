@@ -16,9 +16,12 @@
 #include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
+#include <Storages/MergeTree/MergeTreeIndexInvertedHelper.h>
+#include <Columns/IColumn.h>
+
 #if USE_TSQUERY
 #include "Common/TextSreachQuery.h"
-#endif 
+#endif
 
 namespace DB
 {
@@ -57,7 +60,8 @@ public:
         const String & index_name_,
         const GinFilterParameters & params_,
         TokenExtractorPtr token_extractor_,
-        ChineseTokenExtractorPtr nlp_extractor_);
+        ChineseTokenExtractorPtr nlp_extractor_,
+        const std::vector<String> & subcolumn_names_);
 
     ~MergeTreeIndexAggregatorInverted() override = default;
 
@@ -77,6 +81,39 @@ public:
     ChineseTokenExtractorPtr nlp_extractor;
 
     MergeTreeIndexGranuleInvertedPtr granule;
+
+    std::vector<String> subcolumn_names;
+
+private:
+    // for JSON column
+    void initAggregator();
+
+    inline void buildIndexForString(
+        const size_t & rows_read,
+        const size_t & current_position,
+        const ColumnPtr & column,
+        const size_t & col,
+        UInt32 & row_id,
+        size_t & processed_bytes);
+
+    inline void buildIndexForArrayString(
+        const size_t & rows_read,
+        const size_t & current_position,
+        const ColumnPtr & column,
+        const size_t & col,
+        UInt32 & row_id,
+        size_t & processed_bytes);
+
+    void buildIndexForSubcolumnInTuple(
+        const size_t & rows_read,
+        const size_t & current_position,
+        const ColumnPtr & indexed_column,
+        const std::vector<const ColumnPtr> & offsets_vector,
+        const size_t & col,
+        UInt32 row_id,
+        size_t & processed_bytes);
+
+    IndexColumnPathPtr indexed_path_builder;
 };
 
 class MergeTreeConditionInverted final : public IMergeTreeIndexCondition, WithContext
@@ -88,7 +125,8 @@ public:
         const Block & index_sample_block,
         const GinFilterParameters & params_,
         TokenExtractorPtr token_extractor_,
-        ChineseTokenExtractorPtr nlp_extractor_);
+        ChineseTokenExtractorPtr nlp_extractor_,
+        const std::vector<String> & subcolumn_names_);
 
     ~MergeTreeConditionInverted() override = default;
 
@@ -125,6 +163,9 @@ private:
             /// Constants
             ALWAYS_FALSE,
             ALWAYS_TRUE,
+            // Function for array
+            FUNCTION_HAS,
+            FUNCTION_HAS_ANY,
             #if USE_TSQUERY
             // FOR TEXT SEARCH
             FUNCTION_TEXT_SEARCH,
@@ -191,6 +232,8 @@ private:
     size_t skip_size;
     /// Sets from syntax analyzer.
     PreparedSets prepared_sets;
+
+    std::vector<String> subcolumn_names;
 };
 
 class MergeTreeIndexInverted final : public IMergeTreeIndex
@@ -227,6 +270,9 @@ public:
     std::unique_ptr<ITokenExtractor> token_extractor;
     // select next token with nlp, now we only have chinese
     std::unique_ptr<ChineseTokenExtractor> nlp_extractor;
+
+    // For JSON sub column, we assume that subcolumn is string 
+    std::vector<String> subcolumn_names;
 };
 
 MarkRanges filterMarkRangesByInvertedIndex(MergeTreeIndexReader& idx_reader_,

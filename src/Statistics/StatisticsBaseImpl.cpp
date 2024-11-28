@@ -22,6 +22,7 @@
 #include <Statistics/StatsNdvBucketsExtendImpl.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/StatsTableBasic.h>
+#include <Statistics/StatsUdiCounter.h>
 #include <Statistics/TypeMacros.h>
 #include <Poco/JSON/Parser.h>
 #include <Common/Exception.h>

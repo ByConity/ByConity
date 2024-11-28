@@ -21,8 +21,10 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Protos/RPCHelpers.h>
 #include <Common/Status.h>
+#include <Common/Exception.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Disks/DiskByteS3.h>
 
 
 namespace DB
@@ -33,6 +35,7 @@ namespace ErrorCodes
     extern const int AMBIGUOUS_TABLE_NAME;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int REMOVE_FILE_ERROR;
 }
 
 GlobalGCManager::GlobalGCManager(
@@ -94,49 +97,169 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
 }
 
 namespace {
-    void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, LoggerPtr log)
+    /**
+     * @brief Clean all physical resources related to a table.
+     *
+     * @return `false` if not all resources are cleaned (which means the table cannot be deleted yet).
+     */
+    bool cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, LoggerPtr log)
     {
-        auto catalog = context.getCnchCatalog();
-        Strings partition_ids = catalog->getPartitionIDs(storage, &context);
+            /// 40000 By default.
+            const size_t pool_size = context.getSettingsRef().s3_gc_inter_partition_parallelism;
+            const size_t batch_size = context.getSettingsRef().s3_gc_batch_size;
+            auto catalog = context.getCnchCatalog();
 
-        ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
+            Strings partition_ids = catalog->getPartitionIDs(storage, &context);
+            std::shared_ptr<DiskByteS3> s3_disk = nullptr;
+            auto disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+            if (s3_disk = std::dynamic_pointer_cast<DiskByteS3>(disk); s3_disk == nullptr)
+            {
+                throw Exception(
+                    fmt::format(
+                        "Passing a non s3 disk to MultiDiskS3PartsLazyCleaner, disk {} has type {}",
+                        disk->getName(),
+                        DiskType::toString(disk->getType())),
+                    ErrorCodes::BAD_ARGUMENTS);
+            }
+            S3::S3LazyCleaner lazy_cleaner(
+                s3_disk->getS3Util(),
+                /// Never skip.
+                [](const S3::S3Util &, const String &) { return true; },
+                pool_size,
+                batch_size);
+
+            ThreadPool clean_pool(pool_size);
+            bool some_items_skipped = false;
+
+            /// Trashed Items (parts, delete bitmaps), delete in batch.
+            {
+                size_t count = 0;
+
+                /// Trashed parts.
+                while (true)
+                {
+                    /// Get first N items from trash.
+                    Catalog::TrashItems trash_items = catalog->getDataItemsInTrash(storage, batch_size * pool_size);
+
+                    /// Only break if there is no more parts in trash.
+                    if (trash_items.empty())
+                    {
+                        break;
+                    }
+
+                    LOG_TRACE(
+                        log,
+                        "Will remove {} trashed parts from S3 storage {}.",
+                        trash_items.size(),
+                        storage->getStorageID().getNameForLogs());
+                    for (auto & part : trash_items.data_parts)
+                    {
+                        auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+                        lazy_cleaner.push(cnch_part);
+                    }
+
+                    for (auto & bitmap : trash_items.delete_bitmaps)
+                    {
+                        lazy_cleaner.push(bitmap, storage);
+                    }
+
+                    try
+                    {
+                        lazy_cleaner.finalize();
+                    }
+                    catch (...)
+                    {
+                        some_items_skipped = true;
+                        tryLogCurrentException(log);
+                        continue;
+                    }
+
+                    count += trash_items.size();
+                    /// Remove trashed parts from catalog.
+                    catalog->clearTrashItems(storage, trash_items);
+                }
+                LOG_DEBUG(log, "Finish removing {} trashed items from S3 storage {}.", count, storage->getStorageID().getNameForLogs());
+        }
+
+
+        /// For parts, delete in batch.
+        {
+            size_t count = catalog->removePartsInBatch(
+                mergetree_meta,
+                [&lazy_cleaner, &mergetree_meta, &some_items_skipped, &log](const ServerDataPartsVector & parts) {
+                    for (const auto & part : parts)
+                    {
+                        auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+
+                        lazy_cleaner.push(cnch_part);
+                    }
+
+                    try
+                    {
+                        lazy_cleaner.finalize();
+                    }
+                    catch (...)
+                    {
+                        some_items_skipped = true;
+                        tryLogCurrentException(log);
+                        return false;
+                    }
+                    /// Commit remove KV.
+                    return true;
+                },
+                batch_size * pool_size);
+
+            LOG_DEBUG(log, "Finish removing {} parts from S3 storage {}.", count, storage->getStorageID().getNameForLogs());
+        }
+
+        /// For bitmaps, delete in batch.
+        {
+            size_t count = catalog->removeDeleteBitmapsInBatch(
+                mergetree_meta,
+                [&lazy_cleaner, &some_items_skipped, &log, &storage](const DeleteBitmapMetaPtrVector & bitmaps) {
+                    for (const auto & bitmap : bitmaps)
+                    {
+                        lazy_cleaner.push(bitmap, storage);
+                    }
+
+                    try
+                    {
+                        lazy_cleaner.finalize();
+                    }
+                    catch (...)
+                    {
+                        some_items_skipped = true;
+                        tryLogCurrentException(log);
+                        return false;
+                    }
+                    /// Commit remove KV.
+                    return true;
+                },
+                batch_size * pool_size);
+            LOG_DEBUG(log, "Finish removing {} bitmaps from S3 storage {}.", count, storage->getStorageID().getNameForLogs());
+        }
+
+        /// For detached bitmaps and parts, there is no need to delete them in batch (because they are few).
         for (const String & partition_id : partition_ids)
         {
-            clean_pool.scheduleOrThrowOnError([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
-                MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
-
-                LOG_DEBUG(log, "Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
-
-                ServerDataPartsVector parts_in_trash = catalog->getTrashedPartsInPartitions(storage, {partition_id}, 0);
-                ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
-
-                LOG_DEBUG(log, "Will remove {} data parts and {} trashed parts from S3 storage.", parts.size(), parts_in_trash.size());
-                std::move(parts_in_trash.begin(), parts_in_trash.end(), std::back_inserter(parts));
-
+            clean_pool.scheduleOrThrowOnError([partition_id, &log, &catalog, &storage, &mergetree_meta, &lazy_cleaner, &some_items_skipped]() {
+                auto parts = catalog->listDetachedParts(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
                 for (auto & part : parts)
                 {
                     auto cnch_part = part->toCNCHDataPart(mergetree_meta);
 
-                    auto disks = cnch_part->volume->getDisks();
-                    for (const auto & disk : disks)
-                    {
-                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
-                    }
+                    lazy_cleaner.push(cnch_part);
                 }
 
-                parts = catalog->listDetachedParts(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
-                for (auto & part : parts)
+                try
                 {
-                    auto cnch_part = part->toCNCHDataPart(mergetree_meta);
-
-                    auto disks = cnch_part->volume->getDisks();
-                    for (const auto & disk : disks)
-                    {
-                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
-                    }
+                    lazy_cleaner.finalize();
                 }
-
-                parts_cleaner.finalize();
+                catch (...)
+                {
+                    some_items_skipped = true;
+                    tryLogCurrentException(log);
+                }
 
                 LOG_DEBUG(log, "Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
 
@@ -145,16 +268,33 @@ namespace {
                     auto all_detached_bitmaps
                         = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
                     for (auto & detached_bitmap : all_detached_bitmaps)
-                        detached_bitmap->removeFile();
+                        lazy_cleaner.push(detached_bitmap, storage);
                     LOG_DEBUG(
                         log,
                         "Finish GC detached delete bitmap of partition {} for table {}",
                         partition_id,
                         storage->getStorageID().getNameForLogs());
                 }
+
+                try
+                {
+                    lazy_cleaner.finalize();
+                }
+                catch (...)
+                {
+                    some_items_skipped = true;
+                    tryLogCurrentException(log);
+                }
+                LOG_DEBUG(
+                    log,
+                    "Finish GC detached parts and bitmaps for partition {}, table {}",
+                    partition_id,
+                    storage->getStorageID().getNameForLogs());
             });
         }
         clean_pool.wait();
+
+        return !some_items_skipped;
     }
 
 void cleanDisks(const Disks & disks, const String & relative_path, LoggerPtr log)
@@ -239,7 +379,10 @@ std::optional<Protos::DataModelTable> getCleanableTrashTable(
     if (lifespans.back().second + TxnTimestamp::fromUnixTimestamp(retention_sec) > ts)
     {
         if (fail_reason)
-            *fail_reason = "Under retention period";
+            *fail_reason = fmt::format(
+                "Under retention period {}s, wil be release on {}",
+                retention_sec,
+                (lifespans.back().second + TxnTimestamp::fromUnixTimestamp(retention_sec)));
         return std::nullopt;
     }
 
@@ -316,7 +459,10 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
                     break;
                 }
                 case DiskType::Type::ByteS3: {
-                    cleanS3Disks(storage, *mergetree, context, log);
+                    bool success = cleanS3Disks(storage, *mergetree, context, log);
+                    if (!success)
+                        throw Exception(
+                            fmt::format("Some delete failed, please check previous logs for details"), ErrorCodes::REMOVE_FILE_ERROR);
                     break;
                 }
                 default:

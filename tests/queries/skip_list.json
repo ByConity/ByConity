@@ -638,7 +638,8 @@
         "11007_attach_commit_time_bug",
         "00828_test_bitmap_format_parquet",
         "02681_partial_part_columns",
-        "02460_regex_infile_hdfs"
+        "02460_regex_infile_hdfs",
+        "46018_size_virtual_column_hdfs"
     ],
     
     /// Please do not add new tests to this list. It is only for backward compatibility.
@@ -677,5 +678,9 @@
         "10054_mv_refresh_where_sync",
         /// Code: 5030 -- Tables MergeMutateThread is not found on the server. Please check tables host server first.
         "01001_alter_delete"
+    ],
+
+    "cloudfs": [
+        "50001_test_query_cache_with_non_transactional_optimizer"
     ]
 }

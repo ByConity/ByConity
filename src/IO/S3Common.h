@@ -21,6 +21,8 @@
 #    include <Common/Logger.h>
 #    include <Common/ThreadPool.h>
 #    include <common/types.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 namespace Aws::S3
 {
 class S3Client;
@@ -260,15 +262,14 @@ public:
     void deleteObjectsWithPrefix(
         const String & prefix, const std::function<bool(const S3Util &, const String &)> & filter, size_t batch_size = 1000) const;
 
+    Aws::S3::Model::HeadObjectResult headObject(const String & key) const;
+
     // Internal client and info
     const std::shared_ptr<Aws::S3::S3Client> & getClient() const { return client; }
     const String & getBucket() const { return bucket; }
 
 private:
     static String urlEncodeMap(const std::map<String, String> & mp);
-
-    Aws::S3::Model::HeadObjectResult headObject(const String & key) const;
-    Aws::S3::Model::GetObjectResult headObjectByGet(const String & key) const;
 
     std::shared_ptr<Aws::S3::S3Client> client;
     const String bucket;
@@ -288,7 +289,9 @@ public:
         size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
     ~S3LazyCleaner() noexcept;
 
-    void push(const String & key_);
+    void push(const String& key_);
+    void push(const MutableMergeTreeDataPartCNCHPtr & part);
+    void push(const DeleteBitmapMetaPtr & bitmap, const StoragePtr & storage);
     void finalize();
 
 private:

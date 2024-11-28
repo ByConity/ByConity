@@ -201,7 +201,7 @@ struct HintAnalysis
 
 struct ArrayJoinDescription
 {
-    ASTPtr expr;
+    std::variant<size_t, ASTPtr> source;
     bool create_new_field = false;
 };
 using ArrayJoinDescriptions = std::vector<ArrayJoinDescription>;

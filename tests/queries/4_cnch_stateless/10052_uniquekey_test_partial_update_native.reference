@@ -78,3 +78,15 @@ Specify _update_columns_ corner case test, stage 2
 2023-01-01	1003	22	c3	e3
 2023-01-02	1004	23	c4	e4
 2023-01-02	1005	30	d3	x2
+Modify partial_update_query_parts_thread_size test, stage 1
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	e4
+2023-01-02	1005	30	d2	x2
+Modify partial_update_query_parts_thread_size test, stage 2
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	x3
+2023-01-02	1005	30	d2	x3

@@ -42,4 +42,5 @@ std::vector<ASTPtr> extractExpressions(ContextPtr context, Analysis & analysis, 
 
 std::vector<ASTPtr> extractReferencesToScope(ContextPtr context, Analysis & analysis, ASTPtr root, ScopePtr scope, bool include_subquery = false);
 
+void expandOrderByAll(ASTSelectQuery * select_query);
 }

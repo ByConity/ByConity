@@ -62,6 +62,8 @@ public:
     bool onlyNull() const override;
     bool canBeInsideLowCardinality() const override { return nested_data_type->canBeInsideLowCardinality(); }
 
+    bool hasNestedMap() const override { return nested_data_type->isMap() || nested_data_type->hasNestedMap(); }
+
     /// DataTypeNullable cannot be ByteMap value type, but we need to compatible old invalid tables,
     /// this will be checked in MergeTreeMetaBase::checkMetadataValidity for newly created tables
     bool canBeByteMapValueType() const override { return nested_data_type->canBeByteMapValueType(); }

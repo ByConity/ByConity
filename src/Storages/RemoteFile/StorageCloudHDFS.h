@@ -48,7 +48,7 @@ public:
         const StorageID & table_id_,
         const ColumnsDescription & required_columns_,
         const ConstraintsDescription & constraints_,
-        const Strings & files_,
+        const FilePartInfos & files_,
         const ASTPtr & setting_changes_,
         const CnchFileArguments & arguments_,
         const CnchFileSettings & settings_)

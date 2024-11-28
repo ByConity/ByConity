@@ -251,6 +251,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
 void executePlanSegmentsRemotely(
     const AddressInfo & address_info,
     const PlanSegmentHeaders & plan_segment_headers,
+    const butil::IOBuf & query_resource_buf,
     const butil::IOBuf & query_common_buf,
     const butil::IOBuf & query_settings_buf,
     AsyncContextPtr & async_context,
@@ -261,12 +262,25 @@ void executePlanSegmentsRemotely(
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
 
-    // common
     Protos::SubmitPlanSegmentsRequest request;
     request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
     address_info.toProto(*request.mutable_execution_address());
 
     butil::IOBuf attachment;
+    size_t send_timeout_ms = context.getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds();
+    // query resource
+    if (context.getSettingsRef().enable_batch_send_resources_together)
+    {
+        /// send_timeout refers to the time to send resource to worker
+        /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
+        auto max_execution_time = context.getSettingsRef().max_execution_time.value.totalSeconds();
+        send_timeout_ms
+            += max_execution_time ? max_execution_time * 1000L : context.getSettingsRef().brpc_data_parts_timeout_ms.totalMilliseconds();
+        request.set_query_resource_size(query_resource_buf.size());
+        if (!query_resource_buf.empty())
+            attachment.append(query_resource_buf);
+    }
+    // common
     request.set_query_common_buf_size(query_common_buf.size());
     attachment.append(query_common_buf);
     request.set_query_settings_buf_size(query_settings_buf.size());
@@ -284,7 +298,7 @@ void executePlanSegmentsRemotely(
     /// async call
     auto * response = new Protos::ExecutePlanSegmentResponse;
     auto * cntl = new brpc::Controller;
-    cntl->set_timeout_ms(context.getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds());
+    cntl->set_timeout_ms(send_timeout_ms);
     auto call_id = cntl->call_id();
     cntl->request_attachment().append(attachment.movable());
     google::protobuf::Closure * done = brpc::NewCallback(

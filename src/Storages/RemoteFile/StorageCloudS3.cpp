@@ -140,7 +140,7 @@ void registerStorageCloudS3(StorageFactory & factory)
                 arguments.compression_method));
 
         S3::URI s3_uri(arguments.url, true);
-        Strings files{s3_uri.key};
+        FilePartInfos files{FilePartInfo(s3_uri.key)};
         S3ClientPtr client = initializeS3Client(args.getLocalContext(), arguments);
         std::shared_ptr<S3::S3Util> s3_util = std::make_shared<S3::S3Util>(client, s3_uri.bucket);
         return StorageCloudS3::create(
@@ -148,7 +148,7 @@ void registerStorageCloudS3(StorageFactory & factory)
             args.table_id,
             args.columns,
             args.constraints,
-            files,
+            std::move(files),
             args.storage_def->settings->ptr(),
             arguments,
             settings,

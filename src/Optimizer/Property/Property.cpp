@@ -283,14 +283,14 @@ Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalen
     return translate(mapping);
 }
 
-Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities) const
+Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities, bool discard_not_in) const
 {
     Names translate_columns;
     for (const auto & column : columns)
     {
         if (identities.contains(column))
             translate_columns.emplace_back(identities.at(column));
-        else // note: don't discard column
+        else if (!discard_not_in) // note: don't discard column
             translate_columns.emplace_back(column);
     }
     auto result = Partitioning{
@@ -564,9 +564,9 @@ String TableLayout::toString() const
     return output.str();
 }
 
-Property Property::translate(const std::unordered_map<String, String> & identities) const
+Property Property::translate(const std::unordered_map<String, String> & identities, bool discard_not_in) const
 {
-    Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
+    Property result{node_partitioning.translate(identities, discard_not_in), stream_partitioning.translate(identities, discard_not_in), sorting.translate(identities)};
     result.setCTEDescriptions(cte_descriptions.translate(identities));
     return result;
 }

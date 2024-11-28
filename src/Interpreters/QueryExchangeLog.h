@@ -31,6 +31,9 @@ struct QueryExchangeLogElement
     UInt64 exchange_id{std::numeric_limits<UInt64>::max()};
     UInt64 partition_id{std::numeric_limits<UInt64>::max()};
     UInt64 parallel_index{std::numeric_limits<UInt64>::max()};
+    UInt64 write_segment{std::numeric_limits<UInt64>::max()};
+    UInt64 read_segment{std::numeric_limits<UInt64>::max()};
+    UInt16 exchange_mode{0};
     String coordinator_address{};
     time_t event_time{};
 

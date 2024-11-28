@@ -425,6 +425,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         map(agg.getAggregates()),
         map(agg.getGroupingSetsParams()),
         agg.isFinal(),
+        agg.getStagePolicy(),
         SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
         agg.needOverflowRow(),

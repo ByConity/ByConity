@@ -464,6 +464,9 @@ const Block & Analysis::getScalarSubqueryResult(const ASTPtr & subquery, Context
         changes.emplace_back("max_result_rows", 1);
         changes.emplace_back("result_overflow_mode", "throw");
         changes.emplace_back("extremes", false);
+        changes.emplace_back("limit", 0);
+        changes.emplace_back("offset", 0);
+        changes.emplace_back("final_order_by_all_direction", 0);
         query_context->applySettingsChanges(changes);
         auto block = executeSubPipelineWithOneRow(inner_query, query_context, pre_execute);
 
@@ -543,6 +546,11 @@ SetPtr Analysis::getInSubqueryResult(const ASTPtr & subquery, ContextPtr context
         auto proc_block = [&set](Block & block) { set->insertFromBlock(block); };
 
         auto query_context = createContextForSubQuery(context);
+        SettingsChanges changes;
+        changes.emplace_back("limit", 0);
+        changes.emplace_back("offset", 0);
+        changes.emplace_back("final_order_by_all_direction", 0);
+        query_context->applySettingsChanges(changes);
         executeSubPipeline(inner_query, query_context, pre_execute, proc_block);
 
         set->finishInsert();

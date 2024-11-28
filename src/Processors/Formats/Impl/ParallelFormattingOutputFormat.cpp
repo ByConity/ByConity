@@ -55,6 +55,10 @@ namespace DB
         unit.segment.resize(0);
         unit.status = READY_TO_FORMAT;
         unit.type = type;
+        if (type == ProcessingUnitType::FINALIZE)
+        {
+            unit.watch = std::move(watch);
+        }
 
         scheduleFormatterThreadForUnitWithNumber(current_unit_number);
 
@@ -193,6 +197,7 @@ namespace DB
                 }
                 case ProcessingUnitType::FINALIZE :
                 {
+                    formatter->watch = std::move(unit.watch);
                     formatter->doWriteSuffix();
                     break;
                 }

@@ -17,6 +17,7 @@
 
 #include <Common/Logger.h>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -909,6 +910,23 @@ public:
     ServerDataPartsVector listDetachedParts(const MergeTreeMetaBase & storage, const AttachFilter & filter);
 
     DeleteBitmapMetaPtrVector listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter);
+
+    /**
+     * @brief Remove single storage's parts in batch.
+     *
+     * @param func Will be called before deleting parts (belong to current batch) in catalog.
+     *           If func returns false, current batch will be skipped.
+     * @return The number of parts scanned.
+     */
+    size_t removePartsInBatch(const MergeTreeMetaBase & storage, std::function<bool(const ServerDataPartsVector &)> func, size_t batch_size = 10000);
+    /**
+     * @brief Remove single storage's bitmaps in batch.
+     *
+     * @param func Will be called before deleting parts (belong to current batch) in catalog.
+     *           If func returns false, current batch will be skipped.
+     * @return The number of parts scanned.
+     */
+    size_t removeDeleteBitmapsInBatch(const MergeTreeMetaBase & storage, std::function<bool(const DeleteBitmapMetaPtrVector &)> func, size_t batch_size = 10000);
 
     // Append partial object column schema in Txn
     void

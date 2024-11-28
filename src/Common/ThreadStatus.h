@@ -101,7 +101,7 @@ public:
     std::vector<UInt64> thread_ids;
 
     static ThreadGroupStatusPtr createForBackgroundProcess(ContextPtr storage_context);
-    
+
     /// The first thread created this thread group
     UInt64 master_thread_id = 0;
 

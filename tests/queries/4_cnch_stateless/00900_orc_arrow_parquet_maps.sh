@@ -7,7 +7,7 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS maps"
 ${CLICKHOUSE_CLIENT} --multiquery <<EOF
 SET allow_experimental_map_type = 1;
-CREATE TABLE maps (m1 Map(UInt32, UInt32) KV, m2 Map(String, String) KV, m3 Map(UInt32, Tuple(UInt32, UInt32)) KV, m4 Map(UInt32, Array(UInt32)) KV, m5 Array(Map(UInt32, UInt32)), m6 Tuple(Map(UInt32, UInt32), Map(String, String)), m7 Array(Map(UInt32, Array(Tuple(Map(UInt32, UInt32), Tuple(UInt32)))))) ENGINE=CnchMergeTree order by tuple();
+CREATE TABLE maps (m1 Map(UInt32, UInt32) KV, m2 Map(String, String) KV, m3 Map(UInt32, Tuple(UInt32, UInt32)) KV, m4 Map(UInt32, Array(UInt32)) KV, m5 Array(Map(UInt32, UInt32)) KV, m6 Tuple(Map(UInt32, UInt32), Map(String, String)) KV, m7 Array(Map(UInt32, Array(Tuple(Map(UInt32, UInt32), Tuple(UInt32))))) KV) ENGINE=CnchMergeTree order by tuple();
 EOF
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO maps VALUES ({1 : 2, 2 : 3}, {'1' : 'a', '2' : 'b'}, {1 : (1, 2), 2 : (3, 4)}, {1 : [1, 2], 2 : [3, 4]}, [{1 : 2, 2 : 3}, {3 : 4, 4 : 5}], ({1 : 2, 2 : 3}, {'a' : 'b', 'c' : 'd'}), [{1 : [({1 : 2}, (1)), ({2 : 3}, (2))]}, {2 : [({3 : 4}, (3)), ({4 : 5}, (4))]}])"

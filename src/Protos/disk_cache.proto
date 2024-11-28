@@ -92,7 +92,7 @@ message NexusFSInode {
 
 message NexusFSInodeManager {
     required string prefix = 1;
-    required string surfix = 2;
+    optional string suffix = 2;
     required NexusFSInode root_inode = 3;
     repeated NexusFSInode inodes = 4;
 }
@@ -105,5 +105,5 @@ message NexusFSConfig {
     required uint32 region_size = 5;
     required uint32 segment_size = 6;
     required string file_prefix = 7;
-    required string file_surfix = 8;
+    optional string file_suffix = 8;
 }

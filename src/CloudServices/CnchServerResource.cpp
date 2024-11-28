@@ -26,6 +26,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <brpc/controller.h>
 #include "Common/ProfileEvents.h"
@@ -34,6 +35,7 @@
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
+#include <CloudServices/QueryResourceUtils.h>
 #include <Interpreters/DistributedStages/BSPScheduler.h>
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
@@ -357,16 +359,16 @@ void CnchServerResource::resendResource(const ContextPtr & context, const HostWi
     std::vector<AssignedResource> resources_to_send;
     {
         auto lock = getLock();
-            ResourceOption resource_option{.resend = true};
-            allocateResource(context, lock, resource_option);
+        ResourceOption resource_option{.resend = true};
+        allocateResource(context, lock, resource_option);
 
-            std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
-            std::swap(all_resources, assigned_worker_resource);
-            auto it = all_resources.find(worker);
-            if (it == all_resources.end())
-                return;
+        std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
+        std::swap(all_resources, assigned_worker_resource);
+        auto it = all_resources.find(worker);
+        if (it == all_resources.end())
+            return;
 
-            resources_to_send = std::move(it->second);
+        resources_to_send = std::move(it->second);
     }
 
     Stopwatch rpc_watch;
@@ -456,6 +458,37 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     handler->throwIfException();
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
+}
+
+
+void CnchServerResource::prepareQueryResourceBuf(
+    std::unordered_map<WorkerId, butil::IOBuf, WorkerIdHash> & resource_buf_map, const ContextPtr & context)
+{
+    std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
+    {
+        auto lock = getLock();
+        allocateResource(context, lock, std::nullopt);
+
+        if (!worker_group)
+            return;
+
+        std::swap(all_resources, assigned_worker_resource);
+    }
+
+    for (const auto & [worker_address, worker_resources] : all_resources)
+    {
+        auto worker_client = worker_group->getWorkerClient(worker_address);
+        auto worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_address.id);
+
+        Protos::QueryResource query_resource;
+        prepareQueryResource(query_resource, worker_id, worker_resources, context, send_mutations, log);
+
+        butil::IOBuf query_resource_buf;
+        butil::IOBufAsZeroCopyOutputStream wrapper(&query_resource_buf);
+        query_resource.SerializeToZeroCopyStream(&wrapper);
+        resource_buf_map[worker_id] = query_resource_buf.movable();
+        LOG_TRACE(log, "Worker id {} -> query resource size {}", worker_id.toString(), query_resource_buf.size());
+    }
 }
 
 void CnchServerResource::submitCustomTasks(const ContextPtr & context, WorkerAction act)
@@ -696,7 +729,7 @@ void CnchServerResource::allocateResource(
                 {
                     LOG_TRACE(
                         log,
-                        "SourcePrune skip stroage {} for host {}",
+                        "SourcePrune skip storage {} for host {}",
                         storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
                     continue;

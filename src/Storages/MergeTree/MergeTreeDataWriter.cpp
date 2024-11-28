@@ -368,7 +368,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     UInt64 block_id,
     Int64 mutation,
     Int64 hint_mutation,
-    bool enable_partial_update)
+    PartialUpdateState partial_update_state)
 {
     Block & block = block_with_partition.block;
     Int64 bucket_number = block_with_partition.bucket_info.bucket_number;
@@ -389,6 +389,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 
     /// This will generate unique name in scope of current server process.
     Int64 temp_index = block_id ? block_id : data.insert_increment.get();
+    bool enable_partial_update = (partial_update_state == PartialUpdateState::RWProcessNeeded);
 
     IMergeTreeDataPart::MinMaxIndex minmax_idx;
     minmax_idx.update(block, data.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
@@ -452,7 +453,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
     /// Build bitmap for _delete_flag_ function columns which is must after sort and remove func columns
     {
-        if (metadata_snapshot->hasUniqueKey() && !enable_partial_update && block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
+        if (metadata_snapshot->hasUniqueKey() && !enable_partial_update && partial_update_state != PartialUpdateState::RWProcessFinished
+            && block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
         {
             std::vector<size_t> index_map;
             if (perm_ptr)
@@ -535,6 +537,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     new_data_part->checksums_ptr = std::make_shared<MergeTreeMetaBase::DataPart::Checksums>();
     new_data_part->bucket_number = bucket_number;
     new_data_part->is_temp = true;
+    new_data_part->partial_update_state = partial_update_state;
 
     SyncGuardPtr sync_guard;
     if (new_data_part->isStoredOnDisk())
@@ -651,250 +654,6 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     /// Only add delete bitmap if it's not empty and !enable_partial_update
     if (bitmap->cardinality() && !enable_partial_update)
         new_data_part->setDeleteBitmap(bitmap);
-
-    return new_data_part;
-}
-
-MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPartialUpdatePart(
-    Block & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, const IMergeTreeDataPartPtr & source_part)
-{
-    auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
-    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
-
-    if (metadata_snapshot->hasDynamicSubcolumns())
-    {
-        convertDynamicColumnsToTuples(block, storage_snapshot);
-    }
-
-    for (auto & column : columns)
-        if (column.type->hasDynamicSubcolumns())
-            column.type = block.getByName(column.name).type;
-
-    static const String TMP_PREFIX = "tmp_insert_";
-
-    IMergeTreeDataPart::MinMaxIndex minmax_idx;
-    minmax_idx.update(block, data.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
-
-    MergeTreePartInfo new_part_info = source_part->get_info();
-    new_part_info.level += 1;
-    new_part_info.hint_mutation = new_part_info.mutation;
-    new_part_info.mutation = context->getCurrentTransactionID().toUInt64() + 1;
-
-    String part_name;
-    if (data.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
-    {
-        DayNum min_date(minmax_idx.hyperrectangle[data.minmax_idx_date_column_pos].left.get<UInt64>());
-        DayNum max_date(minmax_idx.hyperrectangle[data.minmax_idx_date_column_pos].right.get<UInt64>());
-
-        const auto & date_lut = DateLUT::serverTimezoneInstance();
-
-        auto min_month = date_lut.toNumYYYYMM(min_date);
-        auto max_month = date_lut.toNumYYYYMM(max_date);
-
-        if (min_month != max_month)
-            throw Exception("Logical error: part spans more than one month.", ErrorCodes::LOGICAL_ERROR);
-
-        part_name = new_part_info.getPartNameV0(min_date, max_date);
-    }
-    else
-        part_name = new_part_info.getPartName();
-
-    /// If we need to calculate some columns to sort.
-    if (metadata_snapshot->hasSortingKey() || metadata_snapshot->hasSecondaryIndices())
-        data.getSortingKeyAndSkipIndicesExpression(metadata_snapshot)->execute(block);
-
-    Names sort_columns = metadata_snapshot->getSortingKeyColumns();
-    SortDescription sort_description;
-    size_t sort_columns_size = sort_columns.size();
-    sort_description.reserve(sort_columns_size);
-
-    for (size_t i = 0; i < sort_columns_size; ++i)
-        sort_description.emplace_back(block.getPositionByName(sort_columns[i]), 1, 1);
-
-    ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterBlocks);
-
-    /// Sort
-    IColumn::Permutation * perm_ptr = nullptr;
-    IColumn::Permutation perm;
-    if (!sort_description.empty())
-    {
-        if (!isAlreadySorted(block, sort_description))
-        {
-            stableGetPermutation(block, sort_description, perm);
-            perm_ptr = &perm;
-        }
-        else
-            ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterBlocksAlreadySorted);
-    }
-
-    /// Remove func columns
-    for (auto & [name, _]: metadata_snapshot->getFuncColumns())
-        if (block.has(name))
-            block.erase(name);
-
-    Names partition_key_columns = metadata_snapshot->getPartitionKey().column_names;
-    if (context->getSettingsRef().optimize_on_insert)
-        block = mergeBlock(block, sort_description, partition_key_columns, perm_ptr);
-
-    /// Size of part would not be greater than block.bytes() + epsilon
-    size_t expected_size = block.bytes();
-
-    /// If optimize_on_insert is true, block may become empty after merge.
-    /// There is no need to create empty part.
-    if (expected_size == 0)
-        return nullptr;
-
-    DB::IMergeTreeDataPart::TTLInfos move_ttl_infos;
-    const auto & move_ttl_entries = metadata_snapshot->getMoveTTLs();
-    for (const auto & ttl_entry : move_ttl_entries)
-        updateTTL(ttl_entry, move_ttl_infos, move_ttl_infos.moves_ttl[ttl_entry.result_column], block, false);
-
-    ReservationPtr reservation = data.reserveSpacePreferringTTLRules(
-        metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true,
-        nullptr, write_location);
-    VolumePtr volume = data.getStoragePolicy(write_location)->getVolume(0);
-    auto part_type = data.choosePartType(expected_size, block.rows());
-
-    auto all_columns = metadata_snapshot->getColumns().getAllPhysical();
-    bool has_bitmap = std::any_of(all_columns.begin(), all_columns.end(),
-                                  [](const NameAndTypePair & name_type) { return isBitmap64(name_type.type);});
-    if (has_bitmap)
-        part_type = MergeTreeDataPartType::WIDE;
-
-    auto new_data_part = data.createPart(
-        part_name,
-        part_type,
-        new_part_info,
-        createVolumeFromReservation(reservation, volume),
-        TMP_PREFIX + part_name,
-        nullptr,
-        write_location);
-
-    LOG_DEBUG(log, "Writing temp part to {}...\n", new_data_part->getFullRelativePath());
-
-    if (data.storage_settings.get()->assign_part_uuids)
-        new_data_part->uuid = UUIDHelpers::generateV4();
-
-    new_data_part->setColumns(columns);
-    new_data_part->rows_count = block.rows();
-    new_data_part->partition = std::move(source_part->partition);
-    new_data_part->minmax_idx = std::move(minmax_idx);
-    new_data_part->checksums_ptr = std::make_shared<MergeTreeMetaBase::DataPart::Checksums>();
-    new_data_part->bucket_number = source_part->bucket_number;
-    new_data_part->is_temp = true;
-    new_data_part->partial_update_state = PartialUpdateState::RWProcessFinished;
-
-    SyncGuardPtr sync_guard;
-    if (new_data_part->isStoredOnDisk())
-    {
-        /// The name could be non-unique in case of stale files from previous runs.
-        String full_path = new_data_part->getFullRelativePath();
-
-        if (new_data_part->volume->getDisk()->exists(full_path))
-        {
-            LOG_WARNING(log, "Removing old temporary directory {}", fullPath(new_data_part->volume->getDisk(), full_path));
-            new_data_part->volume->getDisk()->removeRecursive(full_path);
-        }
-
-        const auto disk = new_data_part->volume->getDisk();
-        disk->createDirectories(full_path);
-
-        if (data.getSettings()->fsync_part_directory)
-            sync_guard = disk->getDirectorySyncGuard(full_path);
-    }
-
-    if (metadata_snapshot->hasProjections())
-    {
-        for (const auto & projection : metadata_snapshot->getProjections())
-        {
-            auto in = InterpreterSelectQuery(
-                          projection.query_ast,
-                          context,
-                          Pipe(std::make_shared<SourceFromSingleChunk>(block.cloneEmpty(), Chunk(block.getColumns(), block.rows()))),
-                          SelectQueryOptions{
-                              projection.type == ProjectionDescription::Type::Normal ? QueryProcessingStage::FetchColumns : QueryProcessingStage::WithMergeableState})
-                          .execute()
-                          .getInputStream();
-            in = std::make_shared<SquashingBlockInputStream>(in, block.rows(), std::numeric_limits<UInt64>::max());
-            in->readPrefix();
-            auto projection_block = in->read();
-            if (in->read())
-                throw Exception("Projection cannot grow block rows", ErrorCodes::LOGICAL_ERROR);
-            in->readSuffix();
-            if (projection_block.rows())
-            {
-                new_data_part->addProjectionPart(projection.name, writeProjectionPart(projection_block, projection, new_data_part.get()));
-            }
-        }
-    }
-
-    if (metadata_snapshot->hasRowsTTL())
-        updateTTL(metadata_snapshot->getRowsTTL(), new_data_part->ttl_infos, new_data_part->ttl_infos.table_ttl, block, true);
-
-    for (const auto & ttl_entry : metadata_snapshot->getGroupByTTLs())
-        updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.group_by_ttl[ttl_entry.result_column], block, true);
-
-    for (const auto & ttl_entry : metadata_snapshot->getRowsWhereTTLs())
-        updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.rows_where_ttl[ttl_entry.result_column], block, true);
-
-    for (const auto & [name, ttl_entry] : metadata_snapshot->getColumnTTLs())
-        updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.columns_ttl[name], block, true);
-
-    const auto & recompression_ttl_entries = metadata_snapshot->getRecompressionTTLs();
-    for (const auto & ttl_entry : recompression_ttl_entries)
-        updateTTL(ttl_entry, new_data_part->ttl_infos, new_data_part->ttl_infos.recompression_ttl[ttl_entry.result_column], block, false);
-
-    new_data_part->ttl_infos.update(move_ttl_infos);
-
-    /// This effectively chooses minimal compression method:
-    ///  either default lz4 or compression method with zero thresholds on absolute and relative part size.
-    auto compression_codec = data.getContext()->chooseCompressionCodec(0, 0);
-
-    const auto & index_factory = MergeTreeIndexFactory::instance();
-
-    BitmapBuildInfo bitmap_build_info;
-    if (!data.getSettings()->enable_build_ab_index)
-        bitmap_build_info.build_all_bitmap_index = false;
-    if (!data.getSettings()->enable_segment_bitmap_index)
-        bitmap_build_info.build_all_segment_bitmap_index = false;
-
-    LOG_DEBUG(log, "There are {} secondary index,  {}", metadata_snapshot->getSecondaryIndices().size(), metadata_snapshot->getSecondaryIndices().toString());
-    MergedBlockOutputStream out(
-        new_data_part,
-        metadata_snapshot,
-        columns,
-        index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
-        compression_codec,
-        /* blocks_are_granules_size(default) */ false,
-        context->getSettingsRef().optimize_map_column_serialization,
-        bitmap_build_info);
-
-    bool sync_on_insert = data.getSettings()->fsync_after_insert;
-
-    // pre-handle low-cardinality fall-back
-    for (auto const &column : columns)
-    {
-        if (column.type->lowCardinality())
-        {
-            auto const &col = block.getByName(column.name);
-            auto const *lc = typeid_cast<const ColumnLowCardinality *>(col.column.get());
-            if (lc->isFullState())
-            {
-                auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(column.type.get());
-                // lc full column need switch type
-                NameAndTypePair pair(column.name,  lc_type->getFullLowCardinalityTypePtr());
-                out.updateWriterStream(pair);
-            }
-        }
-    }
-
-    out.writePrefix();
-    out.writeWithPermutation(block, perm_ptr);
-    out.writeSuffixAndFinalizePart(new_data_part, sync_on_insert);
-
-    ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterRows, block.rows());
-    ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterUncompressedBytes, block.bytes());
-    ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterCompressedBytes, new_data_part->getBytesOnDisk());
 
     return new_data_part;
 }
