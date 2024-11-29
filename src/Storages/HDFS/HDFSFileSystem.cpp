@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <random>
-#include <consul/bridge.h>
 #include "common/types.h"
 #include <Common/formatIPv6.h>
 #include <Common/filesystemHelpers.h>
@@ -90,16 +89,7 @@ HostWithPortsVec lookupNNProxy(const String & hdfs_service, UInt32 nnproxy_cache
         } while (nnproxys.empty());
     }
     else
-    {
-        int retry = 0;
-        do
-        {
-            if (retry++ > 2)
-                throw Exception("No available nnproxy " + hdfs_service, ErrorCodes::NETWORK_ERROR);
-            auto endpoints = cpputil::consul::lookup_name(hdfs_service);
-            nnproxys = ServiceDiscoveryConsul::formatResult(endpoints, ComponentType::NNPROXY);
-        } while (nnproxys.empty());
-    }
+        throw Exception("There is no consul service discovery", ErrorCodes::LOGICAL_ERROR);
     return nnproxys;
 }
 
