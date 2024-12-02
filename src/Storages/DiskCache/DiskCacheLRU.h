@@ -168,7 +168,6 @@ private:
     ThrottlerPtr set_rate_throttler;
     ThrottlerPtr set_throughput_throttler;
     std::atomic<bool> is_droping{false};
-    std::atomic<bool> is_loading{false};
     ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, DiskCacheWeight, DiskCacheWeightFunction>> containers;
 };
 

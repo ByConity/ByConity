@@ -77,7 +77,7 @@ public:
 
     ServiceDiscoveryMode getType() const override { return ServiceDiscoveryMode::DNS; }
 
-    HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "", UInt32 custom_cache_timeout = 0) override;
+    HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "") override;
     Endpoints lookupEndpoints(const String & psm_name) override;
 
     WorkerGroupMap lookupWorkerGroupsInVW(const String & psm, const String & vw_name) override;

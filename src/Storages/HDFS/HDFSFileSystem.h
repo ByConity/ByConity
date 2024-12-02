@@ -42,8 +42,6 @@ namespace ErrorCodes
     extern const int PARAMETER_OUT_OF_BOUND;
 }
 
-HostWithPortsVec lookupNNProxy(const String & hdfs_service, UInt32 nnproxy_cache_timeout = 24 * 3600);
-
 class HDFSFileSystem
 {
 public:

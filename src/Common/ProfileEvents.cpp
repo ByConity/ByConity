@@ -483,7 +483,6 @@
     M(CnchLoadMarksRequests, "") \
     M(CnchLoadMarksBytes, "") \
     M(CnchLoadMarksMicroseconds, "") \
-    M(CnchLoadChecksumsMicroseconds, "load checksums cost time") \
     M(CnchLoadMarksFromDiskCacheRequests, "") \
     M(CnchLoadMarksFromDiskCacheBytes, "") \
     M(CnchLoadMarksFromDiskCacheMicroseconds, "") \

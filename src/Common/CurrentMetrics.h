@@ -6,7 +6,6 @@
 #include <atomic>
 #include <common/types.h>
 #include <metric_helper.h>
-#include <bits/types/time_t.h>
 #include <Common/LabelledMetrics.h>
 
 /** Allows to count number of simultaneously happening processes or current value of some metric.
@@ -54,9 +53,9 @@ namespace CurrentMetrics
     inline void add(Metric metric, Value value = 1, Metrics::MetricType type = Metrics::MetricType::None, LabelledMetrics::MetricLabels labels = {})
     {
         values[metric].fetch_add(value, std::memory_order_relaxed);
-        if (type == Metrics::MetricType::Store)
+        if (type == Metrics::MetricType::Counter)
         {
-            Metrics::EmitMetric(type, getSnakeName(metric), values[metric].load(std::memory_order_relaxed), LabelledMetrics::toString(labels), {});
+            Metrics::EmitCounter(getSnakeName(metric), value, LabelledMetrics::toString(labels));
         }
     }
 

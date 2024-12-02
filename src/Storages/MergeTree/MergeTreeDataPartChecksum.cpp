@@ -20,10 +20,8 @@
  */
 
 #include "MergeTreeDataPartChecksum.h"
-#include <Common/CurrentMetrics.h>
 #include <Common/SipHash.h>
 #include <Common/hex.h>
-#include "metric_helper.h"
 #include <DataTypes/MapHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -32,11 +30,6 @@
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
 
-
-namespace CurrentMetrics
-{
-    extern const Metric PartChecksums;
-}
 
 namespace DB
 {
@@ -52,6 +45,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT;
     extern const int NO_FILE_IN_DATA_PART;
 }
+
 
 void MergeTreeDataPartChecksum::checkEqual(const MergeTreeDataPartChecksum & rhs, bool have_uncompressed, const String & name) const
 {
@@ -84,32 +78,6 @@ void MergeTreeDataPartChecksum::checkSize(const DiskPtr & disk, const String & p
             ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
 }
 
-
-MergeTreeDataPartChecksums::MergeTreeDataPartChecksums()
-{
-    CurrentMetrics::add(CurrentMetrics::PartChecksums, 1, Metrics::MetricType::Store);
-}
-
-MergeTreeDataPartChecksums::MergeTreeDataPartChecksums(const MergeTreeDataPartChecksums & other)
-    : files(other.files)
-    , storage_type(other.storage_type)
-{
-    *versions = *(other.versions);
-    CurrentMetrics::add(CurrentMetrics::PartChecksums, 1, Metrics::MetricType::Store);
-}
-
-MergeTreeDataPartChecksums::MergeTreeDataPartChecksums(MergeTreeDataPartChecksums && other)
-    : files(std::move(other.files))
-    , storage_type(std::move(other.storage_type))
-    , versions(std::move(other.versions))
-{
-    CurrentMetrics::add(CurrentMetrics::PartChecksums, 1, Metrics::MetricType::Store);
-}
-
-MergeTreeDataPartChecksums::~MergeTreeDataPartChecksums()
-{
-    CurrentMetrics::sub(CurrentMetrics::PartChecksums, 1, Metrics::MetricType::Store);
-}
 
 void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & rhs, bool have_uncompressed) const
 {

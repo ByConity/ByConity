@@ -203,9 +203,9 @@ static fs::path getRelativePathForPart(const String & part_name, const String & 
 
 void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint, bool is_preload)
 {
-    if (is_droping || is_loading)
+    if (is_droping)
     {
-        LOG_WARNING(log, "skip write disk cache for disk cache is droping({}) or loading({})", is_droping, is_loading);
+        LOG_WARNING(log, fmt::format("skip write disk cache for droping disk cache is running"));
         return;
     }
 
@@ -403,11 +403,7 @@ void DiskCacheLRU::afterEvictSegment(const std::vector<std::pair<KeyType, std::s
 void DiskCacheLRU::load()
 {
     Stopwatch watch;
-    is_loading = true;
-    SCOPE_EXIT({
-        is_loading = false;
-        LOG_INFO(log, fmt::format("load thread takes {} ms", watch.elapsedMilliseconds()));
-    });
+    SCOPE_EXIT({ LOG_INFO(log, fmt::format("load thread takes {} ms", watch.elapsedMilliseconds())); });
     Disks disks = volume->getDisks();
     if (settings.cache_dispatcher_per_disk)
     {

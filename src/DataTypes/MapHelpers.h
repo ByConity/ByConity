@@ -137,12 +137,10 @@ bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String 
 bool isMapImplicitDataFileNameOfSpecialMapName(const String & file_name, const String map_col);
 
 /// Get range of files from ordered files (e.g. std::map) with a hacking solution.
-template <class M>
-std::pair<typename M::const_iterator, typename M::const_iterator>
-getFileRangeFromOrderedFilesByPrefix(const String & prefix, const M & m)
+template <class V>
+std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
+getFileRangeFromOrderedFilesByPrefix(const String & prefix, const std::map<String, V> & m)
 {
-    static_assert(std::is_same_v<String, typename M::key_type>);
-
     constexpr auto char_max = std::numeric_limits<String::value_type>::max();
     auto beg = m.lower_bound(prefix);
     /// Adding char_max to the end to speed up finding upper bound
@@ -154,12 +152,10 @@ getFileRangeFromOrderedFilesByPrefix(const String & prefix, const M & m)
 }
 
 /// Get range of implicit column files from ordered files (e.g. std::map) with a hacking solution
-template <class M>
-std::pair<typename M::const_iterator, typename M::const_iterator>
-getMapColumnRangeFromOrderedFiles(const String & map_column, const M & m)
+template <class V>
+std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
+getMapColumnRangeFromOrderedFiles(const String & map_column, const std::map<String, V> & m)
 {
-    static_assert(std::is_same_v<String, typename M::key_type>);
-
     String map_prefix = escapeForFileName(getMapKeyPrefix(map_column));
     return getFileRangeFromOrderedFilesByPrefix(map_prefix, m);
 }

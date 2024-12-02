@@ -136,7 +136,6 @@ public:
 
 
     HDFSConnectionType conn_type;
-    UInt32 nnproxy_cache_timeout = 3600; // default 1 hour
     String hdfs_user;
     String hdfs_service;
     std::vector<IpWithPort> addrs;

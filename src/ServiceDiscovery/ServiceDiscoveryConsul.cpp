@@ -16,7 +16,6 @@
 #include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 #include <sstream>
 #include <string>
-#include <common/types.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
@@ -94,20 +93,17 @@ ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfigu
         cache_timeout = config.getUInt("service_discovery.cache_timeout");
     if (config.hasProperty("service_discovery.check_result"))
         check_result = config.getBool("service_discovery.check_result");
-
-    LOG_INFO(log, "ServiceDiscoveryConsul: cluster = {}, cache_disabled = {}, cache_timeout = {}s, check_result = {}",
-             cluster, cache_disabled, cache_timeout, check_result);
 }
 
-HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name, UInt32 custom_cache_timeout)
+HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name)
 {
     if (type != ComponentType::WORKER && !vw_name.empty())
         throw Exception("Should not specify vw name for non-worker components", ErrorCodes::LOGICAL_ERROR);
 
-    Endpoints endpoints = fetchEndpoints(psm_name, vw_name, custom_cache_timeout);
+    Endpoints endpoints = fetchEndpoints(psm_name, vw_name);
     HostWithPortsVec result = formatResult(endpoints, type);
 
-    if (result.empty())
+    if (result.size() == 0)
         LOG_DEBUG(log, "lookup " + typeToString(type) + " [" + psm_name + "][" + vw_name + "] returns empty result");
     return result;
 }
@@ -149,21 +145,21 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW
     return group_map;
 }
 
-ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpoints(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout)
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpoints(const String & psm_name, const String & vw_name)
 {
     if (cache_disabled)
         return fetchEndpointsFromUpstream(psm_name, vw_name);
     else
-        return fetchEndpointsFromCache(psm_name, vw_name, custom_cache_timeout);
+        return fetchEndpointsFromCache(psm_name, vw_name);
 }
 
-ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCache(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout)
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCache(const String & psm_name, const String & vw_name)
 {
     SDCacheKey key {psm_name, vw_name};
     SDCacheValue<Endpoint> cache_res;
 
     // Cache hit. endpoints exists in cache and not outdated
-    if (cache.get(key, cache_res) && time(nullptr) - (custom_cache_timeout ? custom_cache_timeout : cache_timeout) < cache_res.last_update)
+    if (cache.get(key, cache_res) && time(nullptr) - cache_timeout < cache_res.last_update)
     {
         return cache_res.endpoints;
     }

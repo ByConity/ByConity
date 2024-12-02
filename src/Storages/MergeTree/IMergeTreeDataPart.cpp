@@ -33,8 +33,6 @@
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Common/Stopwatch.h>
-#include <common/scope_guard.h>
 #include <Common/Coding.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
@@ -70,10 +68,6 @@ namespace CurrentMetrics
     extern const Metric PartsCNCH;
 }
 
-namespace ProfileEvents
-{
-    extern const Event CnchLoadChecksumsMicroseconds;
-}
 namespace DB
 {
 
@@ -595,11 +589,6 @@ void IMergeTreeDataPart::removeIfNeeded()
 
 IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
 {
-    Stopwatch timer;
-    SCOPE_EXIT({
-        ProfileEvents::increment(ProfileEvents::CnchLoadChecksumsMicroseconds, timer.elapsedMicroseconds(), Metrics::MetricType::Timer);
-    });
-
     ChecksumsPtr res;
     {
         std::lock_guard lock(checksums_mutex);

@@ -21,7 +21,6 @@
 #include <memory>
 #include <Poco/Logger.h>
 #include <ServiceDiscovery/ServiceDiscoveryHelper.h>
-#include <common/types.h>
 
 namespace DB
 {
@@ -45,7 +44,7 @@ public:
 
     ServiceDiscoveryMode getType() const override { return ServiceDiscoveryMode::CONSUL; }
 
-    HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "", UInt32 custom_cache_timeout = 0) override;
+    HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "") override;
     Endpoints lookupEndpoints(const String & psm_name) override;
 
     WorkerGroupMap lookupWorkerGroupsInVW(const String & psm, const String & vw_name) override;
@@ -61,8 +60,8 @@ private:
     bool passCheckVwName(const Endpoint & e, const String & vw_name);
 
     // real interface
-    Endpoints fetchEndpoints(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout = 0);
-    Endpoints fetchEndpointsFromCache(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout = 0);
+    Endpoints fetchEndpoints(const String & psm_name, const String & vw_name);
+    Endpoints fetchEndpointsFromCache(const String & psm_name, const String & vw_name);
     Endpoints fetchEndpointsFromUpstream(const String & psm_name, const String & vw_name);
 
 public:

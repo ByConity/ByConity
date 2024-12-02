@@ -37,8 +37,6 @@ struct MergeTreeDataPartVersions
 
     MergeTreeDataPartVersions(const MergeTreeDataPartVersions & version) : MergeTreeDataPartVersions(version.enable_compact_map_data) { }
 
-    MergeTreeDataPartVersions & operator= (const MergeTreeDataPartVersions &) = default;
-
     void write(WriteBuffer & to);
 
     bool read(ReadBuffer & from, bool needCheckHeader = true);

@@ -168,7 +168,6 @@
     M(PartsCompact, "Compact parts.") \
     M(PartsInMemory, "In-memory parts.") \
     M(PartsCNCH, "CNCH parts.") \
-    M(PartChecksums, "Data part checksums.") \
     M(MMappedFiles, "Total number of mmapped files.") \
     M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
     M(AsynchronousReadWait, "Number of threads waiting for asynchronous read.") \

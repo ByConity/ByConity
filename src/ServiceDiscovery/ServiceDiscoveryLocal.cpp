@@ -49,7 +49,7 @@ ServiceDiscoveryLocal::ServiceDiscoveryLocal(const Poco::Util::AbstractConfigura
     loadConfig(config);
 }
 
-HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, ComponentType type, const String & vw_name, UInt32)
+HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, ComponentType type, const String & vw_name)
 {
     if (!exists(psm_name))
         throw Exception("psm:" + psm_name + " not exists in service registry.", ErrorCodes::SD_PSM_NOT_EXISTS);

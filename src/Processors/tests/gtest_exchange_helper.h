@@ -7,7 +7,6 @@
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 #include <Poco/Util/MapConfiguration.h>
-#include <common/types.h>
 #include <Common/Brpc/BrpcApplication.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
@@ -17,7 +16,7 @@ const int brpc_server_port = 8001;
 
 struct MockServiceDiscoveryClient : public DB::IServiceDiscovery
 {
-    DB::HostWithPortsVec lookup(const String & psm_name, DB::ComponentType type, const String & vw_name = "", UInt32 ttl = 0) override;
+    DB::HostWithPortsVec lookup(const String & psm_name, DB::ComponentType type, const String & vw_name = "") override;
     std::string getName() const override
     {
         return "MockServiceDiscoveryClient";
