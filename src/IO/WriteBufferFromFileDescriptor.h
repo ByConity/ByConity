@@ -34,8 +34,7 @@ class WriteBufferFromFileDescriptor : public WriteBufferFromFileBase
 {
 protected:
     int fd;
-    ThrottlerPtr bytes_throttler;
-    ThrottlerPtr qps_throttler;
+    ThrottlerPtr throttler;
 
     void nextImpl() override;
 
@@ -43,13 +42,12 @@ protected:
     std::string getFileName() const override;
 
 public:
-    explicit WriteBufferFromFileDescriptor(
+    WriteBufferFromFileDescriptor(
         int fd_ = -1,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
         size_t alignment = 0,
-        ThrottlerPtr bytes_throttler = nullptr,
-        ThrottlerPtr qps_throttler = nullptr);
+        ThrottlerPtr throttler = nullptr);
 
     /** Could be used before initialization if needed 'fd' was not passed to constructor.
       * It's not possible to change 'fd' during work.

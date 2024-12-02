@@ -68,11 +68,8 @@ void WriteBufferFromFileDescriptor::nextImpl()
 
     Stopwatch watch;
 
-    if (qps_throttler)
-        qps_throttler->add(1);
-
-    if (bytes_throttler)
-        bytes_throttler->add(offset());
+    if (throttler)
+        throttler->add(offset());
 
     size_t bytes_written = 0;
     while (bytes_written != offset())
@@ -113,9 +110,8 @@ WriteBufferFromFileDescriptor::WriteBufferFromFileDescriptor(
     size_t buf_size,
     char * existing_memory,
     size_t alignment,
-    ThrottlerPtr bytes_throttler_,
-    ThrottlerPtr qps_throttler_)
-    : WriteBufferFromFileBase(buf_size, existing_memory, alignment), fd(fd_), bytes_throttler(bytes_throttler_), qps_throttler(qps_throttler_) {}
+    ThrottlerPtr throttler_)
+    : WriteBufferFromFileBase(buf_size, existing_memory, alignment), fd(fd_), throttler(throttler_) {}
 
 
 WriteBufferFromFileDescriptor::~WriteBufferFromFileDescriptor()
