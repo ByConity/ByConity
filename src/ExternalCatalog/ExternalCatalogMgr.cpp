@@ -1,8 +1,5 @@
 #include <memory>
 
-#include "Common/Config/MetastoreConfig.h"
-#include <Common/Exception.h>
-#include <common/logger_useful.h>
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <ExternalCatalog/InMemoryExternalCatalogMgr.h>
@@ -22,8 +19,7 @@ namespace Mgr
     void init(Context & _context, [[maybe_unused]] const Poco::Util::AbstractConfiguration & conf)
     {
         //TODO(renming):: add more implementation
-        auto prefix = conf.has(configPrefix()) ? configPrefix() : CATALOG_SERVICE_CONFIGURE;
-        auto key_mgr_type = prefix + ".type";
+        auto key_mgr_type = configPrefix() + ".type";
         auto log = getLogger("ExternalCatalogMgr");
         if (!conf.has(key_mgr_type))
         {
@@ -39,7 +35,7 @@ namespace Mgr
         {
             // this will created an catalog mgr backed by fdb/bytekv and etc.
             LOG_DEBUG(log, "Use kv-backed external catalog manager");
-            mgr_ptr = std::make_unique<CnchExternalCatalogMgr>(_context, conf, prefix);
+            mgr_ptr = std::make_unique<CnchExternalCatalogMgr>(_context, conf);
         }
 
         assert(mgr_ptr != nullptr);

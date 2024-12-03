@@ -16,7 +16,7 @@ namespace DB::ExternalCatalog
 class CnchExternalCatalogMgr : public IExternalCatalogMgr
 {
 public:
-    CnchExternalCatalogMgr(Context & context, const Poco::Util::AbstractConfiguration & conf, const String & config_prefix);
+    CnchExternalCatalogMgr(Context & context, const Poco::Util::AbstractConfiguration & conf);
     ~CnchExternalCatalogMgr() override = default;
 
     bool createCatalog(const std::string & catalog_name, PlainConfigs * catalog_meta, const TxnTimestamp & ts) override;

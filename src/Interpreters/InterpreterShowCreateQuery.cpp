@@ -51,9 +51,10 @@ Block InterpreterShowCreateQuery::getSampleBlock()
 BlockInputStreamPtr InterpreterShowCreateQuery::executeForExternalImpl()
 {
     auto catalog_name = query_ptr->as<ASTShowCreateExternalCatalogQuery>()->catalog;
-    auto create_query =ExternalCatalog::Mgr::instance().getCatalogCreateQuery(catalog_name);
-    if(!create_query.has_value() || create_query->empty()){
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist",catalog_name);
+    auto create_query = ExternalCatalog::Mgr::instance().getCatalogCreateQuery(catalog_name);
+    if (create_query->empty())
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
     }
     MutableColumnPtr column = ColumnString::create();
     column->insert(create_query.value());
