@@ -84,7 +84,8 @@ public:
      * @tparam SteppedValidVisitor  A callback with signature:
      *  void(size_t cursor, const std::vector<UInt8> & valid_index_steps)
      *  for n valid elements with null value interleaved in a BitPacked group,
-     *  i-th item in valid_index_steps describes how many elements in column there are after (i-1)-th valid element.
+     *  i-th item in valid_index_steps describes how many elements there are
+     *  from i-th valid element (include) to (i+1)-th valid element (exclude).
      *
      *  take following BitPacked group with 2 valid elements for example:
      *      null valid null null valid null

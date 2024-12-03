@@ -15,6 +15,7 @@
 
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/ExpressionVisitor.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTFunction.h>
@@ -154,7 +155,7 @@ std::vector<ASTPtr> extractReferencesToScope(ContextPtr context, Analysis & anal
     return extractExpressions(context, analysis, root, include_subquery, filter);
 }
 
-void expandOrderByAll(ASTSelectQuery * select_query)
+void expandOrderByAll(ASTSelectQuery * select_query, const ASTs & select_expressions)
 {
     auto * all_elem = select_query->orderBy()->children[0]->as<ASTOrderByElement>();
     if (!all_elem)
@@ -162,7 +163,7 @@ void expandOrderByAll(ASTSelectQuery * select_query)
 
     auto order_expression_list = std::make_shared<ASTExpressionList>();
 
-    for (const auto & expr : select_query->select()->children)
+    for (const auto & expr : select_expressions)
     {
         if (auto * identifier = expr->as<ASTIdentifier>(); identifier != nullptr)
             if (Poco::toUpper(identifier->name()) == "ALL" || Poco::toUpper(identifier->alias) == "ALL")
@@ -184,6 +185,56 @@ void expandOrderByAll(ASTSelectQuery * select_query)
 
     select_query->setExpression(ASTSelectQuery::Expression::ORDER_BY, order_expression_list);
     select_query->order_by_all = false;
+}
+
+std::pair<bool, UInt64> recursivelyCollectMaxOrdinaryExpressions(const ASTPtr & expr, ASTExpressionList & into)
+{
+    if (expr->as<ASTIdentifier>() || expr->as<ASTFieldReference>())
+    {
+        into.children.push_back(expr);
+        return {false, 1};
+    }
+    auto * function = expr->as<ASTFunction>();
+    if (!function)
+        return {false, 0};
+    if (AggregateUtils::isAggregateFunction(*function))
+        return {true, 0};
+    UInt64 pushed_children = 0;
+    bool has_aggregate = false;
+    for (const auto & child : function->arguments->children)
+    {
+        auto [child_has_aggregate, child_pushed_children] = recursivelyCollectMaxOrdinaryExpressions(child, into);
+        has_aggregate |= child_has_aggregate;
+        pushed_children += child_pushed_children;
+    }
+    /// The current function is not aggregate function and there is no aggregate function in its arguments,
+    /// so use the current function to replace its arguments
+    if (!has_aggregate)
+    {
+        for (UInt64 i = 0; i < pushed_children; i++)
+            into.children.pop_back();
+        into.children.push_back(expr);
+        pushed_children = 1;
+    }
+    return {has_aggregate, pushed_children};
+}
+
+/** Expand GROUP BY ALL by extracting all the SELECT-ed expressions that are not aggregate functions.
+  *
+  * For a special case that if there is a function having both aggregate functions and other fields as its arguments,
+  * the `GROUP BY` keys will contain the maximum non-aggregate fields we can extract from it.
+  *
+  * Example:
+  * SELECT substring(a, 4, 2), substring(substring(a, 1, 2), 1, count(b)) FROM t GROUP BY ALL
+  * will expand as
+  * SELECT substring(a, 4, 2), substring(substring(a, 1, 2), 1, count(b)) FROM t GROUP BY substring(a, 4, 2), substring(a, 1, 2)
+  */
+void expandGroupByAll(ASTSelectQuery * select_query, const ASTs & select_expressions)
+{
+    auto group_expression_list = std::make_shared<ASTExpressionList>();
+    for (const auto & expr : select_expressions)
+        recursivelyCollectMaxOrdinaryExpressions(expr, *group_expression_list);
+    select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, group_expression_list);
 }
 
 }

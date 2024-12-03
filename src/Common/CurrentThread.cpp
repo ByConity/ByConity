@@ -72,6 +72,13 @@ void CurrentThread::attachInternalTextLogsQueue(const std::shared_ptr<InternalTe
     current_thread->attachInternalTextLogsQueue(logs_queue, client_logs_level);
 }
 
+void CurrentThread::setQueryLogsLevel(int query_logs_level_for_poco)
+{
+    if (unlikely(!current_thread))
+        return;
+    current_thread->setQueryLogsLevel(query_logs_level_for_poco);
+}
+
 void CurrentThread::setFatalErrorCallback(std::function<void()> callback)
 {
     if (unlikely(!current_thread))

@@ -786,6 +786,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
     M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
     M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
+    M(LogsLevel, query_logs_level, LogsLevel::none, "Respect query log level if it's specified. LogsLevel::none is used to represent the feature is disabled rather than we don't print any log for query. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal'", 0) \
     M(Bool, enable_optimize_predicate_expression, 1, "If it is set to true, optimize predicates to subqueries.", 0) \
     M(Bool, enable_optimize_predicate_expression_to_final_subquery, 1, "Allow push predicate to final subquery.", 0) \
     M(Bool, allow_push_predicate_when_subquery_contains_with, 1, "Allows push predicate when subquery contains WITH clause", 0) \
@@ -1033,7 +1034,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, handle_division_by_zero, false, "If set true, return null for division by zero (MySQL Behavior)", 0) \
     M(Bool, enable_bucket_for_distribute, true, "If set true, enable distribute by keyword by replacing with distribute", 0) \
     \
-    M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
+    M(Bool, optimize_rewrite_sum_if_to_count_if, false, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
     M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
     M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
@@ -1264,6 +1265,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, use_hive_split_level_filter, false, "", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+    M(String, on_duplicate_action, "", "Indicate partial update action when history duplicate key found", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
     M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
     M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \

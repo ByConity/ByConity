@@ -17,6 +17,7 @@
 
 #include <Processors/ISimpleTransform.h>
 #include <Storages/ColumnsDescription.h>
+#include "Processors/Formats/IInputFormat.h"
 
 
 namespace DB
@@ -44,6 +45,22 @@ private:
     const ColumnDefaults column_defaults;
     IInputFormat & input_format;
     ContextPtr context;
+};
+
+class AddingDefaultValuesTransform : public ISimpleTransform
+{
+public:
+    AddingDefaultValuesTransform(
+        const Block & input_,
+        const Block & output_,
+        ColumnMappingPtr column_mapping_);
+
+    String getName() const override { return "AddingDefaultValuesTransform"; }
+
+protected:
+    void transform(Chunk & chunk) override;
+
+    ColumnMappingPtr column_mapping;
 };
 
 }

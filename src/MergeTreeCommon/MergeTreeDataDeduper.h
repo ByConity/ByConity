@@ -35,6 +35,7 @@ public:
     using DeleteInfoPtr = ReplacingSortedKeysIterator::DeleteInfoPtr;
     using RowPos = ReplacingSortedKeysIterator::RowPos;
     using DeleteCallback = ReplacingSortedKeysIterator::DeleteCallback;
+    using FilterInfo = CnchDedupHelper::FilterInfo;
 
     MergeTreeDataDeduper(
         const MergeTreeMetaBase & data_,
@@ -95,6 +96,10 @@ public:
     using DedupTasks = std::vector<DedupTaskPtr>;
 
 private:
+    /// For partial update mode: processOnDuplicateAction
+    static constexpr auto ON_DUPLICATE_PREFIX = "ON_DUP_";
+    static constexpr auto ON_DUPLICATE_FILTER_COLUMN = "_on_duplicate_filter_";
+
     /// Low-level interface to dedup `new_parts` with `visible_parts`.
     /// Return delete bitmaps of input parts to remove duplicate keys.
     /// Size of the result vector is `visible_parts.size() + new_parts.size()`.
@@ -111,7 +116,8 @@ private:
         const IMergeTreeDataPartsVector & current_dedup_new_parts,
         const DedupTaskPtr & dedup_task,
         bool & optimize_for_same_update_columns,
-        NameSet & same_update_column_set);
+        NameSet & same_update_column_set,
+        Names & on_duplicate_action_list);
 
     /// For partial update mode: Remove duplicate keys in block and get replace info.
     size_t removeDupKeysInPartialUpdateMode(
@@ -125,6 +131,18 @@ private:
     /// Given input keys, for each key, search in the existing parts to find the duplicated key.
     /// Returns: {part_index, rowid, row version} for each key. If a key is never existed before, its part_index will be -1
     SearchKeysResult searchPartForKeys(const IMergeTreeDataPartsVector & visible_parts, UniqueKeys & keys);
+
+    /// For partial update mode:
+    /// Given block, new_parts, process on_duplicate_action
+    void processOnDuplicateAction(Block & block, const IMergeTreeDataPartsVector & new_parts, const Names & on_duplicate_action_list, const DedupTaskPtr & dedup_task);
+
+    /// For partial update mode:
+    /// Given block, on_duplicate_action, process on_duplicate_action
+    void processOnDuplicateActionForPart(Block & block, const String & on_duplicate_action, const DedupTaskPtr & dedup_task);
+
+    /// For partial update mode:
+    /// Given block, on_duplicate_block, fill block with on duplicate transform
+    static void fillBlockWithOnDuplicateTransform(Block & block, const Block & on_duplication_block);
 
     /// For partial update mode: read data from part.
     void readColumnsFromStorage(const IMergeTreeDataPartPtr & part, RowidPairs & rowid_pairs,

@@ -7,7 +7,10 @@ namespace DB
 
 void OwnFormattingChannel::logExtended(const ExtendedLogMessage & msg)
 {
-    if (pChannel && priority >= msg.base.getPriority())
+    bool query_logs_level_specified = msg.query_logs_level_for_poco != 0;
+    bool print_log
+        = query_logs_level_specified ? msg.query_logs_level_for_poco >= msg.base.getPriority() : priority >= msg.base.getPriority();
+    if (pChannel && print_log)
     {
         if (pFormatter)
         {

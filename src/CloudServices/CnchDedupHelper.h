@@ -22,6 +22,7 @@
 #include <Core/Block.h>
 #include <Columns/IColumn.h>
 #include <Common/PODArray.h>
+#include <IO/ReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
@@ -278,12 +279,22 @@ struct DedupTask
 
     explicit DedupTask(const DedupMode & dedup_mode_, const StorageID & storage_id_, bool is_sub_task_ = false)
         : dedup_mode(dedup_mode_), storage_id(storage_id_), is_sub_task(is_sub_task_)
-    {
-    }
+    {}
 
     String toString() const;
 };
 using DedupTaskPtr = std::shared_ptr<DedupTask>;
+
+struct PartialUpdateRule
+{
+    /// Currently not used, will further used for detach/attach partial update staged parts
+    bool enable_partial_update;
+    String on_duplicate_action;
+
+    explicit PartialUpdateRule(bool enable_partial_update_ = false, String on_duplicate_action_ = "")
+        : enable_partial_update(enable_partial_update_), on_duplicate_action(on_duplicate_action_)
+    {}
+};
 
 UInt64 getWriteLockTimeout(StorageCnchMergeTree & cnch_table, ContextPtr local_context);
 
@@ -296,10 +307,14 @@ pickWorkerForDedup(StorageCnchMergeTree & cnch_table, DedupTaskPtr dedup_task, c
 
 /************Methods for partial update feature (Start)******************/
 
-String parseAndConvertColumnsIntoIndices(MergeTreeMetaBase & storage, const NamesAndTypesList & columns, const String & columns_name);
+String parseAndConvertColumnsIntoIndices(const MergeTreeMetaBase & storage, const NameSet & non_updatable_columns, const NamesAndTypesList & columns, const String & columns_name);
 
 /// Use index instead of name to reduce size
 void simplifyFunctionColumns(MergeTreeMetaBase & storage, const StorageMetadataPtr & metadata_snapshot, Block & block);
+
+void writePartialUpdateRule(const PartialUpdateRule & partial_update_rule, WriteBuffer & to);
+
+bool readPartialUpdateRule(PartialUpdateRule & partial_update_rule, ReadBuffer & in);
 
 /************Methods for partial update feature (End)******************/
 

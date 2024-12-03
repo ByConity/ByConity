@@ -1548,7 +1548,6 @@ public:
 
     const String & getTenantId() const
     {
-
         if (!tenant_id.empty())
             return tenant_id;
         else

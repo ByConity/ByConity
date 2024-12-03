@@ -13,6 +13,7 @@ class ASTBackupQuery;
 /// Settings specified in the "SETTINGS" clause of a BACKUP query.
 struct BackupSettings
 {
+    String id;
     /// Compression method and level for writing the backup (when applicable).
     String compression_method; /// "" means default method
     int compression_level = -1; /// -1 means default level

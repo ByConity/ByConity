@@ -14,6 +14,7 @@
  */
 
 #include "Storages/HDFS/ReadBufferFromByteHDFS.h"
+#include <Storages/RemoteFile/CnchFileCommon.h>
 #include "metric_helper.h"
 #include <Interpreters/RemoteReadLog.h>
 
@@ -139,8 +140,12 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
         , read_until_position(read_until_position_)
     {
         Poco::URI uri(hdfs_file_path_);
-        hdfs_file_path = uri.getPath();
-
+        // If hdfs file path starts with 'hdfs://', we have to remove it
+        // We don't use Poco::URI::getPath() directly, because it will decode percent-encoded characters
+        if (!uri.getScheme().empty())
+            hdfs_file_path = FileURI(hdfs_file_path_).file_path;
+        else
+            hdfs_file_path = hdfs_file_path_;
         builder = hdfs_params_.createBuilder(uri);
         doWithRetry([this] {
             fs = createHDFSFS(builder.get());

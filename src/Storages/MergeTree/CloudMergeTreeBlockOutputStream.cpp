@@ -283,7 +283,8 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             block_id,
             primary_txn_id,
             /*hint_mutation=*/ 0,
-            /*partial_update_state=*/ dedup_parameters.enable_partial_update ? PartialUpdateState::RWProcessNeeded: PartialUpdateState::NotPartialUpdate);
+            /*partial_update_state=*/ dedup_parameters.enable_partial_update ? PartialUpdateState::RWProcessNeeded: PartialUpdateState::NotPartialUpdate,
+            /*on_duplicate_action=*/context->getSettingsRef().on_duplicate_action.value);
 
         if (txn->isSecondary())
             temp_part->secondary_txn_id = txn->getTransactionID();
@@ -301,12 +302,13 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         rows_size += bucketed_block_with_partition.block.rows();
     };
 
+    Stopwatch write_pool_watch;
+    auto thread_group = CurrentThread::getGroup();
+
     size_t thread_num = storage.getSettings()->cnch_write_part_threads;
     bool use_thread_pool = thread_num > 1;
     /// Set queue size to unlimited to avoid dead lock
     ThreadPool write_pool(thread_num, thread_num, /*queue_size=*/ 0);
-    Stopwatch write_pool_watch;
-    auto thread_group = CurrentThread::getGroup();
     auto processBlockWithPartition = [&](BlockWithPartition & block_with_partition) {
         Row original_partition{block_with_partition.partition};
 

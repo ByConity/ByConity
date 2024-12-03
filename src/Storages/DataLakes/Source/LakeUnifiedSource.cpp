@@ -7,6 +7,8 @@
 #include <Interpreters/Context.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include "Processors/Transforms/AddingDefaultsTransform.h"
+#include "Processors/Transforms/ExtractColumnsTransform.h"
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
@@ -108,22 +110,36 @@ void LakeUnifiedSource::prepareReader()
     if (!lake_scan_info)
         return;
 
-    pipeline = std::make_unique<QueryPipeline>();
-    data_source = getSource();
-
-    pipeline->init(Pipe(data_source));
-    reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-
-    auto input_format = std::dynamic_pointer_cast<IInputFormat>(data_source);
-    if (input_format && need_only_count)
+    auto column_mapping = std::make_shared<ColumnMapping>();
+    for (const auto & [name, idx] : block_info->partition_name_to_index)
     {
-        input_format->needOnlyCount();
+        column_mapping->name_of_default_columns[name] = ColumnMapping::TypeWithDefaultValue{
+            .type = block_info->metadata->getPartitionKey().data_types[idx],
+            .default_value = getHivePartition(lake_scan_info->getPartitionId().value())->value.at(idx)};
     }
 
-    if (read_params->query_info && read_params->query_info->prewhere_info && input_format && !input_format->supportsPrewhere())
+    pipeline = std::make_unique<QueryPipeline>();
+    data_source = getSource();
+    pipeline->init(Pipe(data_source));
+
+    auto input_format = std::dynamic_pointer_cast<IInputFormat>(data_source);
+    if (input_format)
+    {
+        if (need_only_count)
+            input_format->needOnlyCount();
+
+        input_format->setColumnMapping(column_mapping);
+    }
+
+    pipeline->addSimpleTransform([&] (const Block & header) {
+        return std::make_shared<AddingDefaultValuesTransform>(header, block_info->header, column_mapping);
+    });
+
+    if (read_params->query_info && read_params->query_info->prewhere_info
+        && input_format && !input_format->supportsPrewhere())
     {
         const auto & query_info = *read_params->query_info;
-        auto actions_settings = ExpressionActionsSettings::fromContext(getContext());
+        auto actions_settings = ExpressionActionsSettings::fromContext(read_params->context);
         if (query_info.prewhere_info->alias_actions)
         {
             pipeline->addSimpleTransform([&](const Block & header) {
@@ -149,6 +165,15 @@ void LakeUnifiedSource::prepareReader()
                 query_info.prewhere_info->remove_prewhere_column);
         });
     }
+
+    /// Add ExtractColumnsTransform to extract requested columns/subcolumns
+    /// from chunk read by data source
+    pipeline->addSimpleTransform([&](const Block & header)
+    {
+        return std::make_shared<ExtractColumnsTransform>(header, block_info->header.getNamesAndTypesList());
+    });
+
+    reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
 }
 
 Chunk LakeUnifiedSource::generate()
@@ -234,18 +259,10 @@ Chunk LakeUnifiedSource::generatePostProcessorForHive(Chunk & chunk)
 
     for (const auto & col : output_header)
     {
-        if (block_info->physical_header.has(col.name))
+        if (block_info->header.has(col.name))
         {
-            size_t pos = block_info->physical_header.getPositionByName(col.name);
+            size_t pos = block_info->header.getPositionByName(col.name);
             result_columns.push_back(std::move(read_columns[pos]));
-        }
-        else if (auto it = block_info->partition_name_to_index.find(col.name); it != block_info->partition_name_to_index.end())
-        {
-            /// Partition columns
-            size_t idx = it->second;
-            auto column = block_info->metadata->getPartitionKey().data_types[idx]->createColumnConst(
-                num_rows, getHivePartition(lake_scan_info->getPartitionId().value())->value.at(idx));
-            result_columns.push_back(std::move(column));
         }
         else if (col.name == "_path" && file_scan_info)
         {

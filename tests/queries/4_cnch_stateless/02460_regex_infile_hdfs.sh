@@ -14,6 +14,10 @@ ${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS test_regex_infile;"
 
 ${CLICKHOUSE_CLIENT} --query "Create TABLE test_regex_infile (a UInt8) ENGINE = CnchMergeTree() ORDER BY a;"
 
+${CLICKHOUSE_CLIENT} --query "INSERT INTO test_regex_infile FORMAT CSV INFILE 'hdfs://${HDFS_PATH_ROOT}/outfile_02460/clickhouse_outfile_1.csv';"
+
+${CLICKHOUSE_CLIENT} --query "SELECT count() FROM test_regex_infile;"
+
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test_regex_infile FORMAT CSV INFILE 'hdfs://${HDFS_PATH_ROOT}/outfile_02460/*';"
 
 ${CLICKHOUSE_CLIENT} --query "SELECT count() FROM test_regex_infile;"

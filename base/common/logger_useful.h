@@ -43,12 +43,24 @@ namespace
 ///  and the latter arguments treat as values to substitute.
 /// If only one argument is provided, it is threat as message without substitutions.
 
+/// query logs level has highest priority, if it's specified, it decides whether to log or not.
+/// priority: query_logs_level > config_logs_level = client_logs_level
 #define LOG_IMPL(logger, priority, PRIORITY, ...) do                              \
 {                                                                                 \
     const bool _is_clients_log = (DB::CurrentThread::getGroup() != nullptr) &&    \
         (DB::CurrentThread::getGroup()->client_logs_level >= (priority));         \
+    const bool _query_logs_level_specified = (DB::CurrentThread::getGroup() != nullptr) && \
+        (DB::CurrentThread::getGroup()->query_logs_level_for_poco != 0);          \
+    bool _print_log = false;                                                      \
     const auto & _logger = (logger);                                              \
-    if ((_logger)->is((PRIORITY)) || _is_clients_log)                             \
+    if (_query_logs_level_specified)                                              \
+    {                                                                             \
+        if (DB::CurrentThread::getGroup()->query_logs_level_for_poco >= (PRIORITY))       \
+            _print_log = true;                                                    \
+    }                                                                             \
+    else if ((_logger)->is((PRIORITY)) || _is_clients_log)                        \
+        _print_log = true;                                                        \
+    if (_print_log)                                                               \
     {                                                                             \
         std::string formatted_message = numArgs(__VA_ARGS__) > 1 ? fmt::format(__VA_ARGS__) : firstArg(__VA_ARGS__); \
         if (auto _channel = (_logger)->getChannel())                              \

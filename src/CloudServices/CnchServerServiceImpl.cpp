@@ -1890,16 +1890,23 @@ void CnchServerServiceImpl::submitBackupTask(
     try
     {
         ThreadFromGlobalPool async_thread([=, global_context = getContext(), log = log] {
-            ContextMutablePtr context_ptr = Context::createCopy(global_context);
+            try
+            {
+                ContextMutablePtr context_ptr = Context::createCopy(global_context);
 
-            ParserBackupQuery backup_parser;
-            ASTPtr backup_ast = parseQuery(backup_parser, backup_command, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-            const ASTBackupQuery & backup_query = backup_ast->as<const ASTBackupQuery &>();
+                ParserBackupQuery backup_parser;
+                ASTPtr backup_ast = parseQuery(backup_parser, backup_command, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+                const ASTBackupQuery & backup_query = backup_ast->as<const ASTBackupQuery &>();
 
-            if (backup_query.kind == ASTBackupQuery::BACKUP)
-                BackupsWorker::doBackup(backup_id, backup_ast, context_ptr);
-            else
-                BackupsWorker::doRestore(backup_id, backup_ast, context_ptr);
+                if (backup_query.kind == ASTBackupQuery::BACKUP)
+                    BackupsWorker::doBackup(backup_id, backup_ast, context_ptr);
+                else
+                    BackupsWorker::doRestore(backup_id, backup_ast, context_ptr);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
         });
         async_thread.detach();
     }

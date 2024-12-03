@@ -2332,6 +2332,11 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     {
         if (change.name == "profile" && getServerType() != ServerType::cnch_server)
             continue;
+        if (change.name == "query_logs_level")
+        {
+            auto value_str = change.value.safeGet<String>();
+            CurrentThread::setQueryLogsLevel(Poco::Logger::parseLevel(value_str));
+        }
         applySettingChangeWithLock(change, lock);
     }
     applySettingsQuirks(settings);

@@ -36,8 +36,9 @@ void formatAST(const IAST &ast,
                WriteBuffer &buf,
                bool hilite = true,
                bool one_line = false,
-	       bool always_quote_identifiers = false,
-               DialectType dialect = DialectType::CLICKHOUSE);
+	           bool always_quote_identifiers = false,
+               DialectType dialect = DialectType::CLICKHOUSE,
+               bool remove_tenant_id = false);
 
 String serializeAST(const IAST & ast, bool one_line = true, bool always_quote_identifiers = false);
 

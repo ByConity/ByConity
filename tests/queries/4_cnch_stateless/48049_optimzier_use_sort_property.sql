@@ -3,7 +3,8 @@ CREATE TABLE test
     `a` String,
     `b` String,
     `c` String,
-    `d` Nullable(String)
+    `d` Nullable(String),
+    `e` String
 )
 ENGINE = CnchMergeTree
 ORDER BY (a, b, c)
@@ -11,6 +12,7 @@ SETTINGS storage_policy = 'cnch_default_hdfs', index_granularity = 8192;
 
 set enable_optimizer = 1;
 set enable_sorting_property = 1;
+set send_logs_level='warning';
 
 -- { echoOn }
 explain select * from test order by a, b, c, d;
@@ -41,12 +43,24 @@ explain select a, b, c from (select a, b, c from test union all select a, b, c f
 
 explain select a, b, c from (select a, b, c from test where a = '1' and b = '1' union all select a, b, c from test where a = '3' and b = '3') order by c desc limit 10;
 
--- { echoOff }
-insert into test values ('1', '1', '1', '1');
-insert into test values ('1', '1', '2', '2');
+explain select a from test where d = 'x' order by d;
 
-insert into test values ('3', '3', '3', '3');
-insert into test values ('3', '3', '4', '4');
+explain select a from test where d = 'x' order by d, e;
+
+explain select a from test where d = 'x' and e = 'z' order by d, e;
+
+explain select a from test order by a || c, a || b;
+
+explain select a from test order by a, a || b, b;
+
+explain select a from test where (a || b) = 'xy' order by a, a || b, b;
+
+-- { echoOff }
+insert into test values ('1', '1', '1', '1', 1);
+insert into test values ('1', '1', '2', '2', 2);
+
+insert into test values ('3', '3', '3', '3', 3);
+insert into test values ('3', '3', '4', '4', 4);
 
 -- { echoOn }
 select a as e, b, concat(c, d) as f from test order by e desc, b desc, f desc;

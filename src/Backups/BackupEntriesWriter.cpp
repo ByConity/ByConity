@@ -28,6 +28,7 @@ namespace ErrorCodes
     extern const int BACKUP_STATUS_ERROR;
     extern const int BACKUP_UPLOAD_INDEX_ERROR;
     extern const int UNKNOWN_BACKUP_ENTRY_TYPE;
+    extern const int BACKUP_ALREADY_EXISTS;
 }
 
 BackupEntriesWriter::BackupEntriesWriter(const ASTBackupQuery & backup_query_, BackupTaskPtr & backup_task_, const ContextPtr & context_)
@@ -56,7 +57,7 @@ void BackupEntriesWriter::write(BackupEntries & backup_entries, bool need_upload
         // For example, "data/table1/part1"
         String & backup_relative_path = backup_entry.first;
         // Add backup base dir, "backup_dir/data/table1/part1"
-        String backup_fullpath = backup_info.backup_dir + "/" + backup_relative_path;
+        String backup_fullpath = fs::path(backup_info.backup_dir) / backup_relative_path;
         if (backup_entry.second->getEntryType() == IBackupEntry::BackupEntryType::DATA)
         {
             auto * data_entry = dynamic_cast<BackupEntryFromFile *>(backup_entry.second.get());
@@ -161,7 +162,7 @@ void BackupEntriesWriter::loadBackupEntriesFromRocksDB(
 
         size_t file_size = entry_model.file_size();
         // Add backup base dir, "backup_dir/data/table1/part1"
-        String file_fullpath = backup_info.backup_dir + "/" + file_relative_path;
+        String file_fullpath = fs::path(backup_info.backup_dir) / file_relative_path;
         // TODO: Use progress to filter entries
         bool is_file_exist = backup_disk->fileExists(file_fullpath);
         if (is_file_exist && backup_disk->getFileSize(file_fullpath) == file_size)
@@ -226,6 +227,8 @@ void BackupEntriesWriter::uploadBackupEntryFile(
     out.close();
 
     // upload rocksdb zip file to backup disk in remote
+    if (!backup_disk->isDirectoryEmpty(backup_dir))
+        throw Exception(ErrorCodes::BACKUP_ALREADY_EXISTS, "Backup path has to be empty.");
     size_t zip_file_size = std::filesystem::file_size(zip_path);
     // If server restarts while zip file is uploading, this zip file may be truncated and broken.
     // To recognize this, we have to use a meta file by comparing the filesize.

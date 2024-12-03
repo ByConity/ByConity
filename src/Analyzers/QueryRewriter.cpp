@@ -513,8 +513,12 @@ namespace
                 graphviz_index);
         }
 
+        // expand GROUP BY ALL
+        if (select_query.group_by_all)
+            expandGroupByAll(&select_query, select_query.select()->children);
+
         if (settings.enable_order_by_all && select_query.order_by_all)
-            expandOrderByAll(&select_query);
+            expandOrderByAll(&select_query, select_query.select()->children);
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
         if (select_query.having()
             && (!select_query.group_by_with_cube && !select_query.group_by_with_rollup && !select_query.group_by_with_grouping_sets

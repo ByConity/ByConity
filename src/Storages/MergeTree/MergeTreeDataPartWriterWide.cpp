@@ -36,6 +36,7 @@
 #include <Common/FieldVisitorToString.h>
 #include <Common/Slice.h>
 #include <Common/escapeForFileName.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -556,8 +557,11 @@ void MergeTreeDataPartWriterWide::finishDeleteFlagSerialization(MergeTreeData::D
 
 void MergeTreeDataPartWriterWide::finishUpdateColumnsSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync)
 {
-    if (!update_columns)
+    if (!update_columns && settings.on_duplicate_action.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not get update columns in partial update mode");
+
+    if (!settings.on_duplicate_action.empty())
+        return;
 
     auto update_columns_file_stream = data_part->volume->getDisk()->writeFile(part_path + "_update_columns_", {.mode = WriteMode::Rewrite});
     auto update_columns_stream = std::make_unique<HashingWriteBuffer>(*update_columns_file_stream);
@@ -588,6 +592,25 @@ void MergeTreeDataPartWriterWide::finishDedupSortSerialization(MergeTreeData::Da
     if (sync)
         dedup_sort_file_stream->sync();
     dedup_sorts_stream = nullptr;
+}
+
+void MergeTreeDataPartWriterWide::finishPartialUpdateRuleSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync)
+{
+    /// Currently partial update rule only contains on_duplicate_action
+    if (settings.on_duplicate_action.empty())
+        return;
+
+    auto partial_update_rule_file_stream = data_part->volume->getDisk()->writeFile(part_path + "_partial_update_rule_", {.mode = WriteMode::Rewrite});
+    auto partial_update_rule_stream = std::make_unique<HashingWriteBuffer>(*partial_update_rule_file_stream);
+    CnchDedupHelper::PartialUpdateRule partial_update_rule {true, settings.on_duplicate_action};
+    CnchDedupHelper::writePartialUpdateRule(partial_update_rule, *partial_update_rule_stream);
+    partial_update_rule_stream->next();
+    checksums.files["_partial_update_rule_"].file_size = partial_update_rule_stream->count();
+    checksums.files["_partial_update_rule_"].file_hash = partial_update_rule_stream->getHash();
+    partial_update_rule_file_stream->finalize();
+    if (sync)
+        partial_update_rule_file_stream->sync();
+    partial_update_rule_stream = nullptr;
 }
 
 void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
@@ -857,6 +880,7 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         finishDeleteFlagSerialization(checksums, sync);
         finishUpdateColumnsSerialization(checksums, sync);
         finishDedupSortSerialization(checksums, sync);
+        finishPartialUpdateRuleSerialization(checksums, sync);
     }
 
     finishSkipIndicesSerialization(checksums, sync);

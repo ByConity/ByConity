@@ -115,6 +115,7 @@ void ThreadStatus::attachQueryContext(ContextPtr query_context_)
         thread_group->query_context = query_context;
         if (thread_group->global_context.expired())
             thread_group->global_context = global_context;
+        thread_group->query_logs_level_for_poco = Poco::Logger::parseLevel(query_context_->getSettingsRef().query_logs_level.toString());
     }
 
     // Generate new span for thread manually here, because we can't depend

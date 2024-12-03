@@ -485,8 +485,13 @@ void CnchPartGCThread::runDataRemoveTask()
                 round_removing_no_data++;
                 phase_two_continuous_hits = 0;
                 sleep_ms = storage_settings->cleanup_delay_period_upper_bound * 1000;
-                LOG_TRACE(log, "[p2] Removed no data for {} round(s). Delay schedule for {} ms.", round_removing_no_data, sleep_ms);
             }
+            LOG_DEBUG(
+                log,
+                "[p2] Removed no data for {} round(s), has data for {} round(s). Delay schedule for {} ms.",
+                round_removing_no_data,
+                phase_two_continuous_hits,
+                sleep_ms);
 
             if (phase_two_start_key.empty())
                 cleaned_items_in_a_round = 0;

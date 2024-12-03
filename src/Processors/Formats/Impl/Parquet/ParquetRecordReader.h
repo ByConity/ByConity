@@ -5,13 +5,12 @@
 #include <Formats/FormatSettings.h>
 #include <Processors/Chunk.h>
 #include <Processors/Formats/Impl/Parquet/ParquetColumnReader.h>
+#include "Processors/Formats/IInputFormat.h"
 
 #include <arrow/io/interfaces.h>
 #include <parquet/arrow/schema.h>
 #include <parquet/file_reader.h>
 #include <parquet/properties.h>
-
-#include "ParquetColumnReader.h"
 
 namespace DB
 {
@@ -33,7 +32,8 @@ public:
         const ArrowFieldIndexUtil & field_util_,
         const FormatSettings & format_settings,
         std::vector<int> row_groups_indices_,
-        std::shared_ptr<PrewhereInfo> prewhere_info_);
+        std::shared_ptr<PrewhereInfo> prewhere_info_,
+        std::shared_ptr<ColumnMapping> column_mapping_);
 
     ~ParquetRecordReader();
 
@@ -77,13 +77,15 @@ private:
         Columns readBatch(size_t num_rows, const IColumn::Filter * filter);
         void skip(size_t num_rows);
 
-        ColumnPtr executePrewhereAction(Block & block, const std::shared_ptr<PrewhereInfo> & prewhere_info);
+        ColumnPtr executePrewhereAction(
+            Block & block, const std::shared_ptr<PrewhereInfo> & prewhere_info, const std::shared_ptr<ColumnMapping> & mapping);
     };
 
     ChunkReader active_chunk_reader;
     ChunkReader lazy_chunk_reader;
 
     std::shared_ptr<PrewhereInfo> prewhere_info;
+    std::shared_ptr<ColumnMapping> column_mapping;
 
     std::shared_ptr<parquet::RowGroupReader> cur_row_group_reader;
     UInt64 max_block_size;

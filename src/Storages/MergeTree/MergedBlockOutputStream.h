@@ -48,7 +48,8 @@ public:
         bool blocks_are_granules_size = false,
         bool optimize_map_column_serialization_ = false,
         const BitmapBuildInfo & bitmap_build_info_ = {},
-        bool enable_partial_update = false);
+        bool enable_partial_update = false,
+        String on_duplicate_action_ = "");
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
 

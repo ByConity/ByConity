@@ -246,4 +246,41 @@ void AddingDefaultsTransform::transform(Chunk & chunk)
     chunk.setColumns(res.getColumns(), num_rows);
 }
 
+AddingDefaultValuesTransform::AddingDefaultValuesTransform(const Block & input_, const Block & output_, ColumnMappingPtr column_mapping_)
+    : ISimpleTransform(input_, output_, true), column_mapping(column_mapping_)
+{
+}
+
+void AddingDefaultValuesTransform::transform(Chunk & chunk)
+{
+    size_t num_rows = chunk.getNumRows();
+    auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
+
+    const auto & output_header = getOutputPort().getHeader();
+    Columns output_columns;
+    output_columns.reserve(output_header.columns());
+
+    for (const auto & required_column : output_header)
+    {
+        if (auto it = column_mapping->name_of_default_columns.find(required_column.name);
+            it != column_mapping->name_of_default_columns.end())
+        {
+            output_columns.emplace_back(it->second.type->createColumnConst(num_rows, it->second.default_value));
+        }
+        else if (auto * elem = block.findByName(required_column.name))
+        {
+            output_columns.emplace_back(elem->column);
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "The column '{}' is neither present in the input nor has a default value defined.",
+                required_column.name);
+        }
+    }
+    chunk.setColumns(std::move(output_columns), num_rows);
+}
+
+
 }

@@ -1945,7 +1945,7 @@ namespace Catalog
                     ServerDataPartsVector tmp_res;
                     const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
-                    auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ false);
+                    auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, session_context, /*from_trash=*/ false);
                     for (auto & ele : parts_model)
                     {
                         auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, std::move(*(ele->model)), std::move(ele->name));
@@ -1989,7 +1989,7 @@ namespace Catalog
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) -> DataModelPartWrapperVector {
                                 miss_cache = true;
-                                DataModelPartWithNameVector fetched = getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
+                                DataModelPartWithNameVector fetched = getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, session_context, /*from_trash=*/ false);
                                 DataModelPartWrapperVector ret;
                                 ret.reserve(fetched.size());
 
@@ -2285,7 +2285,7 @@ namespace Catalog
 
                 Stopwatch watch;
                 Strings all_partitions = getPartitionIDsFromMetastore(storage);
-                auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ true);
+                auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, &context, /*from_trash=*/ true);
                 for (auto & ele : parts_model)
                 {
                     auto part_model_wrapper = createPartWrapperFromModel(*merge_tree, std::move(*(ele->model)), std::move(ele->name));
@@ -6230,7 +6230,12 @@ namespace Catalog
     }
 
     DataModelPartWithNameVector Catalog::getDataPartsMetaFromMetastore(
-        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash)
+        const ConstStoragePtr & storage,
+        const Strings & required_partitions,
+        const Strings & full_partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        bool from_trash)
     {
         String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
         String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, uuid);
@@ -6250,7 +6255,11 @@ namespace Catalog
 
         };
 
-        UInt32 time_out_ms = 1000 * (context.getSettingsRef().cnch_fetch_parts_timeout.totalSeconds());
+        UInt32 time_out_ms;
+        if (session_context)
+            time_out_ms = 1000 * (session_context->getSettingsRef().cnch_fetch_parts_timeout.totalSeconds());
+        else
+            time_out_ms = 1000 * context.getSettingsRef().cnch_fetch_parts_timeout.totalSeconds();
 
         String meta_prefix = from_trash
             ? MetastoreProxy::trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX

@@ -501,7 +501,7 @@ void TCPHandler::runImpl()
             {
                 if (!state.plan_segment)
                 {
-                    state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
+                    state.io = executeQuery(state.query, ast, query_context, false, state.stage, may_have_embedded_data);
 
                     if (query_context->isAlreadyOutfile())
                     {

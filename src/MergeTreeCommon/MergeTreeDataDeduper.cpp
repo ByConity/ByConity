@@ -13,17 +13,21 @@
  * limitations under the License.
  */
 
+#include <regex>
 #include <unordered_map>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/IndexFile/IndexFileMergeIterator.h>
 #include <Storages/UniqueKeyIndex.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include <Parsers/ASTAssignment.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
@@ -230,6 +234,20 @@ namespace
         return true;
     }
 
+    bool hasSameEntry(const Names & name_list)
+    {
+        if (name_list.size() <= 1)
+            return true;
+
+        const auto & first_name = name_list[0];
+        for (size_t i = 1; i < name_list.size(); ++i)
+        {
+            if (name_list[i] != first_name)
+                return false;
+        }
+        return true;
+    }
+
     Block getReadBlockForHistoryData(const MergeTreeMetaBase & data, const bool & optimize_for_same_update_columns, const NameSet & same_update_column_set)
     {
         Block res = data.getInMemoryMetadataPtr()->getSampleBlock();
@@ -252,6 +270,88 @@ namespace
                     res.erase(col_name);
             }
         }
+        return res;
+    }
+
+    String replaceOnDuplicateSpecificString(String original_str)
+    {
+        String res;
+        /// Ex: replace 'b = EXCLUDED.b, c = EXCLUDED.c' to 'b = b, c = c'
+        std::regex pattern1("EXCLUDED.");
+        res = std::regex_replace(original_str, pattern1, "");
+        /// Ex: replace 'VALUES(a) + VALUES(b)' to '(a) + (b)';
+        std::regex pattern2("VALUES");
+        res = std::regex_replace(res, pattern2, "");
+        return res;
+    }
+
+    NameSet getNonUpdatableColumns(const StorageMetadataPtr & metadata, bool include_version_column = false, String version_column = "", bool include_bucket_key = false)
+    {
+        NameSet non_updatable_columns;
+        for (auto & name : metadata->getColumnsRequiredForUniqueKey())
+            non_updatable_columns.insert(name);
+        for (auto & name : metadata->getUniqueKeyColumns())
+            non_updatable_columns.insert(name);
+        for (auto & name: metadata->getColumnsRequiredForPartitionKey())
+            non_updatable_columns.insert(name);
+        if (include_bucket_key)
+        {
+            for (auto & name: metadata->getColumnsRequiredForClusterByKey())
+                non_updatable_columns.insert(name);
+        }
+        if (include_version_column)
+            non_updatable_columns.insert(version_column);
+        return non_updatable_columns;
+    }
+
+    /// XXX: Redundant in src/Interpreters/addMissingDefaults.cpp
+    String constructUpdateColumns(Names names)
+    {
+        std::ostringstream res;
+        bool first = true;
+        for (auto & name: names)
+        {
+            if (first)
+                first = false;
+            else
+                res << ',';
+            res << name;
+        }
+        return res.str();
+    }
+
+    ASTPtr parseOnDuplicateAction(const String & on_duplicate_action)
+    {
+        ASTPtr on_duplicate_assignments;
+        ParserList parser_assignment_list(std::make_unique<ParserAssignmentWithAlias>(ParserSettings::CLICKHOUSE), std::make_unique<ParserToken>(TokenType::Comma), false);
+        Tokens tokens(on_duplicate_action.data(), on_duplicate_action.data() + on_duplicate_action.size());
+        IParser::Pos pos(tokens, 0);
+        Expected expected;
+        if (!parser_assignment_list.parse(pos, on_duplicate_assignments, expected))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot parse on_duplicate_action: {}", on_duplicate_action);
+
+        return on_duplicate_assignments;
+    }
+
+    ColumnPtr loadUpdateColumnsByOnDuplicateAction(const MergeTreeMetaBase & data, const String & on_duplicate_action, IMergeTreeDataPartPtr part)
+    {
+        auto on_duplicate_assignments = parseOnDuplicateAction(on_duplicate_action);
+        auto column_names = data.getInMemoryMetadataPtr()->getSampleBlock().getNameSet();
+        Names on_duplicate_column_names;
+        for (const auto & child : on_duplicate_assignments->children)
+        {
+            if (const ASTAssignment * assignment = child->as<ASTAssignment>())
+            {
+                auto assignment_column = assignment->column_name;
+                if (!column_names.count(assignment_column))
+                    continue;
+                on_duplicate_column_names.push_back(assignment_column);
+            }
+        }
+        String converted_columns_name = CnchDedupHelper::parseAndConvertColumnsIntoIndices(data, getNonUpdatableColumns(data.getInMemoryMetadataPtr()),
+            data.getInMemoryMetadataPtr()->getColumns().getAllPhysical(), constructUpdateColumns(on_duplicate_column_names));
+        auto res = ColumnString::create();
+        res->insertMany(converted_columns_name, part->rows_count);
         return res;
     }
 
@@ -471,9 +571,9 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         dedup_tasks = convertIntoSubDedupTasks(all_visible_parts, all_staged_parts, all_uncommitted_parts, bucket_level_dedup, txn_id);
     }
 
+    std::mutex mutex;
     size_t dedup_pool_size = std::min(static_cast<size_t>(data.getSettings()->unique_table_dedup_threads), dedup_tasks.size());
     ThreadPool dedup_pool(dedup_pool_size);
-    std::mutex mutex;
     for (size_t i = 0; i < dedup_tasks.size(); ++i)
     {
         {
@@ -1015,18 +1115,14 @@ void MergeTreeDataDeduper::logDedupDetail(const IMergeTreeDataPartsVector & visi
     LOG_DEBUG(log, msg.str());
 }
 
-std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTreeDataPartsVector & current_dedup_new_parts, const DedupTaskPtr & dedup_task, bool & optimize_for_same_update_columns, NameSet & same_update_column_set)
+std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTreeDataPartsVector & current_dedup_new_parts, const DedupTaskPtr & dedup_task, bool & optimize_for_same_update_columns, NameSet & same_update_column_set, Names & on_duplicate_action_list)
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     auto sample_block = metadata_snapshot->getSampleBlock();
+    auto default_columns = metadata_snapshot->getColumns().getDefaults();
     Names column_names = sample_block.getNames();
     NameSet name_set = sample_block.getNameSet();
 
-    size_t read_new_part_thread_num = std::max(
-        static_cast<size_t>(1),
-        std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
-    bool use_thread_pool = read_new_part_thread_num > 1;
-    ThreadPool read_new_data_pool(read_new_part_thread_num);
     std::vector<Block> blocks_from_current_dedup_new_parts{current_dedup_new_parts.size()};
     std::vector<NameSet> update_column_set_list{current_dedup_new_parts.size()};
     std::atomic<bool> optimize_for_same_update_columns_atomic = true;
@@ -1042,15 +1138,27 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
 
         NameSet columns_read_set;
         Names columns_read;
-        auto update_columns = loadFuncColumn(part, StorageInMemoryMetadata::UPDATE_COLUMNS);
-        if (!update_columns->empty() && update_columns->hasEqualValues() && data.getSettings()->partial_update_optimize_for_batch_task)
+
+        on_duplicate_action_list[part_id] = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)->loadPartialUpdateRule().on_duplicate_action;
+        ColumnPtr update_columns;
+        if (on_duplicate_action_list[part_id].empty())
+            update_columns = loadFuncColumn(part, StorageInMemoryMetadata::UPDATE_COLUMNS);
+        else
+            update_columns = loadUpdateColumnsByOnDuplicateAction(data, on_duplicate_action_list[part_id], part);
+
+        /// XXX: To optimize, when reading the history part, can use the difference between column_names and update_columns
+        if (!update_columns->empty() && update_columns->hasEqualValues() && data.getSettings()->partial_update_optimize_for_batch_task &&
+            on_duplicate_action_list[part_id].empty())
         {
             String same_update_columns = update_columns->getDataAt(0).toString();
             size_t last_pos = 0, pos = 0, size = same_update_columns.size();
             LOG_DEBUG(log, "Same update columns: {}, txn id: {}, part name: {}", same_update_columns, dedup_task->txn_id, part->name);
 
             if (size == 0)
+            {
                 columns_read = column_names;
+                update_column_set_list[part_id] = {columns_read.begin(), columns_read.end()};
+            }
             else
             {
                 /// Restore update columns must use part columns instead of storage columns
@@ -1085,6 +1193,11 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
                 if (data.merging_params.hasExplicitVersionColumn())
                     columns_read_set.insert(data.merging_params.version_column);
 
+                update_column_set_list[part_id] = {columns_read_set.begin(), columns_read_set.end()};
+                /// We need to read out the columns containing the default expression
+                for (const auto & default_column : default_columns)
+                    columns_read_set.insert(default_column.first);
+
                 columns_read = {columns_read_set.begin(), columns_read_set.end()};
             }
         }
@@ -1093,9 +1206,6 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             optimize_for_same_update_columns_atomic = false;
             columns_read = column_names;
         }
-
-        if (optimize_for_same_update_columns_atomic)
-            update_column_set_list[part_id] = {columns_read.begin(), columns_read.end()};
 
         size_t total_size = update_columns->size();
         to_block.insert(
@@ -1180,6 +1290,12 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
             dedup_task->txn_id,
             dedup_task->getDedupLevelInfo());
     };
+
+    size_t read_new_part_thread_num = std::max(
+        static_cast<size_t>(1),
+        std::min(current_dedup_new_parts.size(), static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
+    bool use_thread_pool = read_new_part_thread_num > 1;
+    ThreadPool read_new_data_pool(read_new_part_thread_num);
     for (size_t part_id = 0; part_id < current_dedup_new_parts.size(); part_id++)
     {
         if (use_thread_pool)
@@ -1263,10 +1379,11 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             /// 3. Remove duplicate key in block
             /// 4. Calculate key
             /// 5. Search index
-            /// 6. Query history data
-            /// 7. Handle index
-            /// 8. Replace column
-            /// 9. Generate partial part
+            /// 6. Process on duplicate action
+            /// 7. Query history data
+            /// 8. Handle index
+            /// 9. Replace column
+            /// 10. Generate partial part
             std::vector<UInt64> timer;
             Stopwatch phase_watch;
             auto record_and_restart_timer = [&] (Stopwatch & watch) {
@@ -1276,8 +1393,9 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
 
             bool optimize_for_same_update_columns = true;
             NameSet same_update_column_set;
+            Names on_duplicate_action_list(current_dedup_new_parts.size());
             /// Phase 1: restore block from iteration current_dedup_new_parts
-            std::vector<Block> blocks_from_current_dedup_new_parts = restoreBlockFromNewParts(current_dedup_new_parts, dedup_task, optimize_for_same_update_columns, same_update_column_set);
+            std::vector<Block> blocks_from_current_dedup_new_parts = restoreBlockFromNewParts(current_dedup_new_parts, dedup_task, optimize_for_same_update_columns, same_update_column_set, on_duplicate_action_list);
 
             record_and_restart_timer(phase_watch);
 
@@ -1388,6 +1506,8 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             prepared_keys_result = searchPartForKeys(current_dedup_visible_parts, prepared_keys);
             record_and_restart_timer(phase_watch);
 
+            ColumnVector<UInt8>::MutablePtr on_duplicate_action_filter = ColumnVector<UInt8>::create(block_size, 0);
+            bool has_duplicate_row = false;
             for (size_t rowid = 0, prepared_keys_idx = 0; rowid < block_size; ++rowid)
             {
                 if (filter[rowid] == 0)
@@ -1474,6 +1594,9 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 /// mark delete existing row with the same key
                 /// TODO: In conditional update mode, we may need to generate the bitmap after the query of history data.
                 addRowIdToBitmap(delta_bitmaps[part_index], part_rowid);
+                /// mark block rowid which needs to do on duplicate action
+                on_duplicate_action_filter->getData()[rowid] = 1;
+                has_duplicate_row = true;
             }
 
             while (replace_index_id < replace_dst_indexes.size())
@@ -1490,7 +1613,18 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
 
             record_and_restart_timer(phase_watch);
 
-            /// Phase 4: Query data from previous parts parallel
+            /// Phase 4: Process on duplication action
+            if (has_duplicate_row)
+            {
+                block_to_process.insert(ColumnWithTypeAndName{std::move(on_duplicate_action_filter), std::make_shared<DataTypeUInt8>(), ON_DUPLICATE_FILTER_COLUMN});
+                processOnDuplicateAction(block_to_process, current_dedup_new_parts, on_duplicate_action_list, dedup_task);
+                block_to_process.erase(ON_DUPLICATE_FILTER_COLUMN);
+                if (data.getSettings()->partial_update_detail_logging)
+                    dumpBlockForLogging(block_to_process, "Block structure after process on duplicate action", log);
+            }
+            record_and_restart_timer(phase_watch);
+
+            /// Phase 5: Query data from previous parts parallel
             size_t valid_query_parts_num = 0, total_query_row = 0;
             for (const auto & part_rowid_pair : part_rowid_pairs)
             {
@@ -1499,10 +1633,10 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 valid_query_parts_num++;
                 total_query_row += part_rowid_pair.size();
             }
+
             size_t read_history_part_thread_num = std::max(
                 static_cast<size_t>(1), std::min(valid_query_parts_num, static_cast<size_t>(data.getSettings()->partial_update_query_parts_thread_size)));
             bool use_thread_pool = read_history_part_thread_num > 1;
-            ThreadPool read_history_data_pool(read_history_part_thread_num);
             std::vector<Block> columns_from_storage_vector(read_history_part_thread_num);
             std::vector<PaddedPODArray<UInt32>> block_rowids_vector(read_history_part_thread_num);
 
@@ -1572,6 +1706,8 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                     j++;
                 }
             };
+
+            ThreadPool read_history_data_pool(read_history_part_thread_num);
             for (size_t i = 0; i < read_history_part_thread_num; ++i)
             {
                 columns_from_storage_vector[i] = metadata_snapshot->getSampleBlock();
@@ -1617,14 +1753,14 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 dumpBlockForLogging(columns_from_storage, "Block structure from history parts", log);
 
             record_and_restart_timer(phase_watch);
-            /// Phase 5: Replace column and filter data parallel.
+            /// Phase 6: Replace column and filter data parallel.
             replaceColumnsAndFilterData(block_to_process, columns_from_storage, filter, num_filtered, block_rowids, replace_dst_indexes, replace_src_indexes, current_dedup_new_parts, dedup_task, optimize_for_same_update_columns, same_update_column_set);
 
             if (data.getSettings()->partial_update_detail_logging)
                 dumpBlockForLogging(block_to_process, "Block structure after processing", log);
 
             record_and_restart_timer(phase_watch);
-            /// Phase 6: Generate partial part
+            /// Phase 7: Generate partial part
             IMergeTreeDataPartPtr iteration_visible_part = generateAndCommitPartInPartialUpdateMode(block_to_process, current_dedup_new_parts, dedup_task);
 
             current_iteration_bitmaps = generateNextIterationBitmaps(current_dedup_visible_parts, current_dedup_new_parts, delta_bitmaps, dedup_task->txn_id);
@@ -1641,11 +1777,11 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
             }
             record_and_restart_timer(phase_watch);
 
-            chassert(timer.size() == 9);
+            chassert(timer.size() == 10);
             LOG_DEBUG(
                 log,
                 "Partial update cost detail for txn id {}, dedup info {}: restore block cost {} ms, concat block cost {} ms, filter duplicate keys cost {} "
-                "ms, calculate key cost {} ms, search index cost {} ms, handle index cost {} ms, query history data cost {} ms(thread "
+                "ms, calculate key cost {} ms, search index cost {} ms, handle index cost {} ms, process on duplicate action cost {} ms, query history data cost {} ms(thread "
                 "size: {}, query part num: {}, query total row: {}), replace column cost {} ms, generate partial part cost {} ms",
                 dedup_task->txn_id,
                 dedup_task->getDedupLevelInfo(),
@@ -1656,11 +1792,12 @@ DeleteBitmapVector MergeTreeDataDeduper::processDedupSubTaskInPartialUpdateMode(
                 timer[4],
                 timer[5],
                 timer[6],
+                timer[7],
                 read_history_part_thread_num,
                 valid_query_parts_num,
                 total_query_row,
-                timer[7],
-                timer[8]);
+                timer[8],
+                timer[9]);
         }
         else
         {
@@ -1838,6 +1975,195 @@ SearchKeysResult MergeTreeDataDeduper::searchPartForKeys(const IMergeTreeDataPar
         }
     }
     return ans;
+}
+
+void MergeTreeDataDeduper::processOnDuplicateAction(
+    Block & block,
+    const IMergeTreeDataPartsVector & new_parts,
+    const Names & on_duplicate_action_list,
+    const DedupTaskPtr & dedup_task)
+{
+    chassert(new_parts.size() == on_duplicate_action_list.size());
+    bool on_duplicate_action_all_empty = true;
+    size_t on_duplicate_action_cnt {0};
+    for (size_t i = 0; i < new_parts.size(); i++)
+    {
+        if (!on_duplicate_action_list[i].empty())
+        {
+            on_duplicate_action_all_empty = false;
+            on_duplicate_action_cnt++;
+        }
+    }
+    if (on_duplicate_action_all_empty)
+        return;
+
+    bool has_same_on_duplicate_action = hasSameEntry(on_duplicate_action_list);
+    if (has_same_on_duplicate_action)
+    {
+        chassert(!on_duplicate_action_list.empty());
+        processOnDuplicateActionForPart(block, on_duplicate_action_list[0], dedup_task);
+        return;
+    }
+
+    /// Split block into parts using _part_id_ column for further process
+    Blocks blocks_with_part_id;
+    size_t split_block_num = new_parts.size();
+    for (size_t i = 0; i < split_block_num; ++i)
+        blocks_with_part_id.emplace_back(block.cloneEmpty());
+
+    IColumn::Selector selector = IColumn::Selector(block.rows());
+    ColumnPtr part_id_column = block.getByName(StorageInMemoryMetadata::PART_ID_COLUMN).column;
+    if (!part_id_column)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Column part_id_column is nullptr while processing partial update.");
+
+    for (size_t row_num = 0; row_num < block.rows(); row_num++)
+        selector[row_num] = get<UInt64>((*part_id_column)[row_num]);
+
+    for (size_t col = 0; col < block.columns(); ++col)
+    {
+        MutableColumns scattered = block.getByPosition(col).column->scatter(new_parts.size(), selector);
+        for (size_t i = 0; i < new_parts.size(); ++i)
+            blocks_with_part_id[i].getByPosition(col).column = std::move(scattered[i]);
+    }
+
+    size_t process_on_duplicate_thread_num = std::max(
+        static_cast<size_t>(1),
+        std::min(on_duplicate_action_cnt, static_cast<size_t>(data.getSettings()->partial_update_process_on_duplicate_thread_size)));
+    bool use_thread_pool = process_on_duplicate_thread_num > 1;
+    ThreadPool process_on_duplicate_pool(process_on_duplicate_thread_num);
+    for (size_t part_id = 0; part_id < split_block_num; part_id++)
+    {
+        if (on_duplicate_action_list[part_id].empty())
+            continue;
+
+        LOG_DEBUG(log, "Process on duplicate action: {}, txn id: {}, part id: {}, part name: {}", on_duplicate_action_list[part_id], dedup_task->txn_id, part_id, new_parts[part_id]->name);
+        if (use_thread_pool)
+            process_on_duplicate_pool.scheduleOrThrowOnError([&, part_id, thread_group = CurrentThread::getGroup()]() {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("ProcessOnDuplicate");
+                processOnDuplicateActionForPart(blocks_with_part_id[part_id], on_duplicate_action_list[part_id], dedup_task);
+            });
+        else
+            processOnDuplicateActionForPart(blocks_with_part_id[part_id], on_duplicate_action_list[part_id], dedup_task);
+    }
+    if (use_thread_pool)
+        process_on_duplicate_pool.wait();
+
+    block = concatenateBlocks(blocks_with_part_id);
+}
+
+void MergeTreeDataDeduper::processOnDuplicateActionForPart(
+    Block & block,
+    const String & on_duplicate_action,
+    const DedupTaskPtr & dedup_task)
+{
+    FilterInfo on_duplicate_action_filter;
+    on_duplicate_action_filter.filter.assign(block.rows(), static_cast<UInt8>(0));
+    const auto & on_duplicate_filter_column = block.getByName(ON_DUPLICATE_FILTER_COLUMN).column;
+    for (size_t row = 0; row < on_duplicate_filter_column->size(); row++)
+    {
+        if (on_duplicate_filter_column->getUInt(row) == 1)
+        {
+            on_duplicate_action_filter.filter[row] = 1;
+            on_duplicate_action_filter.num_filtered++;
+        }
+    }
+    if (on_duplicate_action_filter.num_filtered == 0)
+        return;
+
+    NameSet columns_for_res = block.getNameSet();
+    /// Filter block using on_duplicate_action_filter
+    Block on_duplicate_block = CnchDedupHelper::filterBlock(block, on_duplicate_action_filter);
+    auto column_names = data.getInMemoryMetadataPtr()->getSampleBlock().getNameSet();
+
+    /// Parse on_duplicate_action
+    auto on_duplicate_action_processed = replaceOnDuplicateSpecificString(on_duplicate_action);
+    auto on_duplicate_assignments = parseOnDuplicateAction(on_duplicate_action_processed);
+
+    String version_column = data.merging_params.hasExplicitVersionColumn() ? data.merging_params.version_column : "";
+    NameSet non_updatable_columns = getNonUpdatableColumns(data.getInMemoryMetadataPtr(), data.merging_params.hasExplicitVersionColumn(), version_column, /*include_bucket_key*/true);
+    for (const auto & child : on_duplicate_assignments->children)
+    {
+        if (const ASTAssignment * assignment = child->as<ASTAssignment>())
+        {
+            auto assignment_column = assignment->column_name;
+            auto assignment_expression = DB::serializeAST(*assignment->expression());
+            if (!column_names.count(assignment_column))
+            {
+                LOG_WARNING(log, "There is no column named {}, txn id: {}", assignment_column, dedup_task->txn_id);
+                continue;
+            }
+            if (non_updatable_columns.count(assignment_column))
+            {
+                LOG_WARNING(log, "Partition/unique/bucket/version key can not be updated, ignore it, column name {}, txn id: {}", assignment_column, dedup_task->txn_id);
+                continue;
+            }
+            /// Handle case for 'b = b' or 'b = (b)'
+            if (assignment_expression == ("(" + assignment_column + ")") || assignment_expression == assignment_column)
+            {
+                LOG_TRACE(log, "Assignment {} does not need further processing, txn id: {}", assignment_column, dedup_task->txn_id);
+                continue;
+            }
+
+            auto alias_name = ON_DUPLICATE_PREFIX + assignment_column;
+            ASTPtr assignment_expr = assignment->expression();
+            assignment_expr->setAlias(alias_name);
+            auto syntax_result = TreeRewriter(data.getContext()).analyze(assignment_expr, data.getInMemoryMetadataPtr()->getColumns().getAllPhysical());
+            auto actions = ExpressionAnalyzer(assignment_expr, syntax_result, data.getContext()).getActions(true, false);
+            actions->execute(on_duplicate_block);
+        }
+    }
+
+    fillBlockWithOnDuplicateTransform(block, on_duplicate_block);
+    NameSet current_columns = block.getNameSet();
+    for (const auto & column_name : current_columns)
+    {
+        if (!columns_for_res.count(column_name))
+            block.erase(column_name);
+    }
+}
+
+void MergeTreeDataDeduper::fillBlockWithOnDuplicateTransform(Block & block, const Block & on_duplication_block)
+{
+    NameSet on_duplicate_block_names = on_duplication_block.getNameSet();
+    auto num_rows = block.rows();
+    const auto & on_duplicate_filter_column = block.getByName(ON_DUPLICATE_FILTER_COLUMN).column;
+    for (size_t column_index = 0, size = block.columns(); column_index < size; ++column_index)
+    {
+        auto & col = block.getByPosition(column_index);
+        if (on_duplicate_block_names.count(ON_DUPLICATE_PREFIX + col.name))
+        {
+            const auto & on_duplicate_col = on_duplication_block.getByName(ON_DUPLICATE_PREFIX + col.name);
+            /// has same data type or both numeric
+            bool can_use_on_duplicate_value = (col.column->getDataType() == on_duplicate_col.column->getDataType())
+                    || (col.column->isNumeric() && on_duplicate_col.column->isNumeric());
+            if (!can_use_on_duplicate_value)
+                continue;
+
+            size_t on_duplicate_row_index{0};
+            auto column = col.column->cloneEmpty();
+            column->reserve(num_rows);
+            for (size_t row_index = 0; row_index < num_rows; ++row_index)
+            {
+                if (on_duplicate_filter_column->getUInt(row_index) == 1)
+                {
+                    Field field;
+                    on_duplicate_col.column->get(on_duplicate_row_index++, field);
+                    column->insert(field);
+                }
+                else
+                    column->insertFrom(*col.column, row_index);
+            }
+            col.column = std::move(column);
+        }
+        else
+            continue;
+    }
 }
 
 void MergeTreeDataDeduper::readColumnsFromStorage(
@@ -2076,13 +2402,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         mergeIndices(replace_dst_indexes, tmp_dst_indexes);
     }
 
-    NameSet non_updatable_columns;
-    for (auto & name : data.getInMemoryMetadataPtr()->getColumnsRequiredForUniqueKey())
-        non_updatable_columns.insert(name);
-    for (auto & name : data.getInMemoryMetadataPtr()->getUniqueKeyColumns())
-        non_updatable_columns.insert(name);
-    for (auto & name: data.getInMemoryMetadataPtr()->getColumnsRequiredForPartitionKey())
-        non_updatable_columns.insert(name);
+    NameSet non_updatable_columns = getNonUpdatableColumns(data.getInMemoryMetadataPtr());
     NameSet func_column_names = data.getInMemoryMetadataPtr()->getFuncColumnNames();
 
     std::unordered_map<String, ColumnVector<UInt8>::MutablePtr> default_filters;
@@ -2312,11 +2632,6 @@ IMergeTreeDataPartPtr MergeTreeDataDeduper::generateAndCommitPartInPartialUpdate
     watch.restart();
 
     IMergeTreeDataPartsVector partial_update_parts;
-    size_t write_part_thread_num
-        = std::max(static_cast<size_t>(1), std::min(split_block_num, static_cast<size_t>(data.getSettings()->cnch_write_part_threads)));
-    ThreadPool write_part_pool(write_part_thread_num);
-    bool use_thread_pool = write_part_thread_num > 1;
-
     IMutableMergeTreeDataPartsVector mutable_partial_update_parts{split_block_num};
     auto generate_drop_part = [&](size_t split_block_id) {
         auto drop_part_info = new_parts[split_block_id]->info;
@@ -2337,6 +2652,10 @@ IMergeTreeDataPartPtr MergeTreeDataDeduper::generateAndCommitPartInPartialUpdate
         mutable_partial_update_parts[split_block_id] = drop_part;
     };
 
+    size_t write_part_thread_num
+        = std::max(static_cast<size_t>(1), std::min(split_block_num, static_cast<size_t>(data.getSettings()->cnch_write_part_threads)));
+    bool use_thread_pool = write_part_thread_num > 1;
+    ThreadPool write_part_pool(write_part_thread_num);
     for (size_t i = 0; i < split_block_num; ++i)
     {
         if (use_thread_pool)

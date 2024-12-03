@@ -148,6 +148,7 @@ void LMNativeORCBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_gr
         current.range_start = stripe_info->getOffset();
         current.range_length = stripe_info->getLength();
         current.orc_tail = orc_file_reader->getSerializedFileTail();
+        current.column_mapping = getColumnMapping();
         auto scanner = std::make_unique<OrcScanner>(current);
         auto status = scanner->init();
         if (!status.ok())

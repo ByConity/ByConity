@@ -21,6 +21,8 @@ public:
     }
     bool executeImpl() override;
 
+    void randomScheduleTask(std::unordered_map<CnchServerClientPtr, String> & server_tasks, BackupTaskModel & backup_task_model);
+
 private:
     std::shared_ptr<Catalog::Catalog> catalog;
     LoggerPtr logger = getLogger("BackupDaemon");

@@ -1,0 +1,32 @@
+Projection Est. ? rows
+│     Expressions: k3:=k3_2, k4:=`expr#NULL_2`, value:=`expr#count(1)_2`
+└─ Gather Exchange Est. ? rows
+   └─ Union Est. ? rows
+      │     OutputToInputs: k3_2 = [k3,k3_1], expr#count(1)_2 = [expr#count(1),expr#count(1)_1], expr#NULL_2 = [expr#NULL_1,k4_1]
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [expr#count(1), k3], expr#NULL_1:=cast(NULL, \'Nullable(Date)\')
+      │  └─ MergingAggregated Est. ? rows
+      │     └─ Repartition Exchange Est. ? rows
+      │        │     Partition by: {k3}
+      │        └─ Aggregating Est. ? rows
+      │           │     Group by: {k3}
+      │           │     Aggregates: expr#count(1):=AggNull(count)(expr#1)
+      │           └─ Projection Est. ? rows
+      │              │     Expressions: [k3], expr#1:=1
+      │              └─ CTERef[1] Est. ? rows
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {k4_1, k3_1}
+            └─ Aggregating Est. ? rows
+               │     Group by: {k4_1, k3_1}
+               │     Aggregates: expr#count(1)_1:=AggNull(count)(expr#1_1)
+               └─ Projection Est. ? rows
+                  │     Expressions: [k3_1, k4_1], expr#1_1:=1
+                  └─ CTERef[1] Est. ? rows
+CTEDef [1]
+   Filter Est. ? rows
+   │     Condition: k4 IN (cast(19820, \'Date\'), cast(19835, \'Date\'))
+   └─ TableScan default.share_common_plan_node Est. ? rows
+            Where: k4 IN (cast(19820, \'Date\'), cast(19835, \'Date\'))
+            Outputs: [k3, k4]
+note: CTE(Common Table Expression) is applied for 2 times.

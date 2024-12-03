@@ -322,7 +322,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, Analy
         lit->alias = node->tryGetAlias();
         lit->prefer_alias_to_column_name = node->as<ASTSubquery &>().prefer_alias_to_column_name;
         node = addTypeConversionToAST(std::move(lit), col_with_type.type->getName());
-        return {col_with_type.column, col_with_type.type, ""};
+        return process(node, ac);
     }
 
     if (isInLambda())

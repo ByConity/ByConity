@@ -400,6 +400,7 @@ public:
     struct FormatSettings
     {
         WriteBuffer & ostr;
+        bool remove_tenant_id = false;
         bool hilite = false;
         bool one_line;
         bool always_quote_identifiers = false;
@@ -466,7 +467,8 @@ public:
     String formatWithHiddenSecrets(size_t max_length = 0,
                                    bool one_line = true,
                                    bool no_alias = false,
-                                   DialectType dialect = DialectType::CLICKHOUSE) const;
+                                   DialectType dialect = DialectType::CLICKHOUSE,
+                                   bool remove_tenant_id = false) const;
     String formatForLogging(size_t max_length = 0) const { return formatWithHiddenSecrets(max_length, true); }
     String formatForErrorMessage() const { return formatWithHiddenSecrets(0, true); }
     String formatForErrorMessageWithoutAlias() const { return formatWithHiddenSecrets(0, true, true); }

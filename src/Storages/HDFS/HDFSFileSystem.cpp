@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <random>
+#include "common/types.h"
 #include <Common/formatIPv6.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/HostWithPorts.h>
@@ -89,7 +90,6 @@ HostWithPortsVec lookupNNProxy(const String & hdfs_service)
     }
     else
         throw Exception("There is no consul service discovery", ErrorCodes::LOGICAL_ERROR);
-
     return nnproxys;
 }
 

@@ -1738,6 +1738,20 @@ void MergeTreeMetaBase::calculateColumnSizesImpl()
 
 void MergeTreeMetaBase::addPartContributionToColumnSizes(const DataPartPtr & part)
 {
+    /// If prefetch is disabled, columns size will not be calculated.
+    if (!getSettings()->enable_prefetch_checksums)
+    {
+        DataPart * mutable_part = const_cast<DataPart *>(part.get());
+        try
+        {
+            mutable_part->calculateColumnsSizesOnDisk();
+        }
+        catch (const Exception &)
+        {
+            /// do nothing, skip calculate column size if columns is empty.
+        }
+    }
+
     for (const auto & column : part->getColumns())
     {
         ColumnSize & total_column_size = column_sizes[column.name];

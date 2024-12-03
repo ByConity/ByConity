@@ -212,7 +212,8 @@ ParquetRecordReader::ParquetRecordReader(
     const ArrowFieldIndexUtil & field_util_,
     const FormatSettings & format_settings_,
     std::vector<int> row_groups_indices_,
-    PrewhereInfoPtr prewhere_info_)
+    PrewhereInfoPtr prewhere_info_,
+    std::shared_ptr<ColumnMapping> column_mapping_)
     : header(std::move(header_))
     , source(source_)
     , file_reader(std::move(file_reader_))
@@ -220,6 +221,7 @@ ParquetRecordReader::ParquetRecordReader(
     , field_util(field_util_)
     , format_settings(format_settings_)
     , prewhere_info(std::move(prewhere_info_))
+    , column_mapping(column_mapping_)
     , max_block_size(format_settings.parquet.max_block_size)
     , row_groups_indices(std::move(row_groups_indices_))
     , log(getLogger("ParquetRecordReader"))
@@ -298,7 +300,7 @@ Chunk ParquetRecordReader::readChunk(BlockMissingValues * block_missing_values)
         Block active_block = active_chunk_reader.sample_block.cloneWithColumns(active_columns);
         ProfileEvents::increment(ProfileEvents::ParquetReadRows, active_block.rows());
 
-        ColumnPtr filter = active_chunk_reader.executePrewhereAction(active_block, prewhere_info);
+        ColumnPtr filter = active_chunk_reader.executePrewhereAction(active_block, prewhere_info, column_mapping);
 
         if (!filter)
         {
@@ -442,7 +444,7 @@ void ParquetRecordReader::ChunkReader::skip(size_t num_rows)
         column_readers[i]->skip(num_rows);
 }
 
-ColumnPtr ParquetRecordReader::ChunkReader::executePrewhereAction(Block & block, const PrewhereInfoPtr & prewhere_info_ptr)
+ColumnPtr ParquetRecordReader::ChunkReader::executePrewhereAction(Block & block, const PrewhereInfoPtr & prewhere_info_ptr, const ColumnMappingPtr & mapping)
 {
     if (!prewhere_info_ptr)
         return {};
@@ -462,12 +464,27 @@ ColumnPtr ParquetRecordReader::ChunkReader::executePrewhereAction(Block & block,
         prewhere_actions->need_filter = prewhere_info_ptr->need_filter;
     }
 
-    if (prewhere_actions->alias_actions)
-        prewhere_actions->alias_actions->execute(block);
-    if (prewhere_actions->row_level_filter)
-        prewhere_actions->row_level_filter->execute(block);
+    auto add_default_columns = [&] (const Names & column_names) {
+        if (mapping)
+            mapping->addConstColumn(block, column_names);
+    };
 
-    prewhere_actions->prewhere_actions->execute(block);
+    if (prewhere_actions->alias_actions)
+    {
+        add_default_columns(prewhere_actions->alias_actions->getRequiredColumns());
+        prewhere_actions->alias_actions->execute(block);
+    }
+    if (prewhere_actions->row_level_filter)
+    {
+        add_default_columns(prewhere_actions->row_level_filter->getRequiredColumns());
+        prewhere_actions->row_level_filter->execute(block);
+    }
+    if (prewhere_actions->prewhere_actions)
+    {
+        add_default_columns(prewhere_actions->prewhere_actions->getRequiredColumns());
+        prewhere_actions->prewhere_actions->execute(block);
+    }
+
     return block.getByName(prewhere_info_ptr->prewhere_column_name).column;
 }
 

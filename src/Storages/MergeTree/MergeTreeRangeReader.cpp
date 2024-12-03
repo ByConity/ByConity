@@ -1554,7 +1554,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
 
 void MergeTreeRangeReader::extractBitmapIndexColumns(Columns & columns, Block & bitmap_block)
 {
-    if (!merge_tree_reader->hasBitmapIndexReader())
+    if (!merge_tree_reader->hasBitmapIndexReader() || columns.empty())
         return;
     auto num_columns = merge_tree_reader->getColumns().size();
     const auto & name_and_types = merge_tree_reader->getBitmapColumns();

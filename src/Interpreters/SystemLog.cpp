@@ -121,7 +121,6 @@ std::shared_ptr<TSystemLog> createSystemLog(
 
 }
 
-
 SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConfiguration & config)
 {
     bool on_server = global_context->getServerType() == ServerType::cnch_server;
