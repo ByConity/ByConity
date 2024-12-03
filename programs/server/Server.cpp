@@ -1494,10 +1494,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         throw;
     }
 
-    // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
-    // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
-    ExternalCatalog::Mgr::init(*global_context, global_context->getConfigRef());
-
+    // Note:: just for test.
+    {
+        // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
+        // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
+        if (global_context->getCnchConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
+        {
+            ExternalCatalog::Mgr::init(*global_context, global_context->getCnchConfigRef());
+        }
+    }
     /// Check sanity of MergeTreeSettings on server startup
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
