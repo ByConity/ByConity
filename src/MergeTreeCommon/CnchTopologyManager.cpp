@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-#include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyManager.h>
 
 #include <Common/Exception.h>
