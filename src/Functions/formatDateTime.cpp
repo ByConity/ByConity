@@ -1943,7 +1943,7 @@ namespace
                 else
                 {
                     Instruction<T> instruction;
-                    instruction.setJodaFunc(bind_front(&Instruction<T>::template jodaLiteral<String>, default_literal));
+                    instruction.setJodaFunc(std::bind_front(&Instruction<T>::template jodaLiteral<String>, default_literal));
                     instructions.push_back(std::move(instruction));
                 }
             };
@@ -1962,7 +1962,7 @@ namespace
                     {
                         Instruction<T> instruction;
                         std::string_view literal(cur_token, 1);
-                        instruction.setJodaFunc(bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
+                        instruction.setJodaFunc(std::bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
                         instructions.push_back(std::move(instruction));
                         ++reserve_size;
                         pos += 2;
@@ -1979,7 +1979,7 @@ namespace
                             {
                                 Instruction<T> instruction;
                                 std::string_view literal(cur_token + i, 1);
-                                instruction.setJodaFunc(bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
+                                instruction.setJodaFunc(std::bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
                                 instructions.push_back(std::move(instruction));
                                 ++reserve_size;
                                 if (*(cur_token + i) == '\'')
@@ -2003,7 +2003,7 @@ namespace
                         case 'G':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaEra, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaEra, repetitions));
                             instructions.push_back(std::move(instruction));
                             reserve_size += repetitions <= 3 ? 2 : 13;
                             break;
@@ -2011,7 +2011,7 @@ namespace
                         case 'C':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaCenturyOfEra, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaCenturyOfEra, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Year range [1900, 2299]
                             reserve_size += std::max(repetitions, 2);
@@ -2020,7 +2020,7 @@ namespace
                         case 'Y':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaYearOfEra, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaYearOfEra, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Year range [1900, 2299]
                             reserve_size += repetitions == 2 ? 2 : std::max(repetitions, 4);
@@ -2029,7 +2029,7 @@ namespace
                         case 'x':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaWeekYear, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaWeekYear, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// weekyear range [1900, 2299]
                             reserve_size += std::max(repetitions, 4);
@@ -2038,7 +2038,7 @@ namespace
                         case 'w':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaWeekOfWeekYear, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaWeekOfWeekYear, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Week of weekyear range [1, 52]
                             reserve_size += std::max(repetitions, 2);
@@ -2047,7 +2047,7 @@ namespace
                         case 'e':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaDayOfWeek1Based, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaDayOfWeek1Based, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Day of week range [1, 7]
                             reserve_size += std::max(repetitions, 1);
@@ -2056,7 +2056,7 @@ namespace
                         case 'E':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaDayOfWeekText, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaDayOfWeekText, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Maximum length of short name is 3, maximum length of full name is 9.
                             reserve_size += repetitions <= 3 ? 3 : 9;
@@ -2065,7 +2065,7 @@ namespace
                         case 'y':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaYear, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaYear, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Year range [1900, 2299]
                             reserve_size += repetitions == 2 ? 2 : std::max(repetitions, 4);
@@ -2074,7 +2074,7 @@ namespace
                         case 'D':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaDayOfYear, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaDayOfYear, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Day of year range [1, 366]
                             reserve_size += std::max(repetitions, 3);
@@ -2085,7 +2085,7 @@ namespace
                             if (repetitions <= 2)
                             {
                                 Instruction<T> instruction;
-                                instruction.setJodaFunc(bind_front(&Instruction<T>::jodaMonthOfYear, repetitions));
+                                instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaMonthOfYear, repetitions));
                                 instructions.push_back(std::move(instruction));
                                 /// Month of year range [1, 12]
                                 reserve_size += 2;
@@ -2093,7 +2093,7 @@ namespace
                             else
                             {
                                 Instruction<T> instruction;
-                                instruction.setJodaFunc(bind_front(&Instruction<T>::jodaMonthOfYearText, repetitions));
+                                instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaMonthOfYearText, repetitions));
                                 instructions.push_back(std::move(instruction));
                                 /// Maximum length of short name is 3, maximum length of full name is 9.
                                 reserve_size += repetitions <= 3 ? 3 : 9;
@@ -2103,7 +2103,7 @@ namespace
                         case 'd':
                         {
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaDayOfMonth, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaDayOfMonth, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Day of month range [1, 3]
                             reserve_size += std::max(repetitions, 3);
@@ -2111,45 +2111,45 @@ namespace
                         }
                         case 'a':
                             /// Default half day of day is "AM"
-                            add_instruction(bind_front(&Instruction<T>::jodaHalfDayOfDay, repetitions), "AM");
+                            add_instruction(std::bind_front(&Instruction<T>::jodaHalfDayOfDay, repetitions), "AM");
                             reserve_size += 2;
                             break;
                         case 'K':
                             /// Default hour of half day is 0
                             add_instruction(
-                                bind_front(&Instruction<T>::jodaHourOfHalfDay, repetitions), padValue(0, repetitions));
+                                std::bind_front(&Instruction<T>::jodaHourOfHalfDay, repetitions), padValue(0, repetitions));
                             /// Hour of half day range [0, 11]
                             reserve_size += std::max(repetitions, 2);
                             break;
                         case 'h':
                             /// Default clock hour of half day is 12
                             add_instruction(
-                                bind_front(&Instruction<T>::jodaClockHourOfHalfDay, repetitions),
+                                std::bind_front(&Instruction<T>::jodaClockHourOfHalfDay, repetitions),
                                 padValue(12, repetitions));
                             /// Clock hour of half day range [1, 12]
                             reserve_size += std::max(repetitions, 2);
                             break;
                         case 'H':
                             /// Default hour of day is 0
-                            add_instruction(bind_front(&Instruction<T>::jodaHourOfDay, repetitions), padValue(0, repetitions));
+                            add_instruction(std::bind_front(&Instruction<T>::jodaHourOfDay, repetitions), padValue(0, repetitions));
                             /// Hour of day range [0, 23]
                             reserve_size += std::max(repetitions, 2);
                             break;
                         case 'k':
                             /// Default clock hour of day is 24
-                            add_instruction(bind_front(&Instruction<T>::jodaClockHourOfDay, repetitions), padValue(24, repetitions));
+                            add_instruction(std::bind_front(&Instruction<T>::jodaClockHourOfDay, repetitions), padValue(24, repetitions));
                             /// Clock hour of day range [1, 24]
                             reserve_size += std::max(repetitions, 2);
                             break;
                         case 'm':
                             /// Default minute of hour is 0
-                            add_instruction(bind_front(&Instruction<T>::jodaMinuteOfHour, repetitions), padValue(0, repetitions));
+                            add_instruction(std::bind_front(&Instruction<T>::jodaMinuteOfHour, repetitions), padValue(0, repetitions));
                             /// Minute of hour range [0, 59]
                             reserve_size += std::max(repetitions, 2);
                             break;
                         case 's':
                             /// Default second of minute is 0
-                            add_instruction(bind_front(&Instruction<T>::jodaSecondOfMinute, repetitions), padValue(0, repetitions));
+                            add_instruction(std::bind_front(&Instruction<T>::jodaSecondOfMinute, repetitions), padValue(0, repetitions));
                             /// Second of minute range [0, 59]
                             reserve_size += std::max(repetitions, 2);
                             break;
@@ -2157,7 +2157,7 @@ namespace
                         {
                             /// Default fraction of second is 0
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaFractionOfSecond, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaFractionOfSecond, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// 'S' repetitions range [0, 9]
                             reserve_size += repetitions <= 9 ? repetitions : 9;
@@ -2169,7 +2169,7 @@ namespace
                                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Short name time zone is not yet supported");
 
                             Instruction<T> instruction;
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::jodaTimezone, repetitions));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::jodaTimezone, repetitions));
                             instructions.push_back(std::move(instruction));
                             /// Longest length of full name of time zone is 32.
                             reserve_size += 32;
@@ -2184,7 +2184,7 @@ namespace
 
                             Instruction<T> instruction;
                             std::string_view literal(cur_token, pos - cur_token);
-                            instruction.setJodaFunc(bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
+                            instruction.setJodaFunc(std::bind_front(&Instruction<T>::template jodaLiteral<decltype(literal)>, literal));
                             instructions.push_back(std::move(instruction));
                             reserve_size += pos - cur_token;
                             break;

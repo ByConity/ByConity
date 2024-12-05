@@ -12,8 +12,7 @@ namespace DB
 /// This class describes a partition (name) that is stored on the shard (parent).
 struct ShardPartition
 {
-    ShardPartition(TaskShard &parent, String name_quoted_, size_t number_of_splits = 10)
-            : task_shard(parent), name(std::move(name_quoted_)) { pieces.reserve(number_of_splits); }
+    ShardPartition(TaskShard & parent, String name_quoted_, size_t number_of_splits = 10);
 
     String getPartitionPath() const;
 

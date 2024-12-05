@@ -472,6 +472,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     if (enable_compact_map_data)
     {
         // when enabling compact map data, it needs to sort the checksum.files, because all implicit columns of a map column need to transfer by order.
+        // Use `::sort` to resolve ambiguity between <sort> and <common/sort.h>.
         sort(checksums_vector.begin(), checksums_vector.end(), [](const pair &x, const pair &y) -> int {
             return x.second.file_offset < y.second.file_offset;
         });
@@ -1035,7 +1036,7 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
 
         /// For compact map, we need to get correct offset because it may be differ from source replica due to clear map key commands.
         /// For compact map, clear map key only remove checksum item, only when all keys of the map column has been removed, we will delete compated files.
-        UInt64 file_offset = 0; 
+        UInt64 file_offset = 0;
         if (need_append && disk->exists(fs::path(part_download_path) / file_name))
             file_offset = disk->getFileSize(fs::path(part_download_path) / file_name);
 

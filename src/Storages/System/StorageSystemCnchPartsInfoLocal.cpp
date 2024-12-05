@@ -23,6 +23,7 @@
 #include <Storages/PartCacheManager.h>
 #include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <Common/Logger.h>
 #include <Common/CurrentThread.h>
 
 namespace DB
@@ -55,6 +56,8 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
         {"total_parts_number", std::make_shared<DataTypeUInt64>()},
         {"total_parts_size", std::make_shared<DataTypeUInt64>()},
         {"total_rows_count", std::make_shared<DataTypeUInt64>()},
+        {"dropped_parts_number", std::make_shared<DataTypeUInt64>()},
+        {"dropped_parts_size", std::make_shared<DataTypeUInt64>()},
         {"ready_state", std::move(ready_state)},
         /// Boolean
         {"recalculating", std::make_shared<DataTypeUInt8>()},
@@ -273,7 +276,18 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                     res_columns[dest_index++]->insert(0);
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(0);
+                LOG_TRACE(
+                    getLogger("PartsInfoLocal"),
+                    "database: {}, table: {}, partition: {}, Actual metrics is {}",
+                    entry->database,
+                    entry->table,
+                    metric->partition,
+                    metrics_data.toString());
             }
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(metrics_data.dropped_parts_number >= 0 ? metrics_data.dropped_parts_number : 0);
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(metrics_data.dropped_parts_size >= 0 ? metrics_data.dropped_parts_size : 0);
             if (columns_mask[src_index++])
             {
                 ReadyState state = ReadyState::Unloaded;

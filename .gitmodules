@@ -26,10 +26,7 @@
 	url = https://github.com/google/double-conversion.git
 [submodule "contrib/re2"]
 	path = contrib/re2
-  url = https://github.com/google/re2
-[submodule "contrib/llvm"]
-	path = contrib/llvm
-	url = https://github.com/ClickHouse-Extras/llvm
+	url = https://github.com/ByConity/re2.git
 [submodule "contrib/mariadb-connector-c"]
 	path = contrib/mariadb-connector-c
 	url = https://github.com/ClickHouse-Extras/mariadb-connector-c.git
@@ -58,12 +55,6 @@
 [submodule "contrib/libgsasl"]
 	path = contrib/libgsasl
 	url = https://github.com/ClickHouse-Extras/libgsasl.git
-[submodule "contrib/libcxx"]
-	path = contrib/libcxx
-	url = https://github.com/ClickHouse-Extras/libcxx.git
-[submodule "contrib/libcxxabi"]
-	path = contrib/libcxxabi
-	url = https://github.com/ByConity/clickhouse-libcxxabi.git
 [submodule "contrib/snappy"]
 	path = contrib/snappy
 	url = https://github.com/google/snappy
@@ -273,7 +264,7 @@
 	url = https://github.com/ByConity/libhdfs3-open.git
 [submodule "contrib/boost"]
 	path = contrib/boost
-	url = https://github.com/ClickHouse-Extras/boost.git
+	url = https://github.com/ByConity/boost.git
 [submodule "contrib/breakpad"]
 	path = contrib/breakpad
 	url = https://github.com/ByConity/breakpad.git
@@ -361,3 +352,6 @@
 [submodule "contrib/java-extensions"]
 	path = contrib/java-extensions
 	url = https://github.com/ByConity/clickhouse-java-extensions.git
+[submodule "contrib/llvm-project"]
+	path = contrib/llvm-project
+	url = https://github.com/ByConity/ClickHouse-llvm-project.git

@@ -81,10 +81,10 @@ private:
     bool getEntityModelByNameAndType(const String & name, EntityType type, AccessEntityModel &model) const;
     bool getEntryByUUID(const UUID &uuid, Entry &entry) const;
     bool getEntryByNameAndType(const String &name, EntityType type, Entry &entry) const;
-    struct Entry * getEntryReferenceByUUID(const UUID &uuid) const TSA_REQUIRES(mutex);
+    struct Entry * getEntryReferenceByUUID(const UUID &uuid) const;
 
-    mutable std::unordered_map<UUID, Entry> entries_by_id[SHARD_CNT] TSA_GUARDED_BY(mutex);
-    mutable std::unordered_map<String, Entry *> entries_by_name_and_type[static_cast<size_t>(EntityType::MAX)][SHARD_CNT] TSA_GUARDED_BY(mutex);
+    mutable std::unordered_map<UUID, Entry> entries_by_id[SHARD_CNT];
+    mutable std::unordered_map<String, Entry *> entries_by_name_and_type[static_cast<size_t>(EntityType::MAX)][SHARD_CNT];
     mutable std::mutex mutex;
 
     mutable std::list<OnChangedHandler> handlers_by_type[static_cast<size_t>(EntityType::MAX)] TSA_GUARDED_BY(hdl_mutex);

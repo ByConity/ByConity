@@ -1,3 +1,4 @@
+set (CMAKE_CXX_STANDARD 17)
 set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/poco")
 
 add_subdirectory (Crypto)

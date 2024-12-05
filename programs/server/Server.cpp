@@ -1371,6 +1371,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
+
+    // pre lookup and cache consult result to avoid the overhead of lookupNNProxy
+    if (!hdfs_nnproxy.empty() && hdfs_params.conn_type == HDFSConnectionParams::CONN_NNPROXY)
+        lookupNNProxy(hdfs_nnproxy);
+    
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
     global_context->setVETosConnectParams(vetos_params);
@@ -1490,15 +1495,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         throw;
     }
 
-    // Note:: just for test.
-    {
-        // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
-        // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
-        if (global_context->getCnchConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
-        {
-            ExternalCatalog::Mgr::init(*global_context, global_context->getCnchConfigRef());
-        }
-    }
+    // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
+    // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
+    ExternalCatalog::Mgr::init(*global_context, global_context->getConfigRef());
+
     /// Check sanity of MergeTreeSettings on server startup
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
