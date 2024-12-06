@@ -29,9 +29,11 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/ProcessorProfile.h>
 #include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/executeQueryHelper.h>
 #include <Interpreters/sendPlanSegment.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Optimizer/Signature/PlanSegmentNormalizer.h>
 #include <Optimizer/Signature/PlanSignature.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
@@ -104,6 +106,7 @@ namespace ErrorCodes
 void PlanSegmentExecutor::prepareSegmentInfo() const
 {
     query_log_element->client_info = context->getClientInfo();
+    query_log_element->txn_id = context->getCurrentTransactionID();
     query_log_element->segment_id = plan_segment->getPlanSegmentId();
     query_log_element->segment_parallel = plan_segment->getParallelSize();
     query_log_element->segment_parallel_index = plan_segment_instance->info.parallel_id;
@@ -157,6 +160,27 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
         {
             if (auto query_log = context->getQueryLog())
                 query_log->add(*query_log_element);
+        }
+        if (context->getSettingsRef().log_query_exchange && context->getSettingsRef().bsp_mode)
+        {
+            if (auto query_exchange_log = context->getQueryExchangeLog())
+            {
+                for (const auto & [uuid, stat] : plan_segment_instance->info.source_task_stats)
+                {
+                    QueryExchangeLogElement element;
+                    element.txn_id = context->getCurrentTransactionID();
+                    element.initial_query_id = context->getInitialQueryId();
+                    element.parallel_index = plan_segment_instance->info.parallel_id;
+                    element.read_segment = plan_segment->getPlanSegmentId();
+                    element.event_time
+                        = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    element.recv_rows = stat.rows;
+                    element.type = fmt::format("table_scan_{}", stat.storage_id.getFullNameNotQuoted());
+                    element.finish_code = query_log_element->type == QUERY_FINISH ? BroadcastStatusCode::ALL_SENDERS_DONE
+                                                                                  : BroadcastStatusCode::RECV_UNKNOWN_ERROR;
+                    query_exchange_log->add(element);
+                }
+            }
         }
     }
     catch (...)

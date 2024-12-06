@@ -27,29 +27,27 @@ namespace DB
 {
 
 /***
- * CnchServerManager is used to get the current topology from service discovery and synchronize it to metastore.
+ * CnchTopologyManager (disabled by default) is used to get the current topology from service discovery and synchronize it to metastore.
  * It contains two kind of background tasks:
  * 1. Topology refresh task. This task periodically get current servers topology from service discovery.
  * 2. Lease renew task. This task is responsible for periodically update the topology to metastore.
  *
- * Leader election is required to make sure only one CnchServerManager can update server topology at a time.
+ * Leader election is required to make sure only one CnchTopologyManager can update server topology at a time.
  */
-class CnchServerManager: public WithContext
+class CnchTopologyManager: public WithContext
 {
 using Topology = CnchServerTopology;
 
 public:
-    explicit CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config);
+    explicit CnchTopologyManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config);
 
-    ~CnchServerManager();
+    ~CnchTopologyManager();
 
     bool isLeader() const;
     std::optional<HostWithPorts> getCurrentLeader() const;
 
     void shutDown();
     void partialShutdown();
-
-    void dumpServerStatus() const;
 
     void updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name = "server_virtual_warehouses");
 
@@ -61,16 +59,14 @@ private:
 
     bool refreshTopology();
     bool renewLease();
-    bool checkAsyncQueryStatus();
 
     /// set topology status when becoming leader. may runs in background tasks.
     void initLeaderStatus();
 
-    LoggerPtr log = getLogger("CnchServerManager");
+    LoggerPtr log = getLogger("CnchTopologyManager");
 
     BackgroundSchedulePool::TaskHolder topology_refresh_task;
     BackgroundSchedulePool::TaskHolder lease_renew_task;
-    BackgroundSchedulePool::TaskHolder async_query_status_check_task;
 
     std::optional<Topology> next_version_topology;
     std::list<Topology> cached_topologies;
@@ -82,10 +78,9 @@ private:
     std::atomic_bool leader_initialized{false};
     std::atomic<UInt64> refresh_topology_time{0};
     std::atomic<UInt64> renew_lease_time{0};
-    std::atomic<UInt64> async_query_status_check_time{0};
     std::unordered_map<String, String> server_virtual_warehouses;
 };
 
-using CnchServerManagerPtr = std::shared_ptr<CnchServerManager>;
+using CnchTopologyManagerPtr = std::shared_ptr<CnchTopologyManager>;
 
 }

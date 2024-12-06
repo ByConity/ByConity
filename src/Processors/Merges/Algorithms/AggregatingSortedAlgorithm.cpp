@@ -14,10 +14,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-AggregatingSortedAlgorithm::ColumnsDefinition::ColumnsDefinition() = default;
-AggregatingSortedAlgorithm::ColumnsDefinition::ColumnsDefinition(ColumnsDefinition &&) noexcept = default;
-AggregatingSortedAlgorithm::ColumnsDefinition::~ColumnsDefinition() = default;
-
 /// Stores information for aggregation of AggregateFunction columns
 struct AggregatingSortedAlgorithm::AggregateDescription
 {
@@ -376,5 +372,9 @@ IMergingAlgorithm::Status AggregatingSortedAlgorithm::merge()
     last_chunk_sort_columns.clear();
     return Status(merged_data.pull(), true);
 }
+
+AggregatingSortedAlgorithm::ColumnsDefinition::ColumnsDefinition() = default;
+AggregatingSortedAlgorithm::ColumnsDefinition::ColumnsDefinition(ColumnsDefinition &&) noexcept = default;
+AggregatingSortedAlgorithm::ColumnsDefinition::~ColumnsDefinition() = default;
 
 }

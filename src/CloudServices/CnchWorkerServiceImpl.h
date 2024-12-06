@@ -246,7 +246,7 @@ private:
     // class PreloadHandler;
     // std::shared_ptr<PreloadHandler> preload_handler;
 
-    ThreadPool thread_pool;
+    std::unique_ptr<ThreadPool> thread_pool;
 
     std::mutex backup_lock;
     std::unique_ptr<ThreadPool> backup_rpc_pool;

@@ -168,6 +168,7 @@
     M(PartsCompact, "Compact parts.") \
     M(PartsInMemory, "In-memory parts.") \
     M(PartsCNCH, "CNCH parts.") \
+    M(PartChecksums, "Data part checksums.") \
     M(MMappedFiles, "Total number of mmapped files.") \
     M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
     M(AsynchronousReadWait, "Number of threads waiting for asynchronous read.") \
@@ -177,6 +178,9 @@
 \
     M(StorageMemoryRows, "Memory table input rows") \
     M(StorageMemoryBytes, "Memory table input bytes") \
+\
+    M(WorkerServicePoolTask, "Number of active tasks in worker service thread pool.") \
+    M(WorkerServicePoolPendingTask, "Number of pending tasks in worker service thread pool.") \
 \
     M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
 \
@@ -216,7 +220,10 @@
     M(IOSchRawRequests, "RawRequests in deadline scheduler") \
 \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
-    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight")
+    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
+\
+    M(ActiveCnchSession, "Number of Cnch session in active") \
+    M(ActiveHttpSession, "Number of Cnch session in active") \
 
 namespace CurrentMetrics
 {

@@ -119,7 +119,8 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
             default_database, user_password.first, user_password.second,
             /*cluster_*/"",/*cluster_secret_*/"",
             "server", address.compression, address.secure, 1,
-            host.exchange_port, host.exchange_status_port, host.rpc_port, host.id);
+            /// `exchange_port` is same as `rpc_port`.
+            host.rpc_port, host.rpc_port, host.rpc_port, host.id);
 
         info.pool = std::make_shared<ConnectionPoolWithFailover>(
             ConnectionPoolPtrs{pool}, settings.load_balancing, settings.connections_with_failover_max_tries);

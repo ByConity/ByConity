@@ -1875,8 +1875,41 @@ std::shared_ptr<TableMetrics> PartCacheManager::getTrashItemsInfoMetrics(const I
 }
 void PartCacheManager::updateTrashItemsMetrics(const UUID & table_uuid, const Catalog::TrashItems & items, bool positive)
 {
+    /// Since currently all items are from the same partition
+    /// (and even it is not that, they are very likely from consecutive partitions),
+    /// we can cache the partition_info to avoid querying the table meta too often.
+    std::optional<std::pair<String, PartitionInfoPtr>> cached_partition_info;
+
     if (auto table_meta_ptr = getTableMeta(table_uuid))
+    {
         table_partition_metrics.updateMetrics(items, table_meta_ptr->trash_item_metrics, positive);
+
+        /// Phase one GC.
+        if (positive)
+        {
+            for (const auto & part : items.data_parts)
+            {
+                const String & partition_id = part->info().partition_id;
+                if (!cached_partition_info.has_value() || cached_partition_info.value().first != partition_id)
+                {
+                    auto partition_info = table_meta_ptr->getPartitionInfo(partition_id);
+                    cached_partition_info = partition_info
+                        ? std::make_optional<std::pair<String, PartitionInfoPtr>>(std::make_pair(partition_id, partition_info))
+                        : std::nullopt;
+                }
+
+                if (cached_partition_info.has_value())
+                {
+                    auto & partition_info = cached_partition_info.value().second;
+
+                    if (partition_info && partition_info->metrics_ptr)
+                    {
+                        partition_info->metrics_ptr->removeDroppedPart(part->part_model());
+                    }
+                }
+            }
+        }
+    }
 }
 bool PartCacheManager::forceRecalculate(StoragePtr table)
 {

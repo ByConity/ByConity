@@ -14,18 +14,23 @@
  */
 
 #include <Catalog/Catalog.h>
+#include <Catalog/DataModelPartWrapper.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
 #include <Catalog/DataModelPartWrapper.h>
-#include "Common/HostWithPorts.h"
 #include "common/types.h"
+#include <Common/HostWithPorts.h>
 #include <common/logger_useful.h>
-#include "Catalog/DataModelPartWrapper_fwd.h"
-#include "Interpreters/Context.h"
+#include <common/types.h>
 
 #include <sstream>
 #include <unordered_map>
@@ -816,7 +821,31 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     }
 }
 
-void filterParts(IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter)
+template <class T>
+struct GetBucketTrait
+{
+};
+
+template <>
+struct GetBucketTrait<ServerDataPart>
+{
+    static Int64 getBucketNumber(const ServerDataPart & part)
+    {
+        return part.part_model().bucket_number();
+    }
+};
+
+template <>
+struct GetBucketTrait<IMergeTreeDataPart>
+{
+    static Int64 getBucketNumber(const IMergeTreeDataPart & part)
+    {
+        return part.bucket_number;
+    }
+};
+
+template <class T>
+void filterParts(std::vector<std::shared_ptr<const T>> & parts, const SourceTaskFilter & filter)
 {
     if (filter.index && filter.count)
     {
@@ -844,11 +873,15 @@ void filterParts(IMergeTreeDataPartsVector & parts, const SourceTaskFilter & fil
         for (auto iter = parts.begin(); iter != parts.end();)
         {
             const auto & part = *iter;
-            if (!buckets.contains(part->bucket_number))
+            if (!buckets.contains(GetBucketTrait<T>::getBucketNumber(*part)))
                 iter = parts.erase(iter);
             else
                 iter++;
         }
     }
 }
+
+template void
+filterParts<Coordination::IMergeTreeDataPart>(Coordination::IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter);
+template void filterParts<ServerDataPart>(ServerDataPartsVector & parts, const SourceTaskFilter & filter);
 }

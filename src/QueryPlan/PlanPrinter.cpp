@@ -545,7 +545,7 @@ String PlanPrinter::TextPrinter::printOutputColumns(PlanNodeBase & plan_node, co
     {
         output_columns.push_back(it.name);
     }
-    sort(output_columns.begin(), output_columns.end());
+    std::sort(output_columns.begin(), output_columns.end());
 
     bool first = true;
     for (auto & column_name : output_columns)

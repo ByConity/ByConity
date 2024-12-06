@@ -16,6 +16,7 @@
 #include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 #include <sstream>
 #include <string>
+#include <common/types.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
@@ -93,17 +94,20 @@ ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfigu
         cache_timeout = config.getUInt("service_discovery.cache_timeout");
     if (config.hasProperty("service_discovery.check_result"))
         check_result = config.getBool("service_discovery.check_result");
+
+    LOG_INFO(log, "ServiceDiscoveryConsul: cluster = {}, cache_disabled = {}, cache_timeout = {}s, check_result = {}",
+             cluster, cache_disabled, cache_timeout, check_result);
 }
 
-HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name)
+HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name, UInt32 custom_cache_timeout)
 {
     if (type != ComponentType::WORKER && !vw_name.empty())
         throw Exception("Should not specify vw name for non-worker components", ErrorCodes::LOGICAL_ERROR);
 
-    Endpoints endpoints = fetchEndpoints(psm_name, vw_name);
+    Endpoints endpoints = fetchEndpoints(psm_name, vw_name, custom_cache_timeout);
     HostWithPortsVec result = formatResult(endpoints, type);
 
-    if (result.size() == 0)
+    if (result.empty())
         LOG_DEBUG(log, "lookup " + typeToString(type) + " [" + psm_name + "][" + vw_name + "] returns empty result");
     return result;
 }
@@ -133,8 +137,6 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW
         if (ep.tags.count("PORT1"))
         {
             host_with_ports.rpc_port = parse<UInt16>(ep.tags.at("PORT1"));
-            host_with_ports.exchange_port = host_with_ports.rpc_port;
-            host_with_ports.exchange_status_port = host_with_ports.rpc_port;
         }
         if (ep.tags.count("PORT2"))
             host_with_ports.http_port = parse<UInt16>(ep.tags.at("PORT2"));
@@ -145,21 +147,21 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW
     return group_map;
 }
 
-ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpoints(const String & psm_name, const String & vw_name)
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpoints(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout)
 {
     if (cache_disabled)
         return fetchEndpointsFromUpstream(psm_name, vw_name);
     else
-        return fetchEndpointsFromCache(psm_name, vw_name);
+        return fetchEndpointsFromCache(psm_name, vw_name, custom_cache_timeout);
 }
 
-ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCache(const String & psm_name, const String & vw_name)
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCache(const String & psm_name, const String & vw_name, UInt32 custom_cache_timeout)
 {
     SDCacheKey key {psm_name, vw_name};
     SDCacheValue<Endpoint> cache_res;
 
     // Cache hit. endpoints exists in cache and not outdated
-    if (cache.get(key, cache_res) && time(nullptr) - cache_timeout < cache_res.last_update)
+    if (cache.get(key, cache_res) && time(nullptr) - (custom_cache_timeout ? custom_cache_timeout : cache_timeout) < cache_res.last_update)
     {
         return cache_res.endpoints;
     }
@@ -212,8 +214,6 @@ HostWithPortsVec ServiceDiscoveryConsul::formatResult(const Endpoints & eps, Com
             if (e.tags.count("PORT1"))
             {
                 host_with_ports.rpc_port = parse<UInt16>(e.tags.at("PORT1"));
-                host_with_ports.exchange_port = host_with_ports.rpc_port;
-                host_with_ports.exchange_status_port = host_with_ports.rpc_port;
             }
             if (e.tags.count("PORT2"))
                 host_with_ports.http_port = parse<UInt16>(e.tags.at("PORT2"));

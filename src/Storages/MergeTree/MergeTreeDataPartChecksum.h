@@ -24,6 +24,7 @@
 #include <optional>
 #include <city.h>
 #include <common/types.h>
+#include <Common/Allocator.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
@@ -80,13 +81,20 @@ struct MergeTreeDataPartChecksums
     using Checksum = MergeTreeDataPartChecksum;
 
     /// The order is important.
-    using FileChecksums = std::map<String, Checksum>;
+    using FileChecksums = std::map<String, Checksum, std::less<String>, TrackAllocator<std::pair<const String, Checksum> > >;
     using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
     FileChecksums files;
 
     StorageType storage_type = StorageType::Local ;
 
     Versions versions = std::make_shared<MergeTreeDataPartVersions>(false);
+
+    MergeTreeDataPartChecksums();
+    MergeTreeDataPartChecksums(const MergeTreeDataPartChecksums & other);
+    MergeTreeDataPartChecksums(MergeTreeDataPartChecksums && other);
+    ~MergeTreeDataPartChecksums();
+
+    MergeTreeDataPartChecksums & operator= (const MergeTreeDataPartChecksums &) = default;
 
     void addFile(const String & file_name, UInt64 file_size, Checksum::uint128 file_hash);
 

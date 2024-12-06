@@ -1,7 +1,7 @@
 #include <Catalog/CatalogBackgroundTask.h>
 #include <Catalog/MetastoreProxy.h>
 #include <Catalog/LargeKVHandler.h>
-#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerLeader.h>
 
 
 namespace DB
@@ -65,7 +65,7 @@ void CatalogBackgroundTask::execute()
 void CatalogBackgroundTask::cleanStaleLargeKV()
 {
     // only leader can execute clean job
-    if (!context->getCnchServerManager()->isLeader())
+    if (!context->getCnchServerLeader()->isLeader())
         return;
 
     // scan large kv records
@@ -98,7 +98,7 @@ void CatalogBackgroundTask::cleanStaleLargeKV()
         auto large_kv_it = metastore->getByPrefix(MetastoreProxy::largeKVDataPrefix(name_space, uuid));
         while (large_kv_it->next())
             batch_write.AddDelete(large_kv_it->key());
-        
+
         batch_write.AddDelete(MetastoreProxy::largeKVReferenceKey(name_space, uuid));
 
         try

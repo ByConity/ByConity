@@ -1,3 +1,4 @@
+set (CMAKE_CXX_STANDARD 17)
 if (HAVE_SSSE3)
     option (ENABLE_HYPERSCAN "Enable hyperscan library" ${ENABLE_LIBRARIES})
 elseif(ENABLE_HYPERSCAN)

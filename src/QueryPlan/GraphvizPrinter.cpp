@@ -3625,7 +3625,7 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     out << "inputs:";
     for (const auto & input : segment_ptr->getPlanSegmentInputs())
     {
-        out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
+        out << input->getExchangeId() << "mode(" << std::to_string(static_cast<UInt8>(input->getExchangeMode())) << "): ";
         for (const auto & col : input->getHeader())
         {
             out << col.name << " ";
@@ -3648,7 +3648,7 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     out << "output:";
     for (const auto & input : segment_ptr->getPlanSegmentOutputs())
     {
-        out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
+        out << input->getExchangeId() << "mode(" << std::to_string(static_cast<UInt8>(input->getExchangeMode())) << "): ";
         for (const auto & col : input->getHeader())
         {
             out << col.name << " ";

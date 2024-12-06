@@ -19,8 +19,8 @@ int main(int, char **)
 {
     using namespace DB;
 
-    IMergeSelector::PartsRanges partitions(1);
-    IMergeSelector::PartsRange & parts = partitions.back();
+    IMergeSelector<IMergeTreeDataPart>::PartsRanges partitions(1);
+    IMergeSelector<IMergeTreeDataPart>::PartsRange & parts = partitions.back();
 
 /*    SimpleMergeSelector::Settings settings;
     SimpleMergeSelector selector(settings);*/
@@ -37,7 +37,7 @@ int main(int, char **)
     while (!in.eof())
     {
         part_names.emplace_back();
-        IMergeSelector::Part part;
+        IMergeSelector<IMergeTreeDataPart>::Part part;
         in >> part.size >> "\t" >> part.age >> "\t" >> part.level >> "\t" >> part_names.back() >> "\n";
         part.data = part_names.back().data();
 //        part.level = 0;
@@ -52,7 +52,7 @@ int main(int, char **)
 
     while (parts.size() > 1)
     {
-        IMergeSelector::PartsRange selected_parts = selector.select(partitions, 100ULL * 1024 * 1024 * 1024);
+        IMergeSelector<IMergeTreeDataPart>::PartsRange selected_parts = selector.select(partitions, 100ULL * 1024 * 1024 * 1024);
 
         if (selected_parts.empty())
         {

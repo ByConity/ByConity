@@ -119,7 +119,7 @@ SELECT uuid, partition_id,
     sumIf(bytes, event_type='MergeParts') AS merged_bytes,
     countIf(event_type='RemovePart' and rows>0) AS removed_parts
 FROM system.server_part_log
-WHERE table NOT LIKE '\%CHTMP' AND event_date >= today() - 7 AND {}
+WHERE table NOT LIKE '\%CHTMP' AND event_date >= today() - 3 AND {}
 GROUP BY uuid, partition_id, start_of_hour
 HAVING inserted_parts > 0 OR merged_parts > 0 OR removed_parts > 0;
 )""";

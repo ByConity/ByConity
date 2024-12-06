@@ -1,3 +1,4 @@
+set (CMAKE_CXX_STANDARD 11)
 option (USE_INTERNAL_BOOST_LIBRARY "Use internal Boost library" ${NOT_UNBUNDLED})
 
 if (NOT USE_INTERNAL_BOOST_LIBRARY)
@@ -86,8 +87,11 @@ if (NOT EXTERNAL_BOOST_FOUND)
     target_include_directories (_boost_headers_only SYSTEM BEFORE INTERFACE ${LIBRARY_DIR})
 
     # asio
-
-    target_compile_definitions (_boost_headers_only INTERFACE BOOST_ASIO_STANDALONE=1)
+    target_compile_definitions (_boost_headers_only INTERFACE
+    BOOST_ASIO_STANDALONE=1
+    BOOST_ASIO_HAS_STD_INVOKE_RESULT=1 # Avoid using of deprecated in c++ > 17 std::result_of
+    BOOST_TIMER_ENABLE_DEPRECATED=1 # wordnet-blast (enabled via USE_NLP) uses Boost legacy timer classes
+    )
 
     # iostreams
 
@@ -203,9 +207,9 @@ if (NOT EXTERNAL_BOOST_FOUND)
     # coroutine
 
     set (SRCS_COROUTINE
-      "${LIBRARY_DIR}/libs/coroutine/detail/coroutine_context.cpp"
-      "${LIBRARY_DIR}/libs/coroutine/exceptions.cpp"
-      "${LIBRARY_DIR}/libs/coroutine/posix/stack_traits.cpp"
+      "${LIBRARY_DIR}/libs/coroutine/src/detail/coroutine_context.cpp"
+      "${LIBRARY_DIR}/libs/coroutine/src/exceptions.cpp"
+      "${LIBRARY_DIR}/libs/coroutine/src/posix/stack_traits.cpp"
     )
     add_library (_boost_coroutine ${SRCS_COROUTINE})
     add_library (boost::coroutine ALIAS _boost_coroutine)

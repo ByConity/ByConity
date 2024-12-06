@@ -153,6 +153,14 @@ fillTopologyVersions(const std::list<CnchServerTopology> & topologies, pb::Repea
                 server.set_http_port(host_with_port.http_port);
             }
         }
+        if (!topology.getLeaderInfo().empty())
+        {
+            topology_version.set_leader_info(topology.getLeaderInfo());
+        }
+        if (!topology.getReason().empty())
+        {
+            topology_version.set_reason(topology.getReason());
+        }
     });
 }
 
@@ -174,13 +182,23 @@ createTopologyVersionsFromModel(const pb::RepeatedPtrField<Protos::DataModelTopo
             String vw_name = vw_topology.server_vw_name();
             for (const auto & server : vw_topology.servers())
             {
-                HostWithPorts host_with_port{server.host()};
-                host_with_port.rpc_port = server.rpc_port();
-                host_with_port.tcp_port = server.tcp_port();
-                host_with_port.http_port = server.http_port();
-                host_with_port.id = server.hostname();
+                HostWithPorts host_with_port{
+                    server.host(),
+                    static_cast<uint16_t>(server.rpc_port()),
+                    static_cast<uint16_t>(server.tcp_port()),
+                    static_cast<uint16_t>(server.http_port()),
+                    server.hostname()};
+              host_with_port.id = server.hostname();
                 topology.addServer(host_with_port, vw_name);
             }
+        }
+        if (model.has_leader_info())
+        {
+            topology.setLeaderInfo(model.leader_info());
+        }
+        if (model.has_reason())
+        {
+            topology.setReason(model.reason());
         }
         res.push_back(topology);
     });

@@ -159,6 +159,11 @@ void ServerPrometheusMetricsWriter::writeConfigMetrics(WriteBuffer & wb)
         {
             writeOutLine(wb, key_label, max_concurrent_system_queries);
         }
+        else if(metric_name == LOGGER_LEVEL_KEY)
+        {
+            const int log_level = getLogger("ServerPrometheusMetricsWriter")->getLevel();
+            writeOutLine(wb, key_label, log_level);
+        }
         else
         {
             LOG_WARNING(getLogger("ServerPrometheusMetricsWriter"), "Unknown config metric found, this should never happen");

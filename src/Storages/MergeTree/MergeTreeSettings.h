@@ -432,7 +432,8 @@ enum StealingCacheMode : UInt64
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
     M(UInt64, cnch_merge_max_parts_to_merge, 100, "", 0) \
-    M(Int64, cnch_merge_expected_parts_number, 0, "Expected part numbers per partition, used to control merge selecting frequency and task size. 0 means using worker numbers in vw settings, negative value means disable this feature.", 0) \
+    M(Int64, cnch_merge_expected_parts_number, -1, "Expected part numbers per partition, used to control merge selecting frequency and task size. 0 means using worker numbers in vw settings, negative value means disable this feature.", 0) \
+    M(Float, cnch_merge_write_amplification_optimize_threshold, 4.0, "Threshold for optimizing merge write amplification, 0 means don't optimize. If positive, will optimize write amplification when parts number in current partition is less than cnch_merge_write_amplification_optimize_threshold * cnch_merge_expected_parts_number.", 0) \
     M(UInt64, cnch_mutate_max_parts_to_mutate, 100, "", 0) \
     M(UInt64, cnch_mutate_max_total_bytes_to_mutate, 50UL * 1024 * 1024 * 1024, "", 0) \
     \

@@ -157,3 +157,4 @@ external_catalog_mgr:
   type: fdb
   fdb:
     cluster_file: /config/fdb/cluster
+hdfs_nnproxy: ""

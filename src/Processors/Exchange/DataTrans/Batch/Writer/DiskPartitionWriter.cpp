@@ -60,6 +60,7 @@ DiskPartitionWriter::~DiskPartitionWriter()
         if (enable_disk_writer_metrics && query_exchange_log)
         {
             QueryExchangeLogElement element;
+            element.txn_id = context->getCurrentTransactionID();
             element.initial_query_id = context->getInitialQueryId();
             element.exchange_id = extended_key.key->exchange_id;
             element.partition_id = extended_key.key->partition_id;

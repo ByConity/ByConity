@@ -49,7 +49,7 @@ ServiceDiscoveryLocal::ServiceDiscoveryLocal(const Poco::Util::AbstractConfigura
     loadConfig(config);
 }
 
-HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, ComponentType type, const String & vw_name)
+HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, ComponentType type, const String & vw_name, UInt32)
 {
     if (!exists(psm_name))
         throw Exception("psm:" + psm_name + " not exists in service registry.", ErrorCodes::SD_PSM_NOT_EXISTS);
@@ -85,8 +85,6 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
             if (ep.ports.count("PORT1"))
             {
                 host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
-                host_with_ports.exchange_port = host_with_ports.rpc_port;
-                host_with_ports.exchange_status_port = host_with_ports.rpc_port;
             }
             if (ep.ports.count("PORT2"))
                 host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);
@@ -150,8 +148,6 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryLocal::lookupWorkerGroupsInVW(
         if (ep.ports.count("PORT1"))
         {
             host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
-            host_with_ports.exchange_port = host_with_ports.rpc_port;
-            host_with_ports.exchange_status_port = host_with_ports.rpc_port;
         }
         if (ep.ports.count("PORT2"))
             host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);

@@ -86,6 +86,7 @@ enum class AggregateStagePolicy : UInt8
 };
 
 Block appendGroupingSetColumn(Block header);
+Block generateOutputHeader(const Block & input_header);
 
 void computeGroupingFunctions(
     QueryPipeline & pipeline,
@@ -196,6 +197,8 @@ public:
         bool no_shuffle_ = false,
         bool streaming_for_cache_ = false,
         PlanHints hints_ = {});
+
+    static Block appendGroupingColumn(Block block, bool has_grouping);
 
     String getName() const override { return "Aggregating"; }
 

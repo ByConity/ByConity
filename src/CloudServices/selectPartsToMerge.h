@@ -46,7 +46,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
-    const std::multimap<String, UInt64> & unselectable_part_rows,
+    const std::unordered_map<String, std::pair<UInt64, UInt64> > & unselectable_part_rows,
     ServerCanMergeCallback can_merge_callback,
     const SelectPartsToMergeSettings & settings,
     LoggerPtr log);

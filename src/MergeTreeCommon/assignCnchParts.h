@@ -117,5 +117,10 @@ void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment);
 
 ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry);
 
-void filterParts(Coordination::IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter);
+template <class T>
+void filterParts(std::vector<std::shared_ptr<const T>> & parts, const SourceTaskFilter & filter);
+
+extern template void
+filterParts<Coordination::IMergeTreeDataPart>(Coordination::IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter);
+extern template void filterParts<ServerDataPart>(ServerDataPartsVector & parts, const SourceTaskFilter & filter);
 }

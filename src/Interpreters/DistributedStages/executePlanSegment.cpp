@@ -219,6 +219,9 @@ void executePlanSegmentRemotelyWithPreparedBuf(
         }
     }
 
+    for (const auto & iter : execution_info.source_task_stats)
+        *request.add_source_task_stats() = iter.second.toProto();
+
     if (execution_info.worker_epoch > 0)
         request.set_worker_epoch(execution_info.worker_epoch);
 

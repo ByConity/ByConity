@@ -48,6 +48,7 @@ ResourceManagerController::ResourceManagerController(ContextPtr global_context_)
     vw_manager = std::make_unique<VirtualWarehouseManager>(*this);
     group_manager = std::make_unique<WorkerGroupManager>(*this);
     election_controller = std::make_unique<ElectionController>(*this);
+    topology_manager = std::make_unique<CnchTopologyManager>(global_context_, global_context_->getConfigRef());
 }
 
 ResourceManagerController::~ResourceManagerController()

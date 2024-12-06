@@ -15,19 +15,21 @@
 
 #include <ResourceManagement/ResourceManager.h>
 
-#include <Catalog/Catalog.h>
-#include <Common/Exception.h>
-#include <Common/getMultipleKeysFromConfig.h>
-#include <Core/UUID.h>
 // TODO(zuochuang.zema): MERGE http handler
 // #include <HTTPHandler/HTTPHandlerFactory.h>
 // #include <HTTPHandler/PrometheusRequestHandler.h>
+#include <Catalog/Catalog.h>
+#include <Core/UUID.h>
 #include <Interpreters/Context.h>
-#include <Poco/Net/HTTPServer.h>
-#include <Poco/Net/NetException.h>
 #include <ResourceManagement/ResourceManagerController.h>
 #include <ResourceManagement/ResourceManagerServiceImpl.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
+#include <Poco/Net/HTTPServer.h>
+#include <Poco/Net/NetException.h>
+#include <Common/Config/ConfigReloader.h>
+#include <Common/Exception.h>
+#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
+#include <Common/getMultipleKeysFromConfig.h>
 
 #include <brpc/server.h>
 #include <Poco/Util/HelpFormatter.h>
@@ -122,11 +124,34 @@ int ResourceManager::main(const std::vector<std::string> &)
     MetastoreConfig catalog_conf(global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE);
     auto name_space = global_context->getCnchConfigRef().getString("catalog.name_space", "default");
     global_context->initCatalog(catalog_conf, name_space, config().getBool("enable_cnch_write_remote_catalog", true));
+    global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));
+    global_context->initTSOElectionReader();
 
+    /// Will init Topology Manager.
     auto rm_controller = std::make_shared<RM::ResourceManagerController>(global_context);
+
+    /// ConfigReloader have to strict parameters which are redundant in our case.
+    zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });
+    zkutil::EventPtr main_config_zk_changed_event = std::make_shared<Poco::Event>();
+    std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
+    /// Init config reloader.
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
+        include_from_path,
+        config().getString("path", ""),
+        std::move(main_config_zk_node_cache),
+        main_config_zk_changed_event,
+        [&](ConfigurationPtr config, bool /* initial_loading */)
+        {
+            /// We need to update the server virtual warehouses here.
+            rm_controller->getTopologyManager().updateServerVirtualWarehouses(*config);
+        },
+        /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
     SCOPE_EXIT({
         rm_controller.reset();
+
+        main_config_reloader.reset();
 
         global_context->shutdown();
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
@@ -264,6 +289,7 @@ int ResourceManager::main(const std::vector<std::string> &)
 
     // --------- END OF METRICS WRITER INIT ---------
 
+    main_config_reloader->start();
     {
         std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
 

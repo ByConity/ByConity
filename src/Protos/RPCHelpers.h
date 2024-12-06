@@ -86,8 +86,6 @@ namespace DB::RPCHelpers
             uint16_t(hp.rpc_port()),
             uint16_t(hp.tcp_port()),
             (hp.has_http_port() ? uint16_t(hp.http_port()) : uint16_t(0)),
-            (hp.has_exchange_port() ? uint16_t(hp.exchange_port()) : uint16_t(0)),
-            (hp.has_exchange_status_port() ? uint16_t(hp.exchange_status_port()) : uint16_t(0)),
             hp.hostname(),
         };
     }
@@ -120,8 +118,6 @@ namespace DB::RPCHelpers
         pb_hp.set_rpc_port(hp.rpc_port);
         pb_hp.set_tcp_port(hp.tcp_port);
         pb_hp.set_http_port(hp.http_port);
-        pb_hp.set_exchange_port(hp.exchange_port);
-        pb_hp.set_exchange_status_port(hp.exchange_status_port);
     }
 
     // inline void fillBpQueryKey(BpQueryKeyPtr query_key, Protos::BpQueryKey & pb_bqk)

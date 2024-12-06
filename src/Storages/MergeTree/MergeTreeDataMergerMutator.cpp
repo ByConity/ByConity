@@ -103,7 +103,7 @@ static const double DISK_USAGE_COEFFICIENT_TO_SELECT = 2;
 ///  because between selecting parts to merge and doing merge, amount of free space could have decreased.
 static const double DISK_USAGE_COEFFICIENT_TO_RESERVE = 1.1;
 
-static MergeTreeData::DataPartsVector toDataPartsVector(const IMergeSelector::PartsRange & parts)
+static MergeTreeData::DataPartsVector toDataPartsVector(const IMergeSelector<IMergeTreeDataPart>::PartsRange & parts)
 {
     MergeTreeData::DataPartsVector res;
     res.reserve(parts.size());
@@ -270,7 +270,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
 
     time_t current_time = std::time(nullptr);
 
-    IMergeSelector::PartsRanges parts_ranges;
+    IMergeSelector<IMergeTreeDataPart>::PartsRanges parts_ranges;
 
     StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
@@ -335,7 +335,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
             }
         }
 
-        IMergeSelector::Part part_info;
+        IMergeSelector<IMergeTreeDataPart>::Part part_info;
         part_info.size = part->getBytesOnDisk();
         part_info.rows = part->rows_count;
         part_info.age = current_time - part->modification_time;
@@ -366,7 +366,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
         return SelectPartsDecision::CANNOT_SELECT;
     }
 
-    IMergeSelector::PartsRange parts_to_merge;
+    IMergeSelector<IMergeTreeDataPart>::PartsRange parts_to_merge;
 
     if (metadata_snapshot->hasAnyTTL() && merge_with_ttl_allowed && !ttl_merges_blocker.isCancelled())
     {
@@ -422,7 +422,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
 
     MergeTreeData::DataPartsVector parts;
     parts.reserve(parts_to_merge.size());
-    for (IMergeSelector::Part & part_info : parts_to_merge)
+    for (IMergeSelector<IMergeTreeDataPart>::Part & part_info : parts_to_merge)
     {
         const MergeTreeData::DataPartPtr & part = *static_cast<const MergeTreeData::DataPartPtr *>(part_info.data);
         parts.push_back(part);
@@ -458,7 +458,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
 
     time_t current_time = std::time(nullptr);
 
-    IMergeSelector::PartsRanges parts_ranges;
+    IMergeSelector<IMergeTreeDataPart>::PartsRanges parts_ranges;
 
     StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
@@ -523,7 +523,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
             }
         }
 
-        IMergeSelector::Part part_info;
+        IMergeSelector<IMergeTreeDataPart>::Part part_info;
         part_info.size = part->getBytesOnDisk();
         part_info.rows = part->rows_count;
         part_info.age = current_time - part->modification_time;
@@ -556,7 +556,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
 
     if (metadata_snapshot->hasAnyTTL() && merge_with_ttl_allowed && !ttl_merges_blocker.isCancelled())
     {
-        IMergeSelector::PartsRange parts_to_merge;
+        IMergeSelector<IMergeTreeDataPart>::PartsRange parts_to_merge;
 
         /// TTL delete is preferred to recompression
         TTLDeleteMergeSelector delete_ttl_selector(
@@ -592,30 +592,33 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         return SelectPartsDecision::SELECTED;
     }
 
-    std::unique_ptr<IMergeSelector> merge_selector;
+    std::unique_ptr<IMergeSelector<IMergeTreeDataPart>> merge_selector;
     auto & config = data.getContext()->getConfigRef();
     auto merge_selector_str = config.getString("merge_selector", "simple");
-    if (merge_selector_str == "dance")
-    {
-        DanceMergeSelector::Settings merge_settings;
-        merge_settings.loadFromConfig(config);
-        /// Override value from table settings
-        /// For CNCH compatibility, we use cnch_merge_max_parts_to_merge and max_parts_to_merge_at_once.
-        merge_settings.max_parts_to_merge_base = std::min(data_settings->cnch_merge_max_parts_to_merge, data_settings->max_parts_to_merge_at_once);
-        merge_settings.enable_batch_select = enable_batch_select;
-        if (aggressive)
-            merge_settings.min_parts_to_merge_base = 1;
 
-        /// make sure rowid could be represented in 4 bytes
-        if (metadata_snapshot->hasUniqueKey())
-        {
-            auto & max_rows = merge_settings.max_total_rows_to_merge;
-            if (!(0 < max_rows && max_rows <= std::numeric_limits<UInt32>::max()))
-                max_rows = std::numeric_limits<UInt32>::max();
-        }
-        merge_selector = std::make_unique<DanceMergeSelector>(merge_settings);
-    }
-    else
+    /// Disable dance merge selector for local merge tree tables. In CNCH, DanceMergeSelector can only used with ServerDataPart, so we simply disable it
+    /// for local merge tree tables which will select merge tasks with IMergeTreeDataPart.
+    // if (merge_selector_str == "dance")
+    // {
+    //     DanceMergeSelector::Settings merge_settings;
+    //     merge_settings.loadFromConfig(config);
+    //     /// Override value from table settings
+    //     /// For CNCH compatibility, we use cnch_merge_max_parts_to_merge and max_parts_to_merge_at_once.
+    //     merge_settings.max_parts_to_merge_base = std::min(data_settings->cnch_merge_max_parts_to_merge, data_settings->max_parts_to_merge_at_once);
+    //     merge_settings.enable_batch_select = enable_batch_select;
+    //     if (aggressive)
+    //         merge_settings.min_parts_to_merge_base = 1;
+
+    //     /// make sure rowid could be represented in 4 bytes
+    //     if (metadata_snapshot->hasUniqueKey())
+    //     {
+    //         auto & max_rows = merge_settings.max_total_rows_to_merge;
+    //         if (!(0 < max_rows && max_rows <= std::numeric_limits<UInt32>::max()))
+    //             max_rows = std::numeric_limits<UInt32>::max();
+    //     }
+    //     merge_selector = std::make_unique<DanceMergeSelector>(merge_settings);
+    // }
+    // else
     {
         SimpleMergeSelector::Settings merge_settings;
         /// Override value from table settings

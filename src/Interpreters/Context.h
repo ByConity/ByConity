@@ -277,9 +277,10 @@ class DeleteBitmapCache;
 class PartCacheManager;
 class IServiceDiscovery;
 using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
-class CnchTopologyMaster;
 class CnchServerTopology;
-class CnchServerManager;
+class CnchServerLeader;
+class CnchTopologyManager;
+class CnchTopologyMaster;
 struct RootConfiguration;
 class TxnTimestamp;
 class TransactionCoordinatorRcCnch;
@@ -825,7 +826,7 @@ public:
     void checkAccess(const AccessRightsElements & elements) const;
 
 
-    bool isGranted(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const; 
+    bool isGranted(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
     bool isGranted(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const;
 
     void grantAllAccess();
@@ -1618,9 +1619,9 @@ public:
     void initDaemonManagerClientPool(const String & service_name);
     DaemonManagerClientPtr getDaemonManagerClient() const;
 
-    void setCnchServerManager(const Poco::Util::AbstractConfiguration & config);
-    std::shared_ptr<CnchServerManager> getCnchServerManager() const;
-    void updateServerVirtualWarehouses(const ConfigurationPtr & config);
+    void setCnchServerLeader(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<CnchServerLeader> getCnchServerLeader() const;
+    void updateCnchTopologyManager(const Poco::Util::AbstractConfiguration & config);
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
 
@@ -1806,7 +1807,7 @@ private:
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;
-    
+
     template <typename... Args>
     bool isGrantedImpl(const Args &... args) const;
 

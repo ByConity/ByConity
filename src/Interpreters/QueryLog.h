@@ -106,6 +106,7 @@ struct QueryLogElement
     String worker_group;
     String query_plan;
     UInt64 normalized_query_plan_hash{};
+    UInt64 txn_id{};
 
     static std::string name() { return "QueryLog"; }
 

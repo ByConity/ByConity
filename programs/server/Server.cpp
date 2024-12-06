@@ -1141,7 +1141,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
 
-            global_context->updateServerVirtualWarehouses(config);
+            global_context->updateCnchTopologyManager(*config);
 
             /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
             if (config->has("max_table_size_to_drop"))
@@ -1371,6 +1371,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
+
+    // pre lookup and cache consult result to avoid the overhead of lookupNNProxy
+    if (!hdfs_nnproxy.empty() && hdfs_params.conn_type == HDFSConnectionParams::CONN_NNPROXY)
+        lookupNNProxy(hdfs_nnproxy);
+    
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
     global_context->setVETosConnectParams(vetos_params);
@@ -1524,8 +1529,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_WARNING(log, "Disable cnch part cache, which is strongly suggested for product use, since disable it may bring significant performace issue.");
         }
 
-        /// only server need start up server manager
-        global_context->setCnchServerManager(config());
+        /// only server need start up server leader
+        global_context->setCnchServerLeader(config());
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);

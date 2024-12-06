@@ -24,6 +24,7 @@
 #include "Aliases.h"
 #include "Internals.h"
 #include "ClusterPartition.h"
+#include "TaskCluster.h"
 
 #include <Core/Defines.h>
 
@@ -381,7 +382,7 @@ template<typename RandomEngine>
 inline void TaskTable::initShards(RandomEngine && random_engine)
 {
     const String & fqdn_name = getFQDNOrHostName();
-    std::uniform_int_distribution<UInt8> get_urand(0, std::numeric_limits<UInt8>::max());
+    std::uniform_int_distribution<uint8_t> get_urand(0, std::numeric_limits<uint8_t>::max());
 
     // Compute the priority
     for (const auto & shard_info : cluster_pull->getShardsInfo())

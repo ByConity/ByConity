@@ -724,12 +724,14 @@ private:
     static constexpr auto MAX_CONCURRENT_DEFAULT_QUERIES_KEY = "max_concurrent_default_queries";
     static constexpr auto MAX_CONCURRENT_INSERT_QUERIES_KEY = "max_concurrent_insert_queries";
     static constexpr auto MAX_CONCURRENT_SYSTEM_QUERIES_KEY = "max_concurrent_system_queries";
+    static constexpr auto LOGGER_LEVEL_KEY = "logger_level";
 
     const std::unordered_map<String, String> config_namedoc_map =
     {
         {MAX_CONCURRENT_DEFAULT_QUERIES_KEY, "Total number of maximum concurrent queries of Default type allowed"},
         {MAX_CONCURRENT_INSERT_QUERIES_KEY, "Total number of maximum concurrent queries of Insert type allowed"},
         {MAX_CONCURRENT_SYSTEM_QUERIES_KEY, "Total number of maximum concurrent queries of System type allowed"},
+        {LOGGER_LEVEL_KEY, "Logger level"},
         {BUILD_INFO_KEY, "Build info"},
     };
 

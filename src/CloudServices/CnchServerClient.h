@@ -179,7 +179,7 @@ public:
      */
     void cleanUndoBuffers(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
-    bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
+    bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &, UInt64 timeout_ms = 0);
 
     void acquireLock(const LockInfoPtr & info);
     void releaseLock(const LockInfoPtr & info);

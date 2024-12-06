@@ -159,12 +159,12 @@ private:
 
 #ifdef USE_EMBEDDED_COMPILER
 protected:
-    bool isCompilableImpl(const DataTypes & types) const override
+    bool isCompilableImpl(const DataTypes & types) const
     {
         return Impl::isCompilable(types);
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & b, const DataTypes & types, Values values, JITContext & ) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & b, const DataTypes & types, Values values, JITContext & ) const
     {
         WhichDataType which_data_type(types[0]);
         if (which_data_type.isString())

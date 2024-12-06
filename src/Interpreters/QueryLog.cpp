@@ -147,7 +147,8 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"virtual_warehouse", std::make_shared<DataTypeString>()},
         {"worker_group", std::make_shared<DataTypeString>()},
         {"query_plan", std::make_shared<DataTypeString>()},
-        {"normalized_query_plan_hash", std::make_shared<DataTypeUInt64>()}};
+        {"normalized_query_plan_hash", std::make_shared<DataTypeUInt64>()},
+        {"txn_id", std::make_shared<DataTypeUInt64>()}};
 }
 
 NamesAndAliases QueryLogElement::getNamesAndAliases()
@@ -350,6 +351,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(worker_group);
     columns[i++]->insert(query_plan);
     columns[i++]->insert(normalized_query_plan_hash);
+    columns[i++]->insert(txn_id);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

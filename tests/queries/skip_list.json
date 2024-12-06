@@ -653,11 +653,15 @@
         /// ---- Need to forward `SYSTEM GC` to host server.
         "10202_part_gc",
         "10200_table_snapshots",
-        "50010_parts_info",
-        "50011_parts_info_for_unique_table",
         /// Need flush system logs on host server
         "02981_vertical_merges_memory_usage",
         "02981_vertical_merges_lc_memory_usage",
+        /// Parts info related.
+        "50010_parts_info",
+        "50011_parts_info_for_unique_table",
+        "50011_parts_info_last_modification_time",
+        "50013_parts_info_with_drop_table",
+        "50014_parts_info_with_dropped_parts",
         /// Code: 57 -- Table xxx already exists.
         "40023_mv_with_topn_filtering",
         /// Code: 36 -- Dictionary xxx not found
@@ -682,6 +686,7 @@
     ],
 
     "cloudfs": [
-        "50001_test_query_cache_with_non_transactional_optimizer"
+        "50001_test_query_cache_with_non_transactional_optimizer",
+        "50001_test_query_cache_non_transactional"
     ]
 }

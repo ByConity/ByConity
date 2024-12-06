@@ -19,7 +19,7 @@ namespace DB
  * BOOL means only return 1/0 if a row is in bitmap or not
  * SINGLE means return the first value if there is a set of element in one row hit the bitmap
  * MULTIPLE means return all the value that hit the bitmap in one row
- * e.g. 
+ * e.g.
  * arraySetCheck return bool
  * arraySetGetAny return single
  * arraySetGet return multiple
@@ -40,7 +40,7 @@ const char * typeToString(BitmapIndexReturnType t);
 
 class BitmapIndexInfo : public MergeTreeIndexInfo
 {
-public: 
+public:
     // key: function result column name
     // value: set ptr
     std::map<String, std::vector<SetPtr>> set_args;
@@ -66,7 +66,7 @@ public:
     std::pair<NameSet,NameSet> getIndexColumns(const IMergeTreeDataPartPtr & data_part) override;
 
     void initIndexes(const Names & columns) override;
-    
+
     String toString() const override;
 
     String dump() const;
@@ -106,11 +106,11 @@ public:
             const IMergeTreeDataPartPtr & part,
             const BitmapIndexInfoPtr & bitmap_index_info,
             const MergeTreeIndexGranularity & index_granularity,
-            const size_t & segment_granularity, 
-            const size_t & serializing_granularity, 
+            const size_t & segment_granularity,
+            const size_t & serializing_granularity,
             const MarkRanges & mark_ranges
         );
-        
+
     static std::unique_ptr<MergeTreeBitmapIndexReader> getBitmapIndexReader
         (
             const IMergeTreeDataPartPtr & part,

@@ -105,8 +105,9 @@ namespace DB
 {
 
 class MergeScheduler;
+class IMergeTreeDataPart;
 
-class SimpleMergeSelector final : public IMergeSelector
+class SimpleMergeSelector final : public IMergeSelector<IMergeTreeDataPart>
 {
 public:
     struct Settings

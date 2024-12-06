@@ -29,6 +29,7 @@ namespace DB
 NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
 {
     return {
+        {"txn_id", std::make_shared<DataTypeUInt64>()},
         {"initial_query_id", std::make_shared<DataTypeString>()},
         {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
@@ -87,6 +88,7 @@ NamesAndAliases QueryExchangeLogElement::getNamesAndAliases()
 void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
 {
     size_t i = 0;
+    columns[i++]->insert(txn_id);
     columns[i++]->insert(initial_query_id);
     columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);

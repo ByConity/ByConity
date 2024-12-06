@@ -15,17 +15,16 @@
 
 #pragma once
 
+#include <memory>
 #include <Interpreters/Context_fwd.h>
+#include <MergeTreeCommon/CnchTopologyManager.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/ResourceScheduler.h>
+#include <boost/noncopyable.hpp>
+#include <bthread/mutex.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Logger.h>
-
-#include <memory>
-
-#include <boost/noncopyable.hpp>
-#include <bthread/mutex.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -69,6 +68,7 @@ public:
     auto & getVirtualWarehouseManager() { return *vw_manager; }
     auto & getWorkerGroupManager() { return *group_manager; }
     auto & getElectionController() { return *election_controller; }
+    auto getTopologyManager() -> CnchTopologyManager & { return *topology_manager; }
 
     void registerWorkerNode(const WorkerNodeResourceData & data); // RPC
     void removeWorkerNode(const std::string & worker_id, const std::string & vw_name, const std::string & group_id);
@@ -94,6 +94,7 @@ private:
     std::unique_ptr<VirtualWarehouseManager> vw_manager;
     std::unique_ptr<WorkerGroupManager> group_manager;
     std::unique_ptr<ElectionController> election_controller;
+    std::unique_ptr<CnchTopologyManager> topology_manager;
 };
 
 }

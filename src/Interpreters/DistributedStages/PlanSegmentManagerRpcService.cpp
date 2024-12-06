@@ -24,9 +24,11 @@
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/PlanSegmentReport.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/NamedSession.h>
 #include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
+#include <Protos/RPCHelpers.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/controller.h>
@@ -630,6 +632,9 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                 execution_info.sources[source.exchange_id].emplace_back(std::move(source));
             }
         }
+
+        for (const auto & iter : request->source_task_stats())
+            execution_info.source_task_stats.emplace(RPCHelpers::createUUID(iter.storage_id().uuid()), SourceTaskStat::fromProto(iter));
 
         butil::IOBuf plan_segment_buf;
         auto plan_segment_buf_size = cntl->request_attachment().cutn(&plan_segment_buf, request->plan_segment_buf_size());

@@ -3,7 +3,7 @@ macro(configure_rustc)
     # NOTE: this can also be done by overriding rustc, but it not trivial with rustup.
     set(RUST_CFLAGS "${CMAKE_C_FLAGS} -Wno-reserved-id-macro")
 
-    set(CXX_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libcxx/include")
+    set(CXX_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/llvm-project/libcxx/include")
     set(RUST_CXXFLAGS "${CMAKE_CXX_FLAGS} -Wno-reserved-id-macro -Wno-comma -Wno-shadow-field-in-constructor -isystem ${CXX_INCLUDE_DIR} -nostdinc++")
 
     if (CMAKE_OSX_SYSROOT)

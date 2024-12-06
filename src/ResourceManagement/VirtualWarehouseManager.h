@@ -58,7 +58,7 @@ private:
         return vw_mgr_mutex;
     }
 
-    auto getLock() const
+    auto getLock() const TSA_NO_THREAD_SAFETY_ANALYSIS
     {
         return std::lock_guard<bthread::Mutex>(vw_mgr_mutex);
     }

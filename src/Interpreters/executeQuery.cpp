@@ -635,6 +635,7 @@ static void onExceptionBeforeStart(
     bool throw_root_cause = needThrowRootCauseError(context.get(), elem.exception_code, elem.exception);
 
     elem.client_info = context->getClientInfo();
+    elem.txn_id = context->getCurrentTransactionID();
     elem.partition_ids = context->getPartitionIds();
 
     elem.log_comment = settings.log_comment;
@@ -1542,6 +1543,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             elem.client_info = client_info;
             elem.partition_ids = context->getPartitionIds();
+            if (txn)
+                elem.txn_id = context->getCurrentTransactionID();
 
 
             if (auto worker_group = context->tryGetCurrentWorkerGroup())

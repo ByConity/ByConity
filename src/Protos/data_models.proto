@@ -371,6 +371,9 @@ message DataModelTopology {
   repeated DataModelVwTopology vw_topologies = 3;
   optional uint64 initialtime = 4;
   optional uint64 term = 5;
+  optional string leader_info = 6;
+  /// Reason why there is a new Topology.
+  optional string reason = 7;
 }
 
 message DataModelTopologyVersions { repeated DataModelTopology topologies = 1; }
@@ -777,6 +780,8 @@ message PartitionPartsMetricsSnapshot {
   required uint64 last_update_time = 8;
   required uint64 last_snapshot_time = 9;
   optional uint64 last_modification_time = 10;
+  optional int64 dropped_parts_size = 11;
+  optional int64 dropped_parts_number = 12;
 }
 
 // Key: <prefix><table_uuid>

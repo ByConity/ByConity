@@ -53,14 +53,23 @@ void DanceMergeSelectorSettings::loadFromConfig(const Poco::Util::AbstractConfig
     }
 }
 
-static void reorderPartsRange(IMergeSelector::PartsRange & parts)
+static void reorderPartsRange(DanceMergeSelector::PartsRange & parts, UInt64 max_parts_to_sort)
 {
-    /// Sort parts by size/rows/age to select smaller merge tasks
-    std::sort(parts.begin(), parts.end(), [](const IMergeSelector::Part & lhs, const IMergeSelector::Part & rhs)
-    {
-        time_t max_age = std::numeric_limits<time_t>::max();
+    DanceMergeSelector::PartsRange::iterator sort_end = parts.end();
+
+    auto cmp = [](const DanceMergeSelector::Part & lhs, const DanceMergeSelector::Part & rhs) {
+        constexpr time_t max_age = std::numeric_limits<time_t>::max();
         return std::make_tuple(lhs.size, lhs.rows, max_age - lhs.age) < std::make_tuple(rhs.size, rhs.rows, max_age - rhs.age);
-    });
+    };
+
+    if (parts.size() > max_parts_to_sort * 2)
+    {
+        sort_end = parts.begin() + max_parts_to_sort;
+        std::nth_element(parts.begin(), sort_end, parts.end(), cmp);
+    }
+
+    /// Sort parts by size/rows/age to select smaller merge tasks
+    std::sort(parts.begin(), sort_end, cmp);
 }
 
 static double score(double count, double sum_size, double sum_size_fixed_cost, double count_exp)
@@ -73,7 +82,7 @@ static double mapPiecewiseLinearToUnit(double value, double min, double max)
     return value <= min ? 0 : (value >= max ? 1 : ((value - min) / (max - min)));
 }
 
-IMergeSelector::PartsRange DanceMergeSelector::select(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+DanceMergeSelector::PartsRange DanceMergeSelector::select(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     if (settings.enable_batch_select)
     {
@@ -87,14 +96,15 @@ IMergeSelector::PartsRange DanceMergeSelector::select(PartsRanges & partitions, 
         {
             num_parts_of_partitions[getPartitionID(partition.front())] += partition.size();
             if (settings.select_nonadjacent_parts_allowed)
-                reorderPartsRange(partition);
+                reorderPartsRange(partition, settings.max_parts_to_break.value + settings.max_parts_to_merge_base.value);
         }
     }
 
+    std::unordered_map<String, std::pair<UInt64, UInt64> > allowed_parts_rows;
     for (const auto & partition : partitions)
     {
         if (partition.size() >= 2)
-            selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+            selectWithinPartition(partition, max_total_size_to_merge, allowed_parts_rows, merge_scheduler);
     }
 
     /// Because of using iterator in best_ranges, should not modify part ranges vector after selectWithPartition.
@@ -114,7 +124,7 @@ IMergeSelector::PartsRange DanceMergeSelector::select(PartsRanges & partitions, 
     return {};
 }
 
-IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+DanceMergeSelector::PartsRanges DanceMergeSelector::selectMulti(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     for (auto & partition : partitions)
     {
@@ -122,13 +132,14 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(PartsRanges & partit
         {
             num_parts_of_partitions[getPartitionID(partition.front())] += partition.size();
             if (settings.select_nonadjacent_parts_allowed)
-                reorderPartsRange(partition);
+                reorderPartsRange(partition, settings.max_parts_to_break.value + settings.max_parts_to_merge_base.value);
         }
     }
 
+    std::unordered_map<String, std::pair<UInt64, UInt64> > allowed_parts_rows;
     for (const auto & partition : partitions)
     {
-        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+        selectWithinPartition(partition, max_total_size_to_merge, allowed_parts_rows, merge_scheduler);
     }
 
     /// Because of using iterator in best_ranges, should not modify part ranges vector after selectWithPartition.
@@ -177,7 +188,8 @@ void DanceMergeSelector::selectRangesFromScoreTable(
     size_t j,
     size_t num_max_out,
     size_t max_width,
-    std::vector<BestRangeWithScore> & out)
+    std::vector<BestRangeWithScore> & out,
+    size_t & allowed_parts)
 {
     if (i >= j || out.size() >= num_max_out)
         return;
@@ -207,13 +219,21 @@ void DanceMergeSelector::selectRangesFromScoreTable(
 
     BestRangeWithScore range{};
     range.update(min_score, parts.begin() + min_i, parts.begin() + min_j + 1);
+
+    size_t parts_in_range = std::distance(range.best_begin, range.best_end);
+    /// Already selected enough parts in current batch according to expected_parts_number. After merge, will generate a
+    /// new part and remove ${parts_in_range} parts.
+    if (parts_in_range > allowed_parts + 1)
+        return;
+
     out.push_back(range);
+    allowed_parts = allowed_parts + 1 - parts_in_range;
 
     if (min_i > i + 1)
-        selectRangesFromScoreTable(parts, score_table, i, min_i - 1, num_max_out, max_width, out);
+        selectRangesFromScoreTable(parts, score_table, i, min_i - 1, num_max_out, max_width, out, allowed_parts);
 
     if (min_j < j - 1)
-        selectRangesFromScoreTable(parts, score_table, min_j + 1, j, num_max_out, max_width, out);
+        selectRangesFromScoreTable(parts, score_table, min_j + 1, j, num_max_out, max_width, out, allowed_parts);
 }
 
 /// Like std::min, but treat 0 as infinity
@@ -222,7 +242,12 @@ static size_t minValueWithoutZero(size_t a, size_t b)
     return a == 0 ? b : (b == 0 ? a : std::min(a, b));
 }
 
-void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, [[maybe_unused]] MergeScheduler * merge_scheduler)
+void DanceMergeSelector::selectWithinPartition(
+    const PartsRange & parts,
+    const size_t max_total_size_to_merge,
+    /// partition_id -> {allowed_parts_in_all_ranges, allowed_rows_in_single_range}
+    std::unordered_map<String, std::pair<UInt64, UInt64> > & allowed_parts_rows,
+    [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
     if (parts.empty())
         return;
@@ -246,10 +271,18 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
     bool enable_batch_select = enable_batch_select_for_partition(partition_id);
 
     double base = getModifiedBaseByController(partition_id);
-    const auto & [max_parts_, max_rows_] =
-        controller ? controller->getMaxPartsAndRows(partition_id) : std::make_pair(settings.max_parts_to_merge_base, 0);
-    size_t max_parts_to_merge = std::min(max_parts_, settings.max_parts_to_merge_base.value);
-    size_t max_rows_to_merge = minValueWithoutZero(max_rows_, settings.max_total_rows_to_merge);
+
+    auto [it, emplaced] = allowed_parts_rows.try_emplace(partition_id, std::numeric_limits<size_t>::max() - 1, 0);
+    if (controller && emplaced)
+        it->second = controller->getMaxPartsAndRows(partition_id);
+
+    /// If batch select is enabled, allowed_parts_in_all_ranges will limit source parts number in all part ranges of
+    /// current partition. For example, we have expected_parts_number = 10, and there is 11 parts in current partition,
+    /// but splited into 2 ranges by columns_commit_time, we can only select 1 task with 2 parts within these 2 ranges
+    /// to keep parts number not less than expected_parts_number.
+    size_t & allowed_parts_in_all_ranges = it->second.first;
+    size_t max_parts_to_merge = std::min(it->second.first + 1, settings.max_parts_to_merge_base.value);
+    size_t max_rows_to_merge = minValueWithoutZero(it->second.second, settings.max_total_rows_to_merge.value);
 
     /// score_table[i][j] means begin with i and length is j --> range [i, i + j - 1]
     std::vector<std::vector<double>> score_table;
@@ -372,10 +405,10 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
         size_t begin = best_range.best_begin - parts.begin();
         size_t end = best_range.best_end - parts.begin() - 1;
         if (begin > 1)
-            selectRangesFromScoreTable(parts, score_table, 0, begin - 1, num_expected_ranges, max_parts_to_merge, res_ranges);
+            selectRangesFromScoreTable(parts, score_table, 0, begin - 1, num_expected_ranges, max_parts_to_merge, res_ranges, allowed_parts_in_all_ranges);
 
         if (end + 2 < max_end)
-            selectRangesFromScoreTable(parts, score_table, end + 1, max_end - 1, num_expected_ranges, max_parts_to_merge, res_ranges);
+            selectRangesFromScoreTable(parts, score_table, end + 1, max_end - 1, num_expected_ranges, max_parts_to_merge, res_ranges, allowed_parts_in_all_ranges);
     }
 
     for (const auto & range : res_ranges)
@@ -435,16 +468,9 @@ bool DanceMergeSelector::allow(double base, double sum_size, double max_size, do
     return (sum_size + range_size * settings.size_fixed_cost_to_add) / (max_size + settings.size_fixed_cost_to_add) >= lowered_base;
 }
 
-String DanceMergeSelector::getPartitionID(const Part & part)
-{
-    if (get_partition_id)
-        return get_partition_id(part);
-    return part.getDataPartPtr()->info.partition_id;
-}
-
 double DanceMergeSelector::getModifiedBaseByController(const String & partition_id)
 {
-    if (controller && controller->needControlWriteAmplification(partition_id))
+    if (controller && controller->needOptimizeWriteAmplification(partition_id))
     {
         double base = settings.min_parts_to_merge_base;
         const auto & [wa, wa_min, wa_max] = controller->getWriteAmplification(partition_id);

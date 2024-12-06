@@ -16,7 +16,6 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Catalog/Catalog.h>
 #include <common/logger_useful.h>
-#include <Common/ConsistentHashUtils/Hash.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Interpreters/Context.h>
 #include <Storages/PartCacheManager.h>
@@ -179,7 +178,7 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
             if (it != current_topology.end())
             {
                 HostWithPorts server_in_new_topology = it->getTargetServer(table_uuid, server_vw_name);
-                if (server_in_new_topology.isExactlySame(server_in_old_topology))
+                if (server_in_new_topology.isSameEndpoint(server_in_old_topology))
                 {
                     target_server = server_in_new_topology;
                     target_server.topology_version = PairInt64(it->getInitialTime(), it->getTerm());

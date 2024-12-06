@@ -43,10 +43,6 @@ std::string HostWithPorts::toDebugString() const
         wb << " rpc/" << rpc_port;
     if (tcp_port != 0)
         wb << " tcp/" << tcp_port;
-    if (exchange_port != 0)
-        wb << " exc/" << exchange_port;
-    if (exchange_status_port != 0)
-        wb << " exs/" << exchange_status_port;
     if (real_id)
         wb << " real_id/" << *real_id;
     wb << '}';
@@ -120,6 +116,11 @@ std::string truncateNetworkInterfaceIfHas(const std::string & s)
         return truncated;
     }
     return s;
+}
+
+bool HostWithPorts::lessThan(const HostWithPorts & rhs) const
+{
+    return std::tie(id, host, rpc_port, tcp_port, http_port) < std::tie(rhs.id, rhs.host, rhs.rpc_port, rhs.tcp_port, rhs.http_port);
 }
 
 }

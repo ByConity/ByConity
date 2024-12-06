@@ -25,7 +25,6 @@
 #include <ctime>
 #include <vector>
 #include <functional>
-#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartTTLInfo.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -48,6 +47,7 @@ class MergeScheduler;
   *
   * Number of parallel merges are controlled outside of scope of this interface.
   */
+template<class DataPartType>
 class IMergeSelector
 {
 public:
@@ -81,9 +81,9 @@ public:
         /// The depth of the part chain. Convert the part chain to a new base part when the chain is long.
         size_t chain_depth = 0;
 
-        const MergeTreeDataPartPtr & getDataPartPtr() const
+        const DataPartType * getDataPartPtr() const
         {
-            return *static_cast<const MergeTreeDataPartPtr *>(data);
+            return static_cast<const DataPartType *>(data);
         }
     };
 

@@ -241,7 +241,7 @@ public:
     }
 
 private:
-    auto getLock() const
+    auto getLock() const TSA_NO_THREAD_SAFETY_ANALYSIS
     {
         return std::lock_guard(mutex);
     }
@@ -256,8 +256,8 @@ private:
         std::lock_guard<std::mutex> &,
         std::optional<ResourceOption> resource_option = std::nullopt);
 
-    void
-    initSourceTaskPayload(const ContextPtr & context, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources);
+    void initSourceTaskPayload(
+        const ContextPtr & context, StoragePtr storage, const HostWithPorts & host_with_ports, ServerDataPartsVector & visible_parts);
 
     void sendCreateQueries(const ContextPtr & context);
     void sendDataParts(const ContextPtr & context);

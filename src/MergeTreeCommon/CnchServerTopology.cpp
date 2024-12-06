@@ -49,7 +49,7 @@ String CnchServerVwTopology::format() const
     {
         if (i>0)
             ss << ", ";
-        ss << servers[i].getHost();
+        ss << servers[i].toDebugString();
     }
     ss << "]}";
 
@@ -137,6 +137,10 @@ String CnchServerTopology::format() const
     ss << "{term: " << term;
     ss << ", initial: " << lease_initialtime;
     ss << ", expiration: " << lease_expiration;
+    if (!leader_info.empty())
+        ss << ", leader: " << leader_info;
+    if (!reason.empty())
+        ss << ", reason: " << reason;
     ss << ", [";
     for (auto it = vw_topologies.begin(); it != vw_topologies.end(); ++it)
     {
@@ -164,6 +168,29 @@ String dumpTopologies(const std::list<CnchServerTopology> & topologies)
     return ss.str();
 }
 
+String dumpTopologies(const std::pair<std::map<String, CnchServerVwTopology>, std::map<String, CnchServerVwTopology>> & topology_diff) {
+    auto left_topo = topology_diff.first;
+    auto right_topo = topology_diff.second;
+    std::stringstream ss;
+    ss << "{";
+    for (auto it = left_topo.begin(); it != left_topo.end(); ++it)
+    {
+        if (it != left_topo.begin())
+            ss << ", ";
+        ss << it->second.format();
+    }
+    ss << "} -> {";
+    for (auto it = right_topo.begin(); it != right_topo.end(); ++it)
+    {
+        if (it != right_topo.begin())
+            ss << ", ";
+        ss << it->second.format();
+    }
+
+    ss << "}";
+    return ss.str();
+}
+
 bool CnchServerTopology::isSameTopologyWith(const CnchServerTopology & other_topology) const
 {
     if (vw_topologies.size() != other_topology.vw_topologies.size())
@@ -182,4 +209,37 @@ bool CnchServerTopology::isSameTopologyWith(const CnchServerTopology & other_top
     return true;
 }
 
+bool CnchServerVwTopology::operator<(const CnchServerVwTopology & other) const
+{
+    if (server_vw_name != other.server_vw_name)
+    {
+        return server_vw_name < other.server_vw_name;
+    }
+    /// Use "server-specific" `HostWithPorts` comparision logic.
+    return std::lexicographical_compare(
+        servers.begin(), servers.end(), other.servers.begin(), other.servers.end(), [](const auto & a, const auto & b) {
+            return a.lessThan(b);
+        });
+}
+std::pair<std::map<String, CnchServerVwTopology>, std::map<String, CnchServerVwTopology>>
+CnchServerTopology::diffWith(const CnchServerTopology & other_topology) const
+{
+    std::map<String, CnchServerVwTopology> not_in_right;
+    std::set_difference(
+        vw_topologies.begin(),
+        vw_topologies.end(),
+        other_topology.vw_topologies.begin(),
+        other_topology.vw_topologies.end(),
+        std::inserter(not_in_right, not_in_right.begin()));
+
+    std::map<String, CnchServerVwTopology> not_in_left;
+    std::set_difference(
+        other_topology.vw_topologies.begin(),
+        other_topology.vw_topologies.end(),
+        vw_topologies.begin(),
+        vw_topologies.end(),
+        std::inserter(not_in_left, not_in_left.begin()));
+
+    return {not_in_right, not_in_left};
+}
 }

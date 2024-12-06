@@ -1,0 +1,16 @@
+Alter table should not cover the base part.
+1
+1
+Rows count should be accurate after recalculating metrics.
+1
+Alter table should not cover the base part.
+1
+1
+1
+Rows count should be accurate after recalculating metrics.
+1
+Truncate table and dropped part.
+1
+1
+0	0	0
+1

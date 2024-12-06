@@ -1,4 +1,4 @@
-set(LIBCXXABI_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libcxxabi")
+set(LIBCXXABI_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/llvm-project/libcxxabi")
 
 set(SRCS
 "${LIBCXXABI_SOURCE_DIR}/src/stdlib_stdexcept.cpp"
@@ -22,6 +22,7 @@ set(SRCS
 )
 
 add_library(cxxabi ${SRCS})
+set_target_properties(cxxabi PROPERTIES FOLDER "contrib/libcxxabi-cmake")
 
 # Third party library may have substandard code.
 target_compile_options(cxxabi PRIVATE -w)
@@ -29,6 +30,7 @@ target_compile_options(cxxabi PRIVATE -w)
 target_include_directories(cxxabi SYSTEM BEFORE
     PUBLIC $<BUILD_INTERFACE:${LIBCXXABI_SOURCE_DIR}/include>
     PRIVATE $<BUILD_INTERFACE:${LIBCXXABI_SOURCE_DIR}/../libcxx/include>
+    PRIVATE $<BUILD_INTERFACE:${LIBCXXABI_SOURCE_DIR}/../libcxx/src>
 )
 target_compile_definitions(cxxabi PRIVATE -D_LIBCPP_BUILDING_LIBRARY)
 target_compile_options(cxxabi PRIVATE -nostdinc++ -fno-sanitize=undefined -Wno-macro-redefined) # If we don't disable UBSan, infinite recursion happens in dynamic_cast.

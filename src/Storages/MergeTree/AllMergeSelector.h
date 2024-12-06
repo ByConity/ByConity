@@ -27,8 +27,10 @@
 namespace DB
 {
 
+class IMergeTreeDataPart;
+
 /// Select all parts within partition (having at least two parts) with minimum total size.
-class AllMergeSelector : public IMergeSelector
+class AllMergeSelector : public IMergeSelector<IMergeTreeDataPart>
 {
 public:
     /// Parameter max_total_size_to_merge is ignored.

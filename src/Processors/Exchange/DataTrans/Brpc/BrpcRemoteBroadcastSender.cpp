@@ -75,6 +75,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
         if (enable_sender_metrics)
         {
             QueryExchangeLogElement element;
+            element.txn_id = context->getCurrentTransactionID();
             const auto & key = trans_keys.front();
             element.initial_query_id = context->getInitialQueryId();
             element.exchange_id = key->exchange_id;

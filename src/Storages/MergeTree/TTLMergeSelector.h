@@ -32,6 +32,7 @@ namespace DB
 {
 
 class MergeScheduler;
+class IMergeTreeDataPart;
 
 /** Merge selector, which is used to remove values with expired ttl.
   * It selects parts to merge by greedy algorithm:
@@ -39,7 +40,7 @@ class MergeScheduler;
   *  2. Tries to find the longest range of parts with expired ttl, that includes part from step 1.
   * Finally, merge selector updates TTL merge timer for the selected partition
   */
-class ITTLMergeSelector : public IMergeSelector
+class ITTLMergeSelector : public IMergeSelector<IMergeTreeDataPart>
 {
 public:
     using PartitionIdToTTLs = std::map<String, time_t>;
@@ -58,11 +59,11 @@ public:
 
     /// Get TTL value for part, may depend on child type and some settings in
     /// constructor.
-    virtual time_t getTTLForPart(const IMergeSelector::Part & part) const = 0;
+    virtual time_t getTTLForPart(const IMergeSelector<IMergeTreeDataPart>::Part & part) const = 0;
 
     /// Sometimes we can check that TTL already satisfied using information
     /// stored in part and don't assign merge for such part.
-    virtual bool isTTLAlreadySatisfied(const IMergeSelector::Part & part) const = 0;
+    virtual bool isTTLAlreadySatisfied(const IMergeSelector<IMergeTreeDataPart>::Part & part) const = 0;
 
 protected:
     time_t current_time;
@@ -84,11 +85,11 @@ public:
         : ITTLMergeSelector(merge_due_times_, current_time_, merge_cooldown_time_)
         , only_drop_parts(only_drop_parts_) {}
 
-    time_t getTTLForPart(const IMergeSelector::Part & part) const override;
+    time_t getTTLForPart(const IMergeSelector<IMergeTreeDataPart>::Part & part) const override;
 
     /// Delete TTL should be checked only by TTL time, there are no other ways
     /// to satisfy it.
-    bool isTTLAlreadySatisfied(const IMergeSelector::Part &) const override;
+    bool isTTLAlreadySatisfied(const IMergeSelector<IMergeTreeDataPart>::Part &) const override;
 
 private:
     bool only_drop_parts;
@@ -105,12 +106,12 @@ public:
     {}
 
     /// Return part min recompression TTL.
-    time_t getTTLForPart(const IMergeSelector::Part & part) const override;
+    time_t getTTLForPart(const IMergeSelector<IMergeTreeDataPart>::Part & part) const override;
 
     /// Checks that part's codec is not already equal to required codec
     /// according to recompression TTL. It doesn't make sense to assign such
     /// merge.
-    bool isTTLAlreadySatisfied(const IMergeSelector::Part & part) const override;
+    bool isTTLAlreadySatisfied(const IMergeSelector<IMergeTreeDataPart>::Part & part) const override;
 private:
     TTLDescriptions recompression_ttls;
 };

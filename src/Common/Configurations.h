@@ -47,9 +47,12 @@ struct SDConfiguration final : public SDConfigurationData
 
 #define SDKV_CONFIG_FIELDS_LIST(M) \
     M(String, election_prefix, "election_prefix", "", ConfigFlag::Recommended, "common prefix for all election keys") \
-    M(String, server_manager_host_path, "server_manager.host_path", "data.cnch.server-election", ConfigFlag::Recommended, "election key of server manager") \
-    M(UInt64, server_manager_refresh_interval_ms, "server_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
-    M(UInt64, server_manager_expired_interval_ms, "server_manager.expired_interval_ms", 5000, ConfigFlag::Default, "") \
+    M(String, topology_maintainer_host_path, "server_manager.host_path", "data.cnch.server-election", ConfigFlag::Recommended, "election key of server manager, now is used by Resource Manager to manage topology. (Server can also do this, but disabled by default)") \
+    M(UInt64, topology_maintainer_refresh_interval_ms, "server_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
+    M(UInt64, topology_maintainer_expired_interval_ms, "server_manager.expired_interval_ms", 3000, ConfigFlag::Default, "") \
+    M(String, server_leader_host_path, "server_leader.host_path", "data.cnch.server_leader-election", ConfigFlag::Recommended, "election key of server leader, used by server to elect a global leader.") \
+    M(UInt64, server_leader_refresh_interval_ms, "server_leader.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
+    M(UInt64, server_leader_expired_interval_ms, "server_leader.expired_interval_ms", 3000, ConfigFlag::Default, "") \
     M(String, resource_manager_host_path, "resource_manager.host_path", "data.cnch.resource_manager-election", ConfigFlag::Recommended, "election key of resource manager") \
     M(UInt64, resource_manager_refresh_interval_ms, "resource_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
     M(UInt64, resource_manager_expired_interval_ms, "resource_manager.expired_interval_ms", 5000, ConfigFlag::Default, "") \

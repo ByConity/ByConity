@@ -37,12 +37,12 @@ const String & getPartitionIdForPart(const ITTLMergeSelector::Part & part_info)
 }
 
 
-IMergeSelector::PartsRange ITTLMergeSelector::select(
+IMergeSelector<IMergeTreeDataPart>::PartsRange ITTLMergeSelector::select(
     PartsRanges & parts_ranges,
     const size_t max_total_size_to_merge,
     [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
-    using Iterator = IMergeSelector::PartsRange::const_iterator;
+    using Iterator = IMergeSelector<IMergeTreeDataPart>::PartsRange::const_iterator;
     Iterator best_begin;
     ssize_t partition_to_merge_index = -1;
     time_t partition_to_merge_min_ttl = 0;
@@ -125,12 +125,12 @@ IMergeSelector::PartsRange ITTLMergeSelector::select(
     return PartsRange(best_begin, best_end);
 }
 
-time_t TTLDeleteMergeSelector::getTTLForPart(const IMergeSelector::Part & part) const
+time_t TTLDeleteMergeSelector::getTTLForPart(const IMergeSelector<IMergeTreeDataPart>::Part & part) const
 {
     return only_drop_parts ? part.ttl_infos->part_max_ttl : part.ttl_infos->part_min_ttl;
 }
 
-bool TTLDeleteMergeSelector::isTTLAlreadySatisfied(const IMergeSelector::Part & part) const
+bool TTLDeleteMergeSelector::isTTLAlreadySatisfied(const IMergeSelector<IMergeTreeDataPart>::Part & part) const
 {
     /// N.B. Satisfied TTL means that TTL is NOT expired.
     /// return true -- this part can not be selected
@@ -148,12 +148,12 @@ bool TTLDeleteMergeSelector::isTTLAlreadySatisfied(const IMergeSelector::Part & 
     return !part.shall_participate_in_merges;
 }
 
-time_t TTLRecompressMergeSelector::getTTLForPart(const IMergeSelector::Part & part) const
+time_t TTLRecompressMergeSelector::getTTLForPart(const IMergeSelector<IMergeTreeDataPart>::Part & part) const
 {
     return part.ttl_infos->getMinimalMaxRecompressionTTL();
 }
 
-bool TTLRecompressMergeSelector::isTTLAlreadySatisfied(const IMergeSelector::Part & part) const
+bool TTLRecompressMergeSelector::isTTLAlreadySatisfied(const IMergeSelector<IMergeTreeDataPart>::Part & part) const
 {
     /// N.B. Satisfied TTL means that TTL is NOT expired.
     /// return true -- this part can not be selected
