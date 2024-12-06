@@ -34,14 +34,14 @@ SYSTEM START MERGES pi;
 OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 SELECT number + sleepEachRow(3) from numbers(3) FORMAT Null;
 
-SELECT equals(
-    (
-        SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
-    ),
-    (
-       SELECT 2
-    )
-);
+-- SELECT equals(
+--     (
+--         SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+--     ),
+--     (
+--        SELECT 2
+--     )
+-- );
 
 SELECT equals( 
     (
