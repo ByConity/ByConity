@@ -92,10 +92,15 @@ void DaemonManagerClient::controlDaemonJob(const StorageID & storage_id, CnchBGT
     Protos::ControlDaemonJobReq req;
     Protos::ControlDaemonJobResp resp;
 
+    if (timeout_ms.has_value())
+    {
+        cntl.set_timeout_ms(timeout_ms.value());
+        /// DM receives the timeout setting and applies it for DM->server RPC
+        req.set_timeout_ms(timeout_ms.value());
+    }
+
     if (!storage_id.empty())
         RPCHelpers::fillStorageID(storage_id, *req.mutable_storage_id());
-    else
-        cntl.set_timeout_ms(360 * 1000);
     req.set_job_type(job_type);
     req.set_action(action);
     if (!query_id.empty())

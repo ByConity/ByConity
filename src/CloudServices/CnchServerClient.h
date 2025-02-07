@@ -170,7 +170,7 @@ public:
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
-    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
+    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action, std::optional<UInt64> timeout_ms = std::nullopt);
     void cleanTransaction(const TransactionRecord & txn_record);
     /**
      * @brief Clean undo buffers with the given txn (only) on target server.

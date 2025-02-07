@@ -150,6 +150,20 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
                 Result res = daemon_job->executeJobAction(storage_id, action);
                 if (!res.res)
                     throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);
+
+                std::optional<UInt64> timeout;
+                if (request->has_timeout_ms())
+                  timeout = request->timeout_ms();
+
+                if (daemon_jobs.find(job_type) == daemon_jobs.end())
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "No daemon job found for {}, this may always be caused by lack of config",
+                        toString(job_type));
+                auto daemon_job = daemon_jobs[job_type];
+                Result res = daemon_job->executeJobAction(storage_id, action, timeout);
+                if (!res.res)
+                    throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);
             }
             catch (...)
             {
