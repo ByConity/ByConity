@@ -83,8 +83,8 @@ jobs:
         run: |
           echo "Bring up ByConity Cluster S3"
           cd /CI/
-          docker compose -f docker-compose-s3.yml up -d
-          sleep 20
+          #docker compose -f docker-compose-s3.yml up -d
+          sleep 1800
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-s3-0) 
           echo "CLICKHOUSE_HOST=${CLICKHOUSE_HOST}" >> $GITHUB_ENV
           export CNCH_WRITE_WORKER_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_worker-write-s3-0) 
