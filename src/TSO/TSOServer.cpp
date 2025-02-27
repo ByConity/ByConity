@@ -286,7 +286,7 @@ void TSOServer::initLeaderElection()
     {
         LOG_DEBUG(log, "Enter leader election");
 
-        auto election_metastore = Catalog::getMetastorePtr(MetastoreConfig{global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE});
+        auto election_metastore = Catalog::getMetastorePtr(MetastoreConfig{global_context->getConfigRef(), CATALOG_SERVICE_CONFIGURE});
 
         auto prefix = global_context->getRootConfig().service_discovery_kv.election_prefix.value;
         leader_election = std::make_unique<StorageElector>(
@@ -326,7 +326,6 @@ int TSOServer::main(const std::vector<std::string> &)
     global_context = Context::createGlobal(shared_context.get());
 
     global_context->makeGlobalContext();
-    global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
     global_context->initServiceDiscoveryClient();
     global_context->setApplicationType(Context::ApplicationType::TSO);

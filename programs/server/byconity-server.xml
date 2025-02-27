@@ -163,6 +163,5 @@
         <num_probes>21</num_probes>
         <load_factor>1.3</load_factor>
     </consistent_hash_ring>
-    <cnch_config>/etc/byconity-server/cnch_config.xml</cnch_config>
     <custom_settings_prefixes>SQL_</custom_settings_prefixes>
 </yandex>
