@@ -2,8 +2,6 @@
 
 #include <Common/Logger.h>
 #include <cstddef>
-#include <Core/Types.h>
-#include <IO/ReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/distributed_file.pb.h>
@@ -12,7 +10,6 @@
 #include <google/protobuf/service.h>
 #include "common/logger_useful.h"
 #include "common/types.h"
-#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -41,7 +38,6 @@ protected:
     LoggerPtr log = getLogger("DistributedDataService");
 };
 
-REGISTER_SERVICE_IMPL(DistributedDataService);
 
 class StreamServiceHandler : public brpc::StreamInputHandler
 {

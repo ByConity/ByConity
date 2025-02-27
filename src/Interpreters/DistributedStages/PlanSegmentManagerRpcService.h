@@ -20,14 +20,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
-#include <Interpreters/ProcessList.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/profile/ProfileLogHub.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <ResourceManagement/CommonData.h>
 #include <brpc/server.h>
-#include <Common/Brpc/BrpcServiceDefines.h>
 #include <Common/ResourceMonitor.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -184,7 +182,5 @@ private:
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     LoggerPtr log;
 };
-
-REGISTER_SERVICE_IMPL(PlanSegmentManagerRpcService);
 
 }

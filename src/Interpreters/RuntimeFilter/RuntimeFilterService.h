@@ -19,8 +19,6 @@
 #include <Interpreters/Context.h>
 #include <Protos/runtime_filter.pb.h>
 #include <brpc/server.h>
-#include <brpc/stream.h>
-#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -48,5 +46,4 @@ private:
     LoggerPtr log;
 };
 
-REGISTER_SERVICE_IMPL(RuntimeFilterService);
 }

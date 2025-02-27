@@ -20,11 +20,9 @@
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Executors/PipelineExecutor.h>
 #include <Protos/registry.pb.h>
 #include <brpc/server.h>
 #include <brpc/stream.h>
-#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -108,6 +106,4 @@ private:
         const String & coordinator_addr,
         bool read_from_disk);
 };
-
-REGISTER_SERVICE_IMPL(BrpcExchangeReceiverRegistryService);
 }
