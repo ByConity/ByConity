@@ -855,8 +855,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     else
     {
         size_t part_rows = merge_tree_reader->data_part->rows_count;
+        size_t delete_rows_cardinality = delete_bitmap != nullptr ? delete_bitmap->cardinality() : 0;
         bool filter_when_read = delete_bitmap != nullptr && filtered_ratio_to_use_skip_read
-            && ((part_rows - delete_bitmap->cardinality()) * filtered_ratio_to_use_skip_read < part_rows)
+            && (
+                (delete_rows_cardinality >= part_rows) // Defensive
+                || ((part_rows - delete_rows_cardinality) * filtered_ratio_to_use_skip_read <= part_rows)
+            )
             && merge_tree_reader->canReadIncompleteGranules();
 
         read_result = startReadingChain(max_rows, ranges, filter_when_read);
@@ -993,6 +997,15 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(
             else
             {
                 size_t filter_column_offset = max_rows - space_left;
+                /// For compact data part, it may expand max_rows in the runtime, so expand delete filter column here
+                if (delete_filter_column != nullptr)
+                {
+                    if (size_t required_size = filter_column_offset + rows_to_read, current_size = delete_filter_column->size();
+                        required_size > current_size)
+                    {
+                        delete_filter_column->insertMany(1, required_size - current_size);
+                    }
+                }
                 UInt8* filter_start = nullptr;
                 /// populate delete filter for this granule
                 if (delete_bitmap)
