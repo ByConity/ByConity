@@ -86,7 +86,7 @@ std::optional<BGJobInfo> DaemonManagerClient::getDMBGJobInfo(const UUID & storag
     };
 }
 
-void DaemonManagerClient::controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action, String query_id)
+void DaemonManagerClient::controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action, String query_id, const std::optional<UInt64> & timeout_ms)
 {
     brpc::Controller cntl;
     Protos::ControlDaemonJobReq req;

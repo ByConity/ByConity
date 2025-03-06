@@ -705,16 +705,16 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
         switch (type)
         {
             case Type::RESUME_ALL_MERGES:
-                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
                 break;
             case Type::SUSPEND_ALL_MERGES:
-                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), timeout_ms);
                 break;
             case Type::RESUME_ALL_GC:
-                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
                 break;
             case Type::SUSPEND_ALL_GC:
-                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), timeout_ms);
                 break;
             default:
                 throw Exception("Table name should be specified for control specified background task", ErrorCodes::LOGICAL_ERROR);
@@ -730,48 +730,46 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
     switch (type)
     {
         case Type::START_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::REMOVE_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::START_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::FORCE_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::START_DEDUP_WORKER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_DEDUP_WORKER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::START_CLUSTER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_CLUSTER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::START_VIEW:
-            checkAsyncMaterializedView(storage);
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_VIEW:
-            checkAsyncMaterializedView(storage);
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::START_MOVES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         case Type::STOP_MOVES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), {}, timeout_ms);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString(), timeout_ms);
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);

@@ -44,7 +44,7 @@ public:
 
     BGJobInfos getAllBGThreadServers(CnchBGThreadType type);
     std::optional<BGJobInfo> getDMBGJobInfo(const UUID & storage_uuid, CnchBGThreadType type, String query_id = {});
-    void controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action, String query_id = {});
+    void controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action, String query_id = {}, const std::optional<UInt64> & timeout_ms = std::nullopt);
     void forwardOptimizeQuery(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
 
 private:

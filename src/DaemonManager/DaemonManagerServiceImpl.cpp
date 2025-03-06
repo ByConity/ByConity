@@ -136,20 +136,11 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
                 CnchBGThreadAction action = static_cast<CnchBGThreadAction>(request->action());
                 thread_status.setQueryID(request->query_id());
 
+                auto job_type = toServerBGThreadType(request->job_type());
                 LOG_INFO(log, "Receive ControlDaemonJob RPC request for storage: {} job type: {} action: {}"
                     , storage_id.empty() ? "empty storage" : storage_id.getNameForLogs()
-                    , toString(CnchBGThreadType(request->job_type()))
+                    , toString(job_type)
                     , toString(action));
-
-                if (daemon_jobs.find(CnchBGThreadType(request->job_type())) == daemon_jobs.end())
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "No daemon job found for {}, this may always be caused by lack of config",
-                        toString(CnchBGThreadType(request->job_type())));
-                auto daemon_job = daemon_jobs[CnchBGThreadType(request->job_type())];
-                Result res = daemon_job->executeJobAction(storage_id, action);
-                if (!res.res)
-                    throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);
 
                 std::optional<UInt64> timeout;
                 if (request->has_timeout_ms())
