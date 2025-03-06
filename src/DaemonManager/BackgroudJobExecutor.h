@@ -26,17 +26,17 @@ struct BGJobInfo;
 class IBackgroundJobExecutor
 {
 public:
-    bool start(const BGJobInfo & info);
-    bool stop(const BGJobInfo & info);
-    bool remove(const BGJobInfo & info);
-    bool drop(const BGJobInfo & info);
-    bool wakeup(const BGJobInfo & info);
+    bool start(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    bool stop(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    bool remove(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    bool drop(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    bool wakeup(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms = std::nullopt);
 
-    virtual bool start(const StorageID & storage_id, const String & host_port) = 0;
-    virtual bool stop(const StorageID & storage_id, const String & host_port) = 0;
-    virtual bool remove(const StorageID & storage_id, const String & host_port) = 0;
-    virtual bool drop(const StorageID & storage_id, const String & host_port) = 0;
-    virtual bool wakeup(const StorageID & storage_id, const String & host_port) = 0;
+    virtual bool start(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) = 0;
+    virtual bool stop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) = 0;
+    virtual bool remove(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) = 0;
+    virtual bool drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) = 0;
+    virtual bool wakeup(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) = 0;
 
     virtual ~IBackgroundJobExecutor() = default;
 };
@@ -50,11 +50,11 @@ public:
     BackgroundJobExecutor(BackgroundJobExecutor &&) = delete;
     BackgroundJobExecutor & operator = (const BackgroundJobExecutor &) = delete;
     BackgroundJobExecutor & operator = (BackgroundJobExecutor &&) = delete;
-    bool start(const StorageID & storage_id, const String & host_port) override;
-    bool stop(const StorageID & storage_id, const String & host_port) override;
-    bool remove(const StorageID & storage_id, const String & host_port) override;
-    bool drop(const StorageID & storage_id, const String & host_port) override;
-    bool wakeup(const StorageID & storage_id, const String & host_port) override;
+    bool start(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) override;
+    bool stop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) override;
+    bool remove(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) override;
+    bool drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) override;
+    bool wakeup(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms) override;
 private:
     const Context & context;
     const CnchBGThreadType type;

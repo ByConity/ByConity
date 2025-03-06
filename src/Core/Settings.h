@@ -1307,6 +1307,8 @@ enum PreloadLevelSettings : UInt64
     \
     /** Brpc config **/\
     M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    M(UInt64, tso_rpc_timeout, 9000, "Default gettimestamp timeout", 0) \
+    M(UInt64, dm_rpc_timeout_ms, 18000, "Timeout for server<->dm rpc timeout, applied only for bg controlling commands like system start bg", 0) \
     \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(Bool, enable_memory_efficient_ingest_partition, true, "Obsolete setting, does nothing.", 0) \

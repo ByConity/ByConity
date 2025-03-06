@@ -806,14 +806,15 @@ void CnchServerClient::removeIntermediateData(const TxnTimestamp & txn_id)
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
+void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action, std::optional<UInt64> timeout_ms)
 {
     auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ControlCnchBGThreadReq request;
     Protos::ControlCnchBGThreadResp response;
-    if (storage_id.empty())
-        cntl.set_timeout_ms(360 * 1000);
+
+    if (timeout_ms.has_value())
+        cntl.set_timeout_ms(timeout_ms.value());
 
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
     request.set_type(uint32_t(type));

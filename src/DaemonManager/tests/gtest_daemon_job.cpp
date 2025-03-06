@@ -51,31 +51,31 @@ std::ostream & operator << (std::ostream & os, const Event & e)
 class StableExecutor : public IBackgroundJobExecutor
 {
 public:
-    bool start(const StorageID & storage_id, const String & host_port) override
+    bool start(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Start, host_port});
         return true;
     }
 
-    bool stop(const StorageID & storage_id, const String & host_port) override
+    bool stop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Stop, host_port});
         return true;
     }
 
-    bool remove(const StorageID & storage_id, const String & host_port) override
+    bool remove(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Remove, host_port});
         return true;
     }
 
-    bool drop(const StorageID & storage_id, const String & host_port) override
+    bool drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Drop, host_port});
         return true;
     }
 
-    bool wakeup(const StorageID & storage_id, const String & host_port) override
+    bool wakeup(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Wakeup, host_port});
         return true;
@@ -160,7 +160,7 @@ StorageID storage_id13 = {"db13", "tb13", uuid13};
 class UnstableExecutor : public StableExecutor
 {
 public:
-    bool drop(const StorageID & storage_id, const String & host_port) override
+    bool drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>&) override
     {
         if (storage_id.uuid == uuid8)
             return false;
@@ -245,7 +245,7 @@ TEST(daemon_job, test_daemon_job)
     const UnstableExecutor * executor = dynamic_cast<const UnstableExecutor * >(&daemon_job.getBgJobExecutor());
     const StablePersistentStoreProxy * proxy = dynamic_cast<const StablePersistentStoreProxy *>(&daemon_job.getStatusPersistentStore());
 
-    Result execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Start);
+    Result execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Start, {});
     {
         EXPECT_EQ(execute_ret.res, true);
         EXPECT_EQ(executor->events.size(), 1);
@@ -261,7 +261,7 @@ TEST(daemon_job, test_daemon_job)
         EXPECT_EQ(info->getStorageID(), storage_id1);
     }
 
-    execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Wakeup);
+    execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Wakeup, {});
     {
         EXPECT_EQ(execute_ret.res, true);
         EXPECT_EQ(executor->events.size(), 2);
@@ -277,7 +277,7 @@ TEST(daemon_job, test_daemon_job)
         EXPECT_EQ(info->getStorageID(), storage_id1);
     }
 
-    execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Stop);
+    execute_ret = daemon_job.executeJobAction(storage_id1, CnchBGThreadAction::Stop, {});
     {
         EXPECT_EQ(execute_ret.res, true);
         EXPECT_EQ(executor->events.size(), 3);
