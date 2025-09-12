@@ -91,7 +91,12 @@ namespace
     {
     }
 
-    TwoLevelIterator::~TwoLevelIterator() = default;
+    TwoLevelIterator::~TwoLevelIterator()
+    {
+        Table * table = reinterpret_cast<Table *>(arg_);
+        if (table != nullptr)
+            table->releaseRemoteFD();
+    }
 
     void TwoLevelIterator::Seek(const Slice & target)
     {

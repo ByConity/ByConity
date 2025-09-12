@@ -141,6 +141,13 @@ namespace
             return s;
         }
 
+        virtual void releaseRemoteFD() const override
+        {
+            std::lock_guard lock(remote_fd_mutex);
+            if (buffer)
+                buffer = nullptr;
+        }
+
     private:
         RemoteFileInfo file;
         RemoteFileCachePtr cache;

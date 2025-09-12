@@ -38,7 +38,12 @@ Status IndexFileReader::Open(const String & file_path)
     if (s.ok())
         s = rep->options.env->NewRandomAccessFile(file_path, &file);
     if (s.ok())
+    {
         s = Table::Open(rep->options, std::move(file), file_size, &rep->table_reader);
+        /// directly release remote FD, as SSTable read from footer, meta, etc, then data block
+        if (rep->table_reader)
+            rep->table_reader->releaseRemoteFD();
+    }
     return s;
 }
 

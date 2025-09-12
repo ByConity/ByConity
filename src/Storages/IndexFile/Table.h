@@ -68,6 +68,10 @@ public:
     // be close to the file length.
     // uint64_t ApproximateOffsetOf(const Slice & key) const;
 
+    // After the iter call ends, we need to explicitly release the buffer, otherwise there may be too many open files due to remote handles.
+    // Safe for concurrent use by multiple threads.
+    void releaseRemoteFD() const;
+
 private:
     struct Rep;
 
