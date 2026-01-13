@@ -989,11 +989,11 @@ request.set_query(query_text);
 
 ## Summary Statistics
 
-- **Total Source Files**: ~7,270 in `/src`
-- **Major Modules**: 47 primary components
+- **Total Source Files**: ~7072 in `/src`
+- **Major Modules**: 45 primary components
 - **Programs**: 23 executable tools
-- **Test Categories**: 40+ specialized test directories
-- **External Dependencies**: 200+ in `/contrib`
+- **Test Categories**: 20+ specialized test directories
+- **External Dependencies**: 204+ in `/contrib`
 - **Languages**: C++20, Protocol Buffers, Python, Rust, SQL
 - **Build System**: CMake 3.17+, Ninja
 - **Compiler**: Clang 11/12 required (not GCC)
@@ -1001,7 +1001,7 @@ request.set_query(query_text);
 
 ---
 
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-13
 **ByConity Version:** Based on current master branch
 **Maintained By:** ByConity Community
 

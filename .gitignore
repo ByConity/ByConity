@@ -177,3 +177,6 @@ buildNumber.properties
 /rust
 
 cherry-pick
+
+# Claude Code backups
+CLAUDE.md.backup.*

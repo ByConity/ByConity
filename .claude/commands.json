@@ -1,0 +1,10 @@
+{
+  "commands": {
+    "update-claude-md": {
+      "description": "Update CLAUDE.md with current project statistics",
+      "command": ".claude/scripts/update-claude-md.sh",
+      "runInBackground": false,
+      "confirmBeforeRun": false
+    }
+  }
+}
