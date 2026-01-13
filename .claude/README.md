@@ -14,7 +14,47 @@ This directory contains Claude Code configuration and custom commands for the By
 
 ## Custom Commands
 
-### `/update-claude-md` - Update CLAUDE.md Documentation
+### 🎯 `/claude-prompt` - Smart Update with Natural Language (Recommended)
+
+This command works like the `#` function - you provide a natural language prompt, and it helps you update CLAUDE.md intelligently.
+
+**Usage:**
+
+```bash
+# With inline prompt
+./.claude/scripts/claude-md-prompt.sh "add section about debugging memory leaks"
+
+# Interactive mode
+./.claude/scripts/claude-md-prompt.sh --interactive
+
+# Or use the command alias (if supported)
+/claude-prompt "add tips for performance optimization"
+```
+
+**Examples:**
+
+```bash
+# Add new section
+./claude-md-prompt.sh "add a section about Docker best practices"
+
+# Update existing section
+./claude-md-prompt.sh "update the testing section with integration test examples"
+
+# Add tips
+./claude-md-prompt.sh "add debugging tips for transaction issues"
+```
+
+**What it does:**
+
+- 🤖 Analyzes your prompt and suggests relevant sections
+- 📝 Creates a context file for Claude to process
+- 📋 Generates templates based on your request
+- 💾 Creates automatic backup before any changes
+- 🎨 Provides formatted output with color coding
+
+---
+
+### 🔄 `/update-claude-md` - Auto-Update Statistics
 
 This command automatically updates the CLAUDE.md file with current project statistics.
 
@@ -46,6 +86,32 @@ In Claude Code CLI, you can run:
 - 📊 Shows detailed statistics and changes
 - ✅ Provides clear success/error messages
 - 🔄 Atomic file updates (uses temp file)
+
+---
+
+### 💬 `/claude-interactive` - Full Interactive Mode
+
+This command provides a guided interactive experience for updating CLAUDE.md with detailed prompts.
+
+**Usage:**
+
+```bash
+# Run interactive mode
+./.claude/scripts/update-with-prompt.sh
+
+# Or with initial prompt
+./.claude/scripts/update-with-prompt.sh "your prompt here"
+```
+
+**Features:**
+
+- 📝 Multi-line prompt support (Ctrl+D to finish)
+- 🎯 Automatic section analysis
+- 📄 Template file generation
+- ✏️ Built-in editor integration
+- 🔄 Direct content insertion
+
+---
 
 **Example output:**
 

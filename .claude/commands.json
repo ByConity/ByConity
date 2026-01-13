@@ -5,6 +5,19 @@
       "command": ".claude/scripts/update-claude-md.sh",
       "runInBackground": false,
       "confirmBeforeRun": false
+    },
+    "claude-prompt": {
+      "description": "Update CLAUDE.md using natural language prompt (like # function)",
+      "command": ".claude/scripts/claude-md-prompt.sh",
+      "runInBackground": false,
+      "confirmBeforeRun": false,
+      "acceptsArgs": true
+    },
+    "claude-interactive": {
+      "description": "Interactive mode for updating CLAUDE.md with prompts",
+      "command": ".claude/scripts/update-with-prompt.sh",
+      "runInBackground": false,
+      "confirmBeforeRun": false
     }
   }
 }
