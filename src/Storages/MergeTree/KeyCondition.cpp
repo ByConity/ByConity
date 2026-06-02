@@ -705,7 +705,8 @@ KeyCondition::KeyCondition(
     , key_subexpr_names(getAllSubexpressionNames(*key_expr))
     , prepared_sets(query_info.sets)
     , single_point(single_point_)
-    , strict(strict_)
+    , strict(strict_),
+    context_(context)
 {
     for (size_t i = 0, size = key_column_names.size(); i < size; ++i)
     {
@@ -2213,6 +2214,9 @@ std::optional<Range> KeyCondition::applyMonotonicFunctionsChainToRange(
 // This allows to use a more efficient lookup with no extra reads.
 bool KeyCondition::matchesExactContinuousRange(const DataTypes & data_types) const
 {
+    if (context_->getSettingsRef().enable_matches_exact_continuous_range_new) {
+        return matchesExactContinuousRangeNew(data_types);
+    }
     enum Constrain
     {
         POINT,
@@ -2289,6 +2293,120 @@ bool KeyCondition::matchesExactContinuousRange(const DataTypes & data_types) con
         if (element.function == RPNElement::Function::FUNCTION_AND || element.function == RPNElement::Function::FUNCTION_UNKNOWN)
             continue;
         return false;
+    }
+
+    if (has_monotonic_function && has_pk_condition_other_than_col0) return false;
+
+    auto min_constrain = columns_constrains[0];
+    if (min_constrain > Constrain::RANGE)
+        return false;
+
+    for (size_t i = 1; i < key_columns.size(); ++i)
+    {
+        if (columns_constrains[i] < min_constrain)
+            return false;
+
+        if (columns_constrains[i] == Constrain::RANGE && min_constrain == Constrain::RANGE)
+            return false;
+    }
+    return true;
+}
+
+bool KeyCondition::matchesExactContinuousRangeNew(const DataTypes & data_types) const
+{
+    enum Constrain
+    {
+        POINT,
+        RANGE,
+        UNKNOWN
+    };
+    std::vector<UInt8> rpn_stack;
+    bool has_monotonic_function = false;
+    bool has_pk_condition_other_than_col0 = false;
+
+    std::vector<Constrain> columns_constrains(key_columns.size(), UNKNOWN);
+
+    for (const auto & element : rpn)
+    {
+        if (element.function == RPNElement::Function::FUNCTION_IN_SET && element.set_index && element.set_index->size() == 1)
+        {
+            rpn_stack.push_back(false);
+            columns_constrains[element.key_column] = Constrain::POINT;
+            if (element.key_column != 0)
+                has_pk_condition_other_than_col0 = true;
+            continue;
+        }
+
+        if (element.function == RPNElement::Function::FUNCTION_IN_RANGE)
+        {
+            rpn_stack.push_back(false);
+            if (element.key_column != 0)
+                has_pk_condition_other_than_col0 = true;
+            if (!element.monotonic_functions_chain.empty())
+            {
+                /// If the PK conditions has monotonic function chain, the optimization will only apply when
+                /// (1) there's only column 0 in the key condition
+                /// (2) the function in the key condtion must be monotonic (in any ranges)
+                if (has_pk_condition_other_than_col0) return false;
+
+                int monotonic_direction = 1;
+                const auto & current_type = data_types[element.key_column];
+                for (const auto & func : element.monotonic_functions_chain)
+                {
+                    /// Check the monotonicity of each function on full range
+                    IFunction::Monotonicity monotonicity = func->getMonotonicityForRange(
+                    *current_type, {}, {});
+
+                    /// If the chain is not monononic on full range, fallback to normal search
+                    if (!monotonicity.is_always_monotonic)
+                    {
+                        return false;
+                    }
+
+                    has_monotonic_function = true;
+
+                    if (!monotonicity.is_positive)
+                    {
+                        monotonic_direction *= -1;
+                    }
+                }
+                /// If the func chain is negative monotonic, the FUNCTION_IN_RANGE may become FUNCTION_NOT_IN_RANGE
+                /// For example, key is `id Int32`, condition is `-0.1 < 1/id < 0.1`, then the range of id is
+                /// (-INF -10) OR (10,INF), which is two continous range.
+                /// Note that the negative monotonic can stil work if we know some certain additional information
+                /// of the PK, e.g. id > 0 on above example, but such additional info is hard to obtain, so we when
+                /// we see a negative monotonic function chain, just avoid the optimization
+                if (monotonic_direction == -1)
+                {
+                    return false;
+                }
+            }
+            /// Normal constrain
+            if (element.range.left == element.range.right)
+                columns_constrains[element.key_column] = Constrain::POINT;
+            if (columns_constrains[element.key_column] != Constrain::POINT)
+                columns_constrains[element.key_column] = Constrain::RANGE;
+            continue;
+        }
+        
+        if (element.function == RPNElement::Function::FUNCTION_UNKNOWN)
+            rpn_stack.push_back(true);
+        else if (element.function == RPNElement::Function::FUNCTION_AND) {
+            auto arg1 = rpn_stack.back();
+            rpn_stack.pop_back();
+            auto arg2 = rpn_stack.back();
+            rpn_stack.back() = arg1 & arg2;
+        }
+        else if (element.function == RPNElement::Function::FUNCTION_OR) {
+            auto arg1 = rpn_stack.back();
+            rpn_stack.pop_back();
+            auto arg2 = rpn_stack.back();
+            rpn_stack.back() = arg1 & arg2;
+            if (!rpn_stack.back()) {
+                return false;
+            }
+        } else 
+            return false;
     }
 
     if (has_monotonic_function && has_pk_condition_other_than_col0) return false;
