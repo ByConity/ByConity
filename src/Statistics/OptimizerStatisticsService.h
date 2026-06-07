@@ -36,8 +36,3 @@ private:
 
 
 }
-
-namespace DB {
-using Statistics::OptimizerStatisticsService;
-REGISTER_SERVICE_IMPL(OptimizerStatisticsService);
-}
