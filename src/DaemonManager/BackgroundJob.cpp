@@ -39,7 +39,7 @@ BackgroundJob::BackgroundJob(StorageID storage_id_, CnchBGThreadStatus status_, 
         expected_status = *stored_status;
 }
 
-Result BackgroundJob::start(bool write_status_to_persisent_store)
+Result BackgroundJob::start(bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms)
 {
     String exception_str{"action failed"};
     // start() can be called even when the status is Running
@@ -94,7 +94,7 @@ Result BackgroundJob::start(bool write_status_to_persisent_store)
     bool ret = false;
     try
     {
-        ret = daemon_job.getBgJobExecutor().start(getBGJobInfo());
+        ret = daemon_job.getBgJobExecutor().start(getBGJobInfo(), timeout_ms);
     }
     catch (...)
     {
@@ -122,7 +122,7 @@ Result BackgroundJob::start(bool write_status_to_persisent_store)
     return {exception_str, ret};
 }
 
-Result BackgroundJob::stop(bool force, bool write_status_to_persisent_store)
+Result BackgroundJob::stop(bool force, bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms)
 {
     String exception_str{"action failed"};
     if (write_status_to_persisent_store)
@@ -173,7 +173,7 @@ Result BackgroundJob::stop(bool force, bool write_status_to_persisent_store)
     bool ret = false;
     try
     {
-        ret = daemon_job.getBgJobExecutor().stop(getBGJobInfo());
+        ret = daemon_job.getBgJobExecutor().stop(getBGJobInfo(), timeout_ms);
     }
     catch (...)
     {
@@ -195,7 +195,7 @@ Result BackgroundJob::stop(bool force, bool write_status_to_persisent_store)
     return {exception_str, ret};
 }
 
-Result BackgroundJob::remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store)
+Result BackgroundJob::remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms)
 {
     if ((remove_type != CnchBGThreadAction::Remove) &&
         (remove_type != CnchBGThreadAction::Drop))
@@ -252,9 +252,9 @@ Result BackgroundJob::remove(CnchBGThreadAction remove_type, bool write_status_t
     try
     {
         if (remove_type == CnchBGThreadAction::Remove)
-            ret = daemon_job.getBgJobExecutor().remove(getBGJobInfo());
+            ret = daemon_job.getBgJobExecutor().remove(getBGJobInfo(), timeout_ms);
         else
-            ret = daemon_job.getBgJobExecutor().drop(getBGJobInfo());
+            ret = daemon_job.getBgJobExecutor().drop(getBGJobInfo(), timeout_ms);
     }
     catch (...)
     {
@@ -276,7 +276,7 @@ Result BackgroundJob::remove(CnchBGThreadAction remove_type, bool write_status_t
     return {exception_str, ret};
 }
 
-Result BackgroundJob::wakeup()
+Result BackgroundJob::wakeup(const std::optional<UInt64>& timeout_ms)
 {
     String exception_str{"action failed"};
     CnchBGThreadStatus curr_status;
@@ -300,7 +300,7 @@ Result BackgroundJob::wakeup()
     bool ret = false;
     try
     {
-        ret = daemon_job.getBgJobExecutor().wakeup(getBGJobInfo());
+        ret = daemon_job.getBgJobExecutor().wakeup(getBGJobInfo(), timeout_ms);
     }
     catch (...)
     {

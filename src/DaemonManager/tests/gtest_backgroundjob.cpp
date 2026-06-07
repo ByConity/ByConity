@@ -45,31 +45,31 @@ struct Event
 class StableExecutor : public IBackgroundJobExecutor
 {
 public:
-    bool start(const StorageID & storage_id, const String & host_port) override
+    bool start(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& ) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Start, host_port});
         return true;
     }
 
-    bool stop(const StorageID & storage_id, const String & host_port) override
+    bool stop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& ) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Stop, host_port});
         return true;
     }
 
-    bool remove(const StorageID & storage_id, const String & host_port) override
+    bool remove(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& ) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Remove, host_port});
         return true;
     }
 
-    bool drop(const StorageID & storage_id, const String & host_port) override
+    bool drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& ) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Drop, host_port});
         return true;
     }
 
-    bool wakeup(const StorageID & storage_id, const String & host_port) override
+    bool wakeup(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& ) override
     {
         events.push_back({storage_id.uuid, CnchBGThreadAction::Wakeup, host_port});
         return true;
@@ -82,27 +82,27 @@ public:
 class UnstableExecutor : public IBackgroundJobExecutor
 {
 public:
-    bool start(const StorageID &, const String &) override
+    bool start(const StorageID &, const String &, const std::optional<UInt64>& ) override
     {
         return false;
     }
 
-    bool stop(const StorageID &, const String &) override
+    bool stop(const StorageID &, const String &, const std::optional<UInt64>& ) override
     {
         return false;
     }
 
-    bool remove(const StorageID &, const String &) override
+    bool remove(const StorageID &, const String &, const std::optional<UInt64>& ) override
     {
         return false;
     }
 
-    bool drop(const StorageID &, const String &) override
+    bool drop(const StorageID &, const String &, const std::optional<UInt64>& ) override
     {
         return false;
     }
 
-    bool wakeup(const StorageID &, const String &) override
+    bool wakeup(const StorageID &, const String &, const std::optional<UInt64>& ) override
     {
         return false;
     }

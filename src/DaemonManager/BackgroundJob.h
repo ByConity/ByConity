@@ -139,10 +139,10 @@ public:
 
     void setExpectedStatus(CnchBGThreadStatus status);
 
-    Result start(bool write_status_to_persisent_store);
-    Result stop(bool force_send_rpc, bool write_status_to_persisent_store);
-    Result remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store);
-    Result wakeup();
+    Result start(bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    Result stop(bool force_send_rpc, bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    Result remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store, const std::optional<UInt64>& timeout_ms = std::nullopt);
+    Result wakeup(const std::optional<UInt64>& timeout_ms = std::nullopt);
     bool sync(const ServerInfo & server_info);
 
     struct SyncAction
