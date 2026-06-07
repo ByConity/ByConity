@@ -160,7 +160,7 @@ public:
                         buffer_permutation[i % 100].view(),
                         [](HybridCache::Status status, HybridCache::HashedKey) {
                             if (status != HybridCache::Status::Ok)
-                                printf("insert failed %d\n", status);
+                                printf("insert failed %d\n", static_cast<int>(status));
                         },
                         HybridCache::EngineTag::UncompressedCache);
             };
@@ -222,7 +222,7 @@ public:
                         buffer_permutation[i % 100].view(),
                         [](HybridCache::Status status, HybridCache::HashedKey) {
                             if (status != HybridCache::Status::Ok)
-                                printf("insert faield %d\n", status);
+                                printf("insert faield %d\n", static_cast<int>(status));
                         },
                         HybridCache::EngineTag::UncompressedCache);
             };
@@ -236,7 +236,7 @@ public:
                         HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
                         [](HybridCache::Status status, HybridCache::HashedKey, HybridCache::Buffer) {
                             if (status != HybridCache::Status::Ok)
-                                printf("lookup failed %d\n", status);
+                                printf("lookup failed %d\n", static_cast<int>(status));
                         },
                         HybridCache::EngineTag::UncompressedCache);
             };
