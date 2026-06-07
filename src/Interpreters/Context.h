@@ -753,9 +753,6 @@ public:
     const RootConfiguration & getRootConfig() const;
     void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
 
-    void initCnchConfig(const Poco::Util::AbstractConfiguration & poco_config);
-    const Poco::Util::AbstractConfiguration & getCnchConfigRef() const;
-
     AccessControlManager & getAccessControlManager();
     const AccessControlManager & getAccessControlManager() const;
 

@@ -17,6 +17,5 @@
         <tso_get_leader_info_interval_ms>0</tso_get_leader_info_interval_ms>
         <tso_max_retry_count>3</tso_max_retry_count>
     </tso_service>
-    <cnch_config>/etc/byconity-server/cnch_config.xml</cnch_config>
 </yandex>
 

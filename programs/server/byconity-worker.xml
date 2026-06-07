@@ -166,6 +166,4 @@
             </cnch_default_hdfs>
         </policies>
     </storage_configuration>
-
-    <cnch_config>/etc/byconity-server/cnch_config.xml</cnch_config>
 </yandex>

@@ -31,27 +31,26 @@ description: |
 overrides:
   deb:
     depends:
-    - foundationdb-clients
+      - foundationdb-clients
   rpm:
     depends:
-    - foundationdb-clients
+      - foundationdb-clients
 
 contents:
-- src: root/usr/bin/clickhouse
-  dst: /usr/bin/clickhouse
-- src: root/etc/byconity-server/cnch_config.xml
-  dst: /etc/byconity-server/cnch_config.xml
-  type: config|noreplace
-- src: fdb.cluster
-  dst: /etc/byconity-server/fdb.cluster
-  type: config|noreplace
-# docs
-- src: ../AUTHORS
-  dst: /usr/share/doc/byconity-common-static/AUTHORS
-- src: ../CHANGELOG.md
-  dst: /usr/share/doc/byconity-common-static/CHANGELOG.md
-- src: ../LICENSE
-  dst: /usr/share/doc/byconity-common-static/LICENSE
-- src: ../README.md
-  dst: /usr/share/doc/byconity-common-static/README.md
-
+  - src: root/usr/bin/clickhouse
+    dst: /usr/bin/clickhouse
+  - src: root/etc/byconity-server/conf.d
+    dst: /etc/byconity-server/conf.d
+    type: config|noreplace
+  - src: fdb.cluster
+    dst: /etc/byconity-server/fdb.cluster
+    type: config|noreplace
+  # docs
+  - src: ../AUTHORS
+    dst: /usr/share/doc/byconity-common-static/AUTHORS
+  - src: ../CHANGELOG.md
+    dst: /usr/share/doc/byconity-common-static/CHANGELOG.md
+  - src: ../LICENSE
+    dst: /usr/share/doc/byconity-common-static/LICENSE
+  - src: ../README.md
+    dst: /usr/share/doc/byconity-common-static/README.md

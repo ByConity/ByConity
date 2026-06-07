@@ -115,14 +115,13 @@ int ResourceManager::main(const std::vector<std::string> &)
     global_context->makeGlobalContext();
     global_context->setServerType(config().getString("cnch_type", "resource_manager"));
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
 
     global_context->initServiceDiscoveryClient();
 
     /// Initialize catalog
-    MetastoreConfig catalog_conf(global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE);
-    auto name_space = global_context->getCnchConfigRef().getString("catalog.name_space", "default");
+    MetastoreConfig catalog_conf(global_context->getConfigRef(), CATALOG_SERVICE_CONFIGURE);
+    auto name_space = global_context->getConfigRef().getString("catalog.name_space", "default");
     global_context->initCatalog(catalog_conf, name_space, config().getBool("enable_cnch_write_remote_catalog", true));
     global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));
     global_context->initTSOElectionReader();
