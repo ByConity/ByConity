@@ -475,8 +475,7 @@ size_t MergeTreeReaderCNCH::readBatch(const NamesAndTypesList& sort_columns, siz
 
             /// For elements of Nested, column_size_before_reading may be greater than column size
             ///  if offsets are not empty and were already read, but elements are empty.
-            if (!column->empty())
-                processed_rows = std::max(processed_rows, col_processed_rows);
+            processed_rows = std::max(processed_rows, col_processed_rows);
         }
         catch (Exception & e)
         {

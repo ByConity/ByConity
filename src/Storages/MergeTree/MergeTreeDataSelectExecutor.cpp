@@ -1099,7 +1099,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 ranges.ranges = std::move(sampled_ranges);
             }
 
-            MutableFilterBitmapPtr filter_bitmap = std::make_shared<roaring::Roaring>();
+            MutableFilterBitmapPtr filter_bitmap = nullptr;
 
             IndexTimeWatcher index_time_watcher;
             for (auto & index_and_condition : seperate_skip_indices)
