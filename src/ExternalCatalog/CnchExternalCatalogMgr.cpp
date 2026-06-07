@@ -21,12 +21,12 @@ extern const int UNKNOWN_CATALOG;
 
 namespace DB::ExternalCatalog
 {
-CnchExternalCatalogMgr::CnchExternalCatalogMgr(Context & _context, const Poco::Util::AbstractConfiguration & mgr_conf)
-    : context(_context), metastore_conf(mgr_conf, Mgr::configPrefix())
+CnchExternalCatalogMgr::CnchExternalCatalogMgr(Context & _context, const Poco::Util::AbstractConfiguration & mgr_conf, const String & config_prefix)
+    : context(_context), metastore_conf(mgr_conf, config_prefix)
 {
     // TODO(ExterncalCatalog):: check whether to set FLAGS_consul_agent_addr here.
     meta_proxy = std::make_shared<Catalog::MetastoreProxy>(metastore_conf, mgr_conf.getBool("enable_cnch_write_remote_catalog", true));
-    name_space = mgr_conf.getString(Mgr::configPrefix() + ".name_space", "default");
+    name_space = mgr_conf.getString("catalog.name_space", "default");
 }
 bool CnchExternalCatalogMgr::createCatalog(const std::string & catalog_name, PlainConfigs * catalog_meta, const TxnTimestamp & ts)
 {
