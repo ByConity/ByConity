@@ -151,7 +151,7 @@ public:
 
         auto & name_index = indexes.template get<name_tag>();
         auto it = name_index.equal_range(name);
-        if (it.frist == it.second)
+        if (it.first == it.second)
             return;
 
         name_index.erase(it.first, it.second);
