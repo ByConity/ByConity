@@ -19,10 +19,6 @@
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Common/config.h>
-
-#include <Common/Brpc/BrpcServiceDefines.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -251,7 +247,4 @@ private:
     std::mutex backup_lock;
     std::unique_ptr<ThreadPool> backup_rpc_pool;
 };
-
-REGISTER_SERVICE_IMPL(CnchWorkerServiceImpl);
-
 }

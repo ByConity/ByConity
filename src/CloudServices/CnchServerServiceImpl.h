@@ -23,8 +23,6 @@
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_server_rpc.pb.h>
-#include <common/logger_useful.h>
-#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -421,7 +419,5 @@ private:
     std::optional<GlobalGCManager> global_gc_manager;
     LoggerPtr log;
 };
-
-REGISTER_SERVICE_IMPL(CnchServerServiceImpl);
 
 }

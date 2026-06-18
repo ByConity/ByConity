@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Storages/DistributedDataService.h>
-#include <butil/compiler_specific.h>
 
 namespace DB
 {
@@ -21,7 +20,4 @@ public:
         ::DB::Protos::writeFileResponse * response,
         ::google::protobuf::Closure * closeure) override;
 };
-
-REGISTER_SERVICE_IMPL(RemoteDiskCacheService);
-
 }
