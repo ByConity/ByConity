@@ -168,19 +168,32 @@ Status OrcScanner::prepareFileReader()
 /// Note that in Orc there are two id concepts:
 /// 1. field id, the index used to getSubType(i).
 /// 2. column id, the id assigned in the orc meta. we always choose this.
+const static std::string orc_prefix = "_col";
 void OrcScanner::buildColumnNameToId(
     [[maybe_unused]] const Block & header, const orc::Type & root_type, std::map<std::string, int64_t> & column_name_to_id)
 {
-    // col name to index in orc schema.
-    for (size_t i = 0; i < root_type.getSubtypeCount(); ++i)
+    auto const sub_type_count = root_type.getSubtypeCount();
+    if (sub_type_count == 0)
+        return;
+
+    auto assgine_name_to_id = [&root_type, &column_name_to_id](std::string col_name, const int & index) {
+        boost::to_lower(col_name);
+        if (!column_name_to_id.contains(col_name))
+            column_name_to_id[col_name] = root_type.getSubtype(index)->getColumnId();
+    };
+
+    auto const names_size = header.getNames().size();
+    auto const column_name = root_type.getFieldName(0);
+    if (!startsWith(column_name, orc_prefix) || names_size == 0)
     {
-        std::string name = root_type.getFieldName(i);
-        auto col_id = root_type.getSubtype(i)->getColumnId();
-        // auto max_col_id = root_type.getSubtype(i)->getMaximumColumnId();
-        boost::to_lower(name);
-        column_name_to_id[name] = col_id;
-        // column_id_to_name[col_id] = name;
+        // col name to index in orc schema.
+        for (size_t i = 0; i < sub_type_count; ++i)
+            assgine_name_to_id(root_type.getFieldName(i), i);
+        return;
     }
+    const int size = std::min(names_size, sub_type_count);
+    for (int i = 0; i < size; i++)
+        assgine_name_to_id(header.getNames().at(i), i);
 }
 
 Status OrcScanner::initChunkReader()
