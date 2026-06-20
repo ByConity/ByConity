@@ -58,4 +58,4 @@
     X_(TableBasic) \
     X_(ColumnBasic) \
     X_(HllSketch) \
-    X_(UdiCounter) \
+    X_(UdiCounter)
