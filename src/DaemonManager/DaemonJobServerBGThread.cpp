@@ -424,7 +424,7 @@ void syncServerBGJob(
         {
             LOG_INFO(log, "syncServerBGJob: remove {} from {}",
                 storage_id.getNameForLogs(), job_from_server.host_port);
-            daemon_job.getBgJobExecutor().remove(storage_id, job_from_server.host_port);
+            daemon_job.getBgJobExecutor().remove(storage_id, job_from_server.host_port, {});
         }
         else
         {
@@ -849,7 +849,7 @@ BackgroundJobPtr DaemonJobServerBGThread::getBackgroundJob(const UUID & uuid) co
 }
 
 /// called from BRPC server, execute synchonously, no retry, persist job status to persistent storage
-Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, CnchBGThreadAction action)
+Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, CnchBGThreadAction action, std::optional<UInt64> timeout_ms)
 {
     Context & context = *getContext();
     LOG_DEBUG(log, "Executing a job action for storage id: {} {}", storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(), toString(action));
@@ -875,7 +875,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 for (auto & host_port : servers)
                 {
                     CnchServerClientPtr server_client = context.getCnchServerClient(host_port);
-                    server_client->controlCnchBGThread(StorageID::createEmpty(), type, action);
+                    server_client->controlCnchBGThread(StorageID::createEmpty(), type, action, timeout_ms);
                     LOG_DEBUG(getLogger(__func__), "Succeed to {} all threads on {}",
                         toString(action), host_port);
                 }
@@ -927,7 +927,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 }
                 else
                 {
-                    return bg_ptr->remove(action, true);
+                    return bg_ptr->remove(action, true, timeout_ms);
                 }
             }
         }
@@ -946,7 +946,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                     return {"", true};
             }
             if (bg_ptr)
-                return bg_ptr->stop(false, true);
+                return bg_ptr->stop(false, true, timeout_ms);
             break;
         }
         case CnchBGThreadAction::Start:
@@ -983,14 +983,16 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
 
                     bool server_died = checkIfServerDied(servers, current_host_port);
                     if (!server_died)
+                        /// todo(fredwang): if the new server is the same as the current server, skip the remove op?
+                        /// && (!new_cnch_server || new_cnch_server->getRPCAddress() != current_host_port))
                     {
                         LOG_INFO(log, "remove bg job: {} in {} before start new job", storage_id.getNameForLogs(), current_host_port);
-                        Result res = bg_ptr->remove(CnchBGThreadAction::Remove, false);
+                        Result res = bg_ptr->remove(CnchBGThreadAction::Remove, false, timeout_ms);
                         if (!res.res)
                             return res;
                     }
                 }
-                return bg_ptr->start(true);
+                return bg_ptr->start(true, timeout_ms);
             }
             break;
         }
@@ -1003,7 +1005,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 return {error_msg, false};
             }
             else
-                return bg_ptr->wakeup();
+                return bg_ptr->wakeup(timeout_ms);
         }
     }
     return {"", false};
@@ -1074,7 +1076,7 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
                         // remove a duplicate running task
                         try
                         {
-                            getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress());
+                            getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress(), {});
                         }
                         catch (...)
                         {
@@ -1093,7 +1095,7 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
                     // remove duplicate stop task
                     try
                     {
-                        getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress());
+                        getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress(), {});
                     }
                     catch (...)
                     {

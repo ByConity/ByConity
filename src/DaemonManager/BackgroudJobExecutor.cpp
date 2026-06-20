@@ -23,72 +23,73 @@ namespace DB::DaemonManager
 namespace
 {
 
-void executeServerBGThreadAction(const StorageID & storage_id, const String & host_port, CnchBGThreadAction action, const Context & context, CnchBGThreadType type)
+void executeServerBGThreadAction(const StorageID & storage_id, const String & host_port, CnchBGThreadAction action, 
+    const Context & context, CnchBGThreadType type, const std::optional<UInt64>& timeout_ms)
 {
     CnchServerClientPtr server_client = context.getCnchServerClient(host_port);
-    server_client->controlCnchBGThread(storage_id, type, action);
+    server_client->controlCnchBGThread(storage_id, type, action, timeout_ms);
     LOG_DEBUG(getLogger(__func__), "Succeed to {} thread for {} on {}",
         toString(action), storage_id.getNameForLogs(), host_port);
 }
 
 } /// end anonymous namespace
 
-bool IBackgroundJobExecutor::start(const BGJobInfo & info)
+bool IBackgroundJobExecutor::start(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms)
 {
-    return start(info.storage_id, info.host_port);
+    return start(info.storage_id, info.host_port, timeout_ms);
 }
 
-bool IBackgroundJobExecutor::stop(const BGJobInfo & info)
+bool IBackgroundJobExecutor::stop(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms)
 {
-    return stop(info.storage_id, info.host_port);
+    return stop(info.storage_id, info.host_port, timeout_ms);
 }
 
-bool IBackgroundJobExecutor::remove(const BGJobInfo & info)
+bool IBackgroundJobExecutor::remove(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms)
 {
-    return remove(info.storage_id, info.host_port);
+    return remove(info.storage_id, info.host_port, timeout_ms);
 }
 
-bool IBackgroundJobExecutor::drop(const BGJobInfo & info)
+bool IBackgroundJobExecutor::drop(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms)
 {
-    return drop(info.storage_id, info.host_port);
+    return drop(info.storage_id, info.host_port, timeout_ms);
 }
 
-bool IBackgroundJobExecutor::wakeup(const BGJobInfo & info)
+bool IBackgroundJobExecutor::wakeup(const BGJobInfo & info, const std::optional<UInt64>& timeout_ms)
 {
-    return wakeup(info.storage_id, info.host_port);
+    return wakeup(info.storage_id, info.host_port, timeout_ms);
 }
 
 BackgroundJobExecutor::BackgroundJobExecutor(const Context & context_, CnchBGThreadType type_)
     : context{context_}, type{type_}
 {}
 
-bool BackgroundJobExecutor::start(const StorageID & storage_id, const String & host_port)
+bool BackgroundJobExecutor::start(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms)
 {
-    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Start, context, type);
+    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Start, context, type, timeout_ms);
     return true;
 }
 
-bool BackgroundJobExecutor::stop(const StorageID & storage_id, const String & host_port)
+bool BackgroundJobExecutor::stop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms)
 {
-    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Stop, context, type);
+    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Stop, context, type, timeout_ms);
     return true;
 }
 
-bool BackgroundJobExecutor::remove(const StorageID & storage_id, const String & host_port)
+bool BackgroundJobExecutor::remove(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms)
 {
-    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Remove, context, type);
+    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Remove, context, type, timeout_ms);
     return true;
 }
 
-bool BackgroundJobExecutor::drop(const StorageID & storage_id, const String & host_port)
+bool BackgroundJobExecutor::drop(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms)
 {
-    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Drop, context, type);
+    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Drop, context, type, timeout_ms);
     return true;
 }
 
-bool BackgroundJobExecutor::wakeup(const StorageID & storage_id, const String & host_port)
+bool BackgroundJobExecutor::wakeup(const StorageID & storage_id, const String & host_port, const std::optional<UInt64>& timeout_ms)
 {
-    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Wakeup, context, type);
+    executeServerBGThreadAction(storage_id, host_port, CnchBGThreadAction::Wakeup, context, type, timeout_ms);
     return true;
 }
 

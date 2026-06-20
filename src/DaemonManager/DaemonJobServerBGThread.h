@@ -123,7 +123,7 @@ public:
     void setLivenessCheckInterval(size_t interval) { liveness_check_interval = interval; }
     BackgroundJobPtr getBackgroundJob(const UUID & uuid) const;
     BGJobInfos getBGJobInfos() const;
-    Result executeJobAction(const StorageID & storage_id, CnchBGThreadAction action);
+    Result executeJobAction(const StorageID & storage_id, CnchBGThreadAction action, std::optional<UInt64> timeout_ms);
     /// StoragePtr for table level DaemonJobServerBGThread, StorageID for database level DaemonJobServerBGThread
     virtual bool ifNeedDaemonJob(const StorageTrait &, const StorageID &) { return false; }
     IBackgroundJobExecutor & getBgJobExecutor() const { return *bg_job_executor; }
