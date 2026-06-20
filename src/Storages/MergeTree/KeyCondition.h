@@ -317,6 +317,7 @@ public:
         bool single_point = false);
 
     bool matchesExactContinuousRange(const DataTypes & data_types) const;
+    bool matchesExactContinuousRangeNew(const DataTypes & data_types) const;
 
     using ColumnIndices = std::map<String, size_t>;
     const ColumnIndices & getKeyColumns() const { return key_columns; }
@@ -465,6 +466,7 @@ private:
     bool single_point;
     // If true, do not use always_monotonic information to transform constants
     bool strict;
+    ContextPtr context_;
 };
 
 }
